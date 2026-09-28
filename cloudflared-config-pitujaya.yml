@@ -1,0 +1,12 @@
+protocol: http2
+tunnel: pos-konter
+credentials-file: C:\Users\MSI\.cloudflared\pos-konter.json
+# NOTE: nama file json di atas akan benar setelah `tunnel create`.
+# Kalau namanya <ID>.json, ganti baris credentials-file dengan path file itu.
+ingress:
+  - hostname: pos.pitujaya.my.id
+    service: http://localhost:8000
+  - hostname: api.pitujaya.my.id
+    service: http://localhost:8000
+  - service: http_status:404
+

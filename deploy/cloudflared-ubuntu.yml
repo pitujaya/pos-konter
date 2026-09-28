@@ -1,0 +1,12 @@
+# Contoh Cloudflare Tunnel di UBUNTU (bila IP server tidak publik)
+# Taruh di: /etc/cloudflared/config.yml  ATAU  /opt/pos-konter/deploy/cloudflared-ubuntu.yml
+# Jalankan: cloudflared tunnel --config /opt/pos-konter/deploy/cloudflared-ubuntu.yml run pos-konter
+# Prasyarat di Ubuntu: cloudflared tunnel login && cloudflared tunnel create pos-konter
+tunnel: pos-konter
+credentials-file: /root/.cloudflared/pos-konter.json
+ingress:
+  - hostname: pos.pitujaya.my.id
+    service: http://localhost:8000
+  - hostname: api.pitujaya.my.id
+    service: http://localhost:8000
+  - service: http_status:404

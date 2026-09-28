@@ -1,0 +1,39 @@
+# ServisHP Pro (POS Konter) — gitignore
+# Database lokal (berisi data transaksi + hash password) JANGAN di-push
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Secret / env lokal
+.env
+backend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Uploads (gambar slide) — hanya contoh, bukan data produksi
+backend/app/uploads/*
+!backend/app/uploads/.gitkeep
+
+# Build / IDE / OS
+android-mirror/app/build/
+android-mirror/build/
+android-mirror/.gradle/
+android-mirror/local.properties
+.idea/
+.vscode/
+*.apk
+node_modules/
+dist/
+Thumbs.db
+Desktop.ini
+
+# Log / sementara
+*.log

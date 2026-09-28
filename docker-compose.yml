@@ -1,0 +1,38 @@
+# ServisHP Pro — compose production Ubuntu
+# Jalankan: docker compose up -d --build
+services:
+  pos-konter:
+    build: .
+    image: servishp-pos:latest
+    container_name: pos-konter
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/servishp.db}
+      UPLOAD_DIR: /data/uploads
+      FRONTEND_DIR: /app/frontend
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      SECRET_KEY: ${SECRET_KEY:?SET_SECRET_KEY_DI_BACKEND_ENV}
+      APP_VERSION: ${APP_VERSION:-1.1.0-ubuntu}
+      PORT: "8000"
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+    volumes:
+      - pos-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pos-data:
+    name: pos-konter-data

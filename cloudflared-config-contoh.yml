@@ -1,0 +1,12 @@
+# Contoh config Named Tunnel - taruh di: C:\Users\NAMAMU\.cloudflared\config.yml
+# Ganti tunnel ID + hostname dengan milikmu
+# protocol http2 = pakai TCP 443 (stabil bila UDP/QUIC diblokir ISP/firewall)
+protocol: http2
+tunnel: pos-konter
+credentials-file: C:\Users\NAMAMU\.cloudflared\<TUNNEL-ID>.json
+ingress:
+  - hostname: pos.domainkamu.id
+    service: http://localhost:8000
+  - hostname: api.domainkamu.id
+    service: http://localhost:8000
+  - service: http_status:404

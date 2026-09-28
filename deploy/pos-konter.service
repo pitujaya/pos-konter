@@ -1,0 +1,25 @@
+[Unit]
+Description=ServisHP Pro POS Konter (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=poskonter
+Group=poskonter
+WorkingDirectory=/opt/pos-konter/backend
+EnvironmentFile=/opt/pos-konter/backend/.env
+Environment=FRONTEND_DIR=/opt/pos-konter
+Environment=UPLOAD_DIR=/opt/pos-konter/backend/app/uploads
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/pos-konter/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips *
+Restart=always
+RestartSec=3
+# Keamanan systemd
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pos-konter/backend /opt/pos-konter/backend/app/uploads /opt/pos-konter/backend/servishp.db
+
+[Install]
+WantedBy=multi-user.target

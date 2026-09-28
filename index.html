@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0f172a" />
+<link rel="icon" type="image/png" href="icon.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<title>ServisHP Pro - Management Service HP</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="authScreen" class="auth-screen">
+  <div class="auth-card">
+    <div class="auth-brand"><div class="brand-logo">📱</div><div><h2>ServisHP Pro</h2><small>Management Service HP • POS Konter</small></div></div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLogin" type="button">Masuk</button>
+      <button class="auth-tab" id="tabRegister" type="button">Daftar</button>
+    </div>
+
+    <!-- LOGIN -->
+    <form id="loginForm" class="auth-form">
+      <h3>Selamat datang kembali 👋</h3>
+      <p class="muted">Masuk pakai <b>email atau nomor HP</b> + password.</p>
+      <label>Email / No. HP *<input id="l_id" autocomplete="username" placeholder="cth: budi@gmail.com atau 0812xxxx" required /></label>
+      <label>Password *<span class="pw-wrap"><input id="l_pw" type="password" autocomplete="current-password" placeholder="••••••••" required /><button type="button" class="pw-eye" data-eye="l_pw">👁</button></span></label>
+      <div class="auth-row"><label class="remember"><input type="checkbox" id="l_remember" checked /> Ingat saya</label><button type="button" class="link" id="btnForgot">Lupa password?</button></div>
+      <button class="btn primary big full" type="submit">🔑 Masuk</button>
+      <p class="auth-hint">Akun demo:<br>👑 <code>admin@konter.id</code> (Super Admin)<br>🛠 <code>admin.toko@konter.id</code> (Admin)<br>🧾 <code>kasir.toko@konter.id</code> (Kasir)<br>password: <code>admin123</code> / <code>admin123</code> / <code>kasir123</code></p>
+    </form>
+
+    <!-- REGISTER -->
+    <form id="registerForm" class="auth-form hidden">
+      <h3>Buat akun baru ✨</h3>
+      <p class="muted">Isi <b>email atau nomor HP</b> (boleh isi keduanya).</p>
+      <label>Nama Lengkap *<input id="r_nama" autocomplete="name" placeholder="cth: Budi Santoso" required /></label>
+      <div class="row2">
+        <label>Email<input id="r_email" type="email" autocomplete="email" placeholder="budi@gmail.com" /></label>
+        <label>No. HP<input id="r_hp" inputmode="tel" autocomplete="tel" placeholder="08xx-xxxx-xxxx" /></label>
+      </div>
+      <div class="row2">
+        <label>Password * (min. 6)<span class="pw-wrap"><input id="r_pw" type="password" autocomplete="new-password" placeholder="••••••••" required /><button type="button" class="pw-eye" data-eye="r_pw">👁</button></span></label>
+        <label>Ulangi Password *<input id="r_pw2" type="password" autocomplete="new-password" placeholder="••••••••" required /></label>
+      </div>
+      <label>Jenis Pengguna *<select id="r_role">
+        <option value="kasir" selected>🧾 Kasir — input & nota saja</option>
+        <option value="admin">🛠 Admin — kelola service & pengaturan</option>
+        <option value="superadmin">👑 Super Admin — akses penuh + kelola pengguna</option>
+      </select></label>
+      <button class="btn primary big full" type="submit">📝 Daftar Akun</button>
+      <p class="auth-hint">Dengan mendaftar, data tersimpan lokal di perangkat ini (LocalStorage).</p>
+    </form>
+  </div>
+</div>
+
+<div class="app hidden" id="mainApp">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-logo">📱</div>
+      <div>
+        <h2 id="brandName">ServisHP Pro</h2>
+        <small id="brandSub">POS Konter</small>
+      </div>
+    </div>
+
+    <button class="btn primary side-cta" data-goto="tambah">+ Service Baru</button>
+
+    <nav class="nav">
+      <button class="nav-btn active" data-page="dashboard">📊 <span>Dashboard</span></button>
+      <button class="nav-btn" data-page="data">📲 <span>Data Service</span></button>
+      <button class="nav-btn" data-page="sparepart">🔧 <span>Data Sparepart</span></button>
+      <button class="nav-btn" data-page="lacak">🔍 <span>Lacak Service</span></button>
+      <button class="nav-btn" data-page="pengaturan" id="navPengaturan">⚙️ <span>Pengaturan</span></button>
+      <button class="nav-btn" data-page="pengguna" id="navPengguna">👥 <span>Pengguna</span></button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="konter-card">
+        <strong id="sideKonter">Konter Saya</strong>
+        <small id="sideKonterAlamat">Jl. Merdeka No.1</small>
+      </div>
+      <!-- PROFIL USER LOGIN -->
+      <div class="side-profile">
+        <div class="side-avatar" id="sideAvatar">👤</div>
+        <div class="side-profile-info">
+          <strong id="sideUser">-</strong>
+          <span class="role-badge" id="sideUserRole">-</span>
+          <small id="sideUserId">-</small>
+        </div>
+      </div>
+      <button class="btn logout-btn side-logout" id="btnLogout" title="Keluar dari akun">⏻ Logout</button>
+      <small class="ver">v1.0 • LocalStorage</small>
+    </div>
+    <button class="hamburger-close" id="closeSidebar">✕</button>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <header class="topbar">
+      <button class="hamburger" id="openSidebar">☰</button>
+      <div class="search-wrap">
+        <span>🔍</span>
+        <input id="globalSearch" type="text" placeholder="Cari nama, no HP, merk, No. service..." />
+      </div>
+    </header>
+
+    <!-- DASHBOARD -->
+    <section class="page active" id="page-dashboard">
+      <!-- HEADBAR SLIDER -->
+      <div class="headbar" id="headbar">
+        <div class="headbar-track" id="headSlides"></div>
+        <button class="headbar-arrow left" id="headPrev" type="button">‹</button>
+        <button class="headbar-arrow right" id="headNext" type="button">›</button>
+        <div class="headbar-dots" id="headDots"></div>
+      </div>
+
+      <h1 class="page-title">Dashboard</h1>
+      <p class="page-sub">Ringkasan operasional service HP hari ini</p>
+
+      <div class="stats">
+        <div class="stat"><div class="stat-icon blue">📥</div><div><small>Total Masuk</small><h3 id="stTotal">0</h3></div></div>
+        <div class="stat"><div class="stat-icon yellow">⏳</div><div><small>Antri</small><h3 id="stAntri">0</h3></div></div>
+        <div class="stat"><div class="stat-icon purple">🔧</div><div><small>Dikerjakan</small><h3 id="stProses">0</h3></div></div>
+        <div class="stat"><div class="stat-icon green">✅</div><div><small>Selesai / Diambil</small><h3 id="stSelesai">0</h3></div></div>
+        <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Estimasi Pendapatan</small><h3 id="stOmzet">Rp 0</h3></div></div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><h3>Service Terbaru</h3><button class="link" data-goto="data">Lihat semua →</button></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>No. Service</th><th>Pelanggan</th><th>HP</th><th>Status</th></tr></thead>
+            <tbody id="recentTable"></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Status Service</h3></div>
+          <div id="statusChart" class="status-list"></div>
+          <hr class="sep"/>
+          <h4>Perlu Perhatian ⚠️</h4>
+          <div id="attentionList" class="attention"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FORM PELANGGAN + DATA HP -->
+    <section class="page" id="page-tambah">
+      <h1 class="page-title">Form Pelanggan & Data HP</h1>
+      <p class="page-sub">Isi data pelanggan dan unit HP yang diservice. Nomor service dibuat otomatis.</p>
+
+      <form id="serviceForm" class="card form-card">
+        <div class="form-banner">
+          <div><small>Nomor Service</small><h2 id="previewNoService">SVC-0000</h2></div>
+          <div><small>Tanggal Masuk</small><input type="date" id="f_tanggal" required /></div>
+        </div>
+
+        <div class="form-grid">
+          <fieldset>
+            <legend>👤 Data Pelanggan</legend>
+            <label>Nama Pelanggan *<input id="f_nama" required placeholder="cth: Budi Santoso" /></label>
+            <div class="row2">
+              <label>No. HP / WA *<input id="f_telp" required placeholder="08xx-xxxx-xxxx" /></label>
+              <label>Alamat<textarea id="f_alamat" rows="1" placeholder="Alamat pelanggan"></textarea></label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>📲 Data HP</legend>
+            <div class="row2">
+              <label>Merk HP *<input id="f_merk" list="listMerk" required placeholder="Samsung, iPhone, Xiaomi..." /><datalist id="listMerk"></datalist></label>
+              <label>Tipe / Model *<input id="f_tipe" required placeholder="cth: Galaxy A12 / Redmi 12C" /></label>
+            </div>
+            <label>Kunci Layar / Sandi<input id="f_sandi" placeholder="123456 / pola" /></label>
+            <label>Kelengkapan
+              <div class="chips" id="chipKelengkapan">
+                <button type="button" class="chip">HP Saja</button>
+                <button type="button" class="chip">Charger</button>
+                <button type="button" class="chip">Dus</button>
+                <button type="button" class="chip">Kabel Data</button>
+                <button type="button" class="chip">Softcase</button>
+                <button type="button" class="chip">Memori</button>
+              </div>
+            </label>
+            <label>Keluhan / Kerusakan *<textarea id="f_keluhan" rows="2" required placeholder="cth: LCD pecah, baterai ngedrop, tidak bisa dicas..."></textarea></label>
+            <div class="row2">
+              <label>Kondisi Fisik<textarea id="f_kondisi" rows="1" placeholder="cth: lecet pemakaian, tombol volume hilang"></textarea></label>
+              <label>Teknisi<select id="f_teknisi"></select></label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>💰 Biaya & Estimasi</legend>
+            <div class="row2">
+              <label>Estimasi Biaya (Rp)<input id="f_biaya" type="number" min="0" value="0" /></label>
+              <label>Estimasi Selesai<input id="f_estimasi" type="date" /></label>
+            </div>
+            <label>Catatan Teknisi<textarea id="f_catatan" rows="1" placeholder="Catatan internal..."></textarea></label>
+            <label>Status Awal
+              <select id="f_status">
+                <option>Antri</option>
+                <option>Dikerjakan</option>
+                <option>Menunggu Sparepart</option>
+                <option>Selesai</option>
+              </select>
+            </label>
+          </fieldset>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn ghost" id="btnResetForm">Reset</button>
+          <button type="button" class="btn ghost" id="btnPreviewNota">👁 Preview Nota</button>
+          <button type="submit" class="btn primary big">💾 Simpan Service</button>
+        </div>
+      </form>
+
+      <!-- PREVIEW NOTA SAAT INPUT -->
+      <div class="card" id="previewNotaCard">
+        <div class="card-head"><h3>🖨️ Preview Nota (dari inputan di atas)</h3><div class="btn-row"><button class="btn small" id="btnRefreshPreviewNota">🔄 Refresh Preview</button><button class="btn small primary" id="btnCetakPreview">🖨 Cetak Preview</button></div></div>
+        <p class="muted">Klik <b>Preview Nota</b> untuk melihat nota sesuai isian form, tanpa harus simpan dulu.</p>
+        <div class="nota-preview" id="previewNotaBox">Belum ada preview. Isi form lalu klik Preview Nota.</div>
+      </div>
+    </section>
+
+    <!-- DATA HP -->
+    <section class="page" id="page-data">
+      <h1 class="page-title">Data HP Masuk</h1>
+      <p class="page-sub">Kelola semua unit HP yang masuk service • <b id="dataCount">0 data</b> <span id="dataInfo" class="muted"></span></p>
+      <div class="toolbar">
+        <div class="filters">
+          <button class="fbtn active" data-filter="Semua">Semua</button>
+          <button class="fbtn" data-filter="Antri">Antri</button>
+          <button class="fbtn" data-filter="Dikerjakan">Dikerjakan</button>
+          <button class="fbtn" data-filter="Menunggu Sparepart">Sparepart</button>
+          <button class="fbtn" data-filter="Selesai">Selesai</button>
+          <button class="fbtn" data-filter="Diambil">Diambil</button>
+          <button class="fbtn" data-filter="Batal">Batal</button>
+        </div>
+        <div class="toolbar-right">
+          <select id="sortData">
+            <option value="baru">Terbaru dulu</option>
+            <option value="lama">Terlama dulu</option>
+            <option value="nama">Nama A-Z</option>
+          </select>
+          <button class="btn small ghost" id="btnTampilSemua" title="Reset filter & pencarian, tampilkan semua data">⟳ Tampilkan Semua</button>
+          <button class="btn small" id="btnExportCSV">⬇ CSV</button>
+        </div>
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr>
+            <th>No. Service</th><th>Tgl</th><th>Pelanggan</th><th>HP</th><th>Keluhan</th><th>Biaya</th><th>Status</th><th>Aksi</th>
+          </tr></thead>
+          <tbody id="dataTable"></tbody>
+        </table>
+        <div id="emptyData" class="empty hidden">Belum ada data. <button class="link" data-goto="tambah">Tambah service pertama →</button></div>
+      </div>
+    </section>
+
+    <!-- DATA SPAREPART -->
+    <section class="page" id="page-sparepart">
+      <h1 class="page-title">Data Sparepart</h1>
+      <p class="page-sub">Stok barang service • <b id="spCount">0 item</b> <span id="spInfo" class="muted"></span></p>
+      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat"><div class="stat-icon blue">📦</div><div><small>Total Item</small><h3 id="spTotal">0</h3></div></div>
+        <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Nilai Stok (HPP)</small><h3 id="spNilai">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon yellow">⚠️</div><div><small>Stok Menipis</small><h3 id="spLow">0</h3></div></div>
+      </div>
+      <div class="toolbar">
+        <div class="search-wrap" style="max-width:320px">
+          <span>🔍</span>
+          <input id="spSearch" type="text" placeholder="Cari nama / SKU / merk..." />
+        </div>
+        <div class="toolbar-right">
+          <select id="spSort">
+            <option value="nama">Nama A-Z</option>
+            <option value="sku">SKU A-Z</option>
+            <option value="stok">Stok tersedikit</option>
+          </select>
+          <button class="btn small ghost" id="spLowBtn" title="Tampilkan yg stok menipis">⚠️ Menipis</button>
+          <button class="btn small primary" id="btnAddSpare">+ Tambah Barang</button>
+        </div>
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr>
+            <th>SKU</th><th>Barang</th><th>Merk</th><th>HPP</th><th>Jual</th><th>Stok</th><th>Aksi</th>
+          </tr></thead>
+          <tbody id="spTable"></tbody>
+        </table>
+        <div id="emptySpare" class="empty hidden">Belum ada sparepart.</div>
+      </div>
+      <div class="bottom-cta">
+        <button class="btn primary big full" id="btnAddSpareBottom">+ Input Sparepart Baru</button>
+      </div>
+    </section>
+
+    <!-- LACAK -->
+    <section class="page" id="page-lacak">
+      <h1 class="page-title">Lacak Service</h1>
+      <p class="page-sub">Cek status perbaikan berdasarkan nomor service / nama / No. HP</p>
+      <div class="card lacak-card">
+        <div class="lacak-input">
+          <input id="lacakInput" placeholder="cth: SVC-2026-0001 atau nama pelanggan..." />
+          <button class="btn primary" id="btnLacak">🔍 Lacak</button>
+        </div>
+        <div id="lacakResult"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Antrian Aktif (belum diambil)</h3></div>
+        <div id="queueList" class="queue"></div>
+      </div>
+    </section>
+
+    <!-- PENGATURAN -->
+    <section class="page" id="page-pengaturan">
+      <h1 class="page-title">Pengaturan</h1>
+      <p class="page-sub">Profil konter, teknisi, dan manajemen data</p>
+      <div class="grid2">
+        <div class="card">
+          <h3>👤 Akun Saya</h3>
+          <p class="muted">Akun yang sedang login di perangkat ini.</p>
+          <div class="kv"><b>Nama</b><span id="accNama">-</span></div>
+          <div class="kv"><b>Role</b><span id="accRole">-</span></div>
+          <div class="kv"><b>Email</b><span id="accEmail">-</span></div>
+          <div class="kv"><b>No. HP</b><span id="accHp">-</span></div>
+          <div class="btn-row">
+            <button class="btn small" id="btnGantiPw">🔒 Ganti Password</button>
+            <button class="btn small danger-btn" id="btnLogout2">⏻ Keluar</button>
+          </div>
+          <div id="gantiPwBox" class="hidden" style="margin-top:10px">
+            <div class="row2"><label>Password Baru<input id="npw1" type="password" placeholder="min. 6 karakter"/></label><label>Ulangi<input id="npw2" type="password"/></label></div>
+            <button class="btn small primary" id="btnSavePw">Simpan Password</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🏪 Profil Konter</h3>
+          <label>Nama Konter<input id="s_nama" /></label>
+          <label>Alamat<textarea id="s_alamat" rows="2"></textarea></label>
+          <div class="row2">
+            <label>No. Telp<input id="s_telp" /></label>
+            <label>Catatan Nota<input id="s_nota" placeholder="Garansi 7 hari..." /></label>
+          </div>
+          <button class="btn primary" id="btnSaveSetting">Simpan Pengaturan</button>
+        </div>
+        <div class="card">
+          <h3>👨‍🔧 Data Teknisi</h3>
+          <div class="inline-add"><input id="newTeknisi" placeholder="Nama teknisi baru..." /><button class="btn small" id="btnAddTeknisi">+ Tambah</button></div>
+          <div id="teknisiList" class="pill-list"></div>
+          <hr class="sep"/>
+          <h3>📋 Merk HP Favorit</h3>
+          <div class="inline-add"><input id="newMerk" placeholder="cth: Infinix..." /><button class="btn small" id="btnAddMerk">+ Tambah</button></div>
+          <div id="merkList" class="pill-list"></div>
+        </div>
+        <div class="card">
+          <h3>💾 Backup & Restore</h3>
+          <p class="muted">Simpan semua data ke file JSON atau pulihkan kembali.</p>
+          <div class="btn-row">
+            <button class="btn small" id="btnBackup">⬇ Backup JSON</button>
+            <button class="btn small" id="btnExportCSV2">⬇ Export CSV</button>
+            <label class="btn small ghost file-btn">⬆ Restore <input type="file" id="restoreFile" accept=".json" hidden /></label>
+          </div>
+          <hr class="sep"/>
+          <h3 class="danger">🗑 Zona Berbahaya</h3>
+          <div class="btn-row">
+            <button class="btn small danger-btn" id="btnHapusSelesai">Hapus yg sudah diambil</button>
+            <button class="btn small danger-btn" id="btnHapusSemua">Hapus SEMUA data</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🖨️ Contoh Nota</h3>
+          <p class="muted">Nota akan dicetak dengan kop konter di atas.</p>
+          <button class="btn small" id="btnTestPrint">Lihat Contoh Nota</button>
+          <div class="nota-preview" id="notaPreview"></div>
+        </div>
+        <div class="card">
+          <h3>🖼️ Headbar Slide</h3>
+          <p class="muted">Gambar banner berjalan di Dashboard. Bisa isi URL gambar atau upload dari HP/laptop (maks 3MB).</p>
+          <label>Judul<input id="sl_judul" placeholder="cth: Promo Ganti LCD" /></label>
+          <label>Subjudul<input id="sl_sub" placeholder="cth: Gratis tempered glass hari ini" /></label>
+          <label>URL Gambar<input id="sl_url" placeholder="https://... atau hasil upload" /></label>
+          <div class="btn-row">
+            <label class="btn small ghost file-btn">📤 Upload Gambar <input type="file" id="sl_file" accept="image/*" hidden /></label>
+            <button class="btn small primary" id="btnAddSlide">+ Tambah Slide</button>
+          </div>
+          <div id="slidePreview" class="nota-preview hidden"></div>
+          <hr class="sep"/>
+          <div id="slideList" class="pill-list"></div>
+        </div>
+        <div class="card">
+          <h3>🔌 Backend Server (FastAPI)</h3>
+          <p class="muted">Status koneksi ke server Ubuntu + database. Hijau = tersambung, merah = offline (pakai LocalStorage).</p>
+          <div class="kv"><b>Status</b><span id="backendStatus">⏳ mengecek...</span></div>
+          <label>API Base URL<input id="s_apiBase" placeholder="http://IP-UBUNTU:8000/api atau https://domain/api" /></label>
+          <div class="btn-row">
+            <button class="btn small primary" id="btnTestBackend">🔄 Tes Koneksi</button>
+            <button class="btn small" id="btnSaveApiBase">Simpan URL</button>
+          </div>
+          <p class="muted" style="margin-top:8px">Di server Ubuntu jalankan <code>sudo ./deploy/deploy-ubuntu.sh</code>, lalu buka <code>http://IP-SERVER/</code>. Bisa juga override cepat via URL: <code>?api=http://IP:8000</code>. Detail: <code>DEPLOY-UBUNTU.md</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PENGGUNA (Super Admin) -->
+    <section class="page" id="page-pengguna">
+      <h1 class="page-title">Kelola Pengguna</h1>
+      <p class="page-sub">Hanya <b>Super Admin</b> yang bisa menambah, mengubah role, dan menghapus pengguna</p>
+      <div id="penggunaLock" class="card lock-box hidden">🔒 Halaman ini khusus <b>Super Admin</b>.</div>
+      <div id="penggunaWrap" class="grid2">
+        <div class="card">
+          <h3>➕ Tambah Pengguna</h3>
+          <label>Nama Lengkap *<input id="u_nama" placeholder="cth: Kasir 1" /></label>
+          <div class="row2">
+            <label>Email<input id="u_email" type="email" placeholder="nama@gmail.com" /></label>
+            <label>No. HP<input id="u_hp" placeholder="08xx-xxxx-xxxx" /></label>
+          </div>
+          <div class="row2">
+            <label>Password * (min. 6)<input id="u_pw" type="password" placeholder="••••••••" /></label>
+            <label>Jenis Pengguna *<select id="u_role">
+              <option value="kasir">🧾 Kasir</option>
+              <option value="admin">🛠 Admin</option>
+              <option value="superadmin">👑 Super Admin</option>
+            </select></label>
+          </div>
+          <button class="btn primary" id="btnAddUser">+ Tambah Pengguna</button>
+          <hr class="sep"/>
+          <h4>Hak akses 📋</h4>
+          <small class="muted">🧾 <b>Kasir</b>: input service, lihat data & sparepart, ubah status & stok, cetak nota & lacak. <b>Tidak bisa</b> edit/hapus data, tambah/hapus sparepart, pengaturan, kelola pengguna.<br>🛠 <b>Admin</b>: semua operasional + pengaturan & backup. <b>Tidak bisa</b> kelola pengguna.<br>👑 <b>Super Admin</b>: akses penuh termasuk tambah/ubah role/hapus pengguna & hapus semua data.</small>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Daftar Pengguna (<span id="userCount">0</span>)</h3></div>
+          <div class="table-wrap"><table style="min-width:520px">
+            <thead><tr><th>Nama</th><th>Kontak</th><th>Role</th><th>Aksi</th></tr></thead>
+            <tbody id="userTable"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- MODAL DETAIL -->
+<div class="modal-bg hidden" id="modalDetail">
+  <div class="modal">
+    <div class="modal-head"><h3 id="detailTitle">Detail Service</h3><button class="x" data-close>✕</button></div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-foot" id="detailFoot"></div>
+  </div>
+</div>
+
+<!-- MODAL EDIT -->
+<div class="modal-bg hidden" id="modalEdit">
+  <div class="modal">
+    <div class="modal-head"><h3>Edit Data Service</h3><button class="x" data-close>✕</button></div>
+    <div class="modal-body">
+      <div class="row2"><label>Nama<input id="e_nama"/></label><label>No HP<input id="e_telp"/></label></div>
+      <div class="row2"><label>Merk<input id="e_merk"/></label><label>Tipe<input id="e_tipe"/></label></div>
+      <label>Keluhan<textarea id="e_keluhan" rows="2"></textarea></label>
+      <div class="row2"><label>Biaya<input id="e_biaya" type="number"/></label><label>Teknisi<select id="e_teknisi"></select></label></div>
+      <label>Status<select id="e_status">
+        <option>Antri</option><option>Dikerjakan</option><option>Menunggu Sparepart</option>
+        <option>Selesai</option><option>Diambil</option><option>Batal</option>
+      </select></label>
+      <label>Catatan<textarea id="e_catatan" rows="2"></textarea></label>
+    </div>
+    <div class="modal-foot"><button class="btn ghost" data-close>Batal</button><button class="btn primary" id="btnSaveEdit">Simpan Perubahan</button></div>
+  </div>
+</div>
+
+<!-- MODAL SPAREPART -->
+<div class="modal-bg hidden" id="modalSpare">
+  <div class="modal">
+    <div class="modal-head"><h3 id="spareTitle">Tambah Sparepart</h3><button type="button" class="x" id="btnCloseSpareX" data-close>✕</button></div>
+    <div class="modal-body">
+      <label>Nama Barang *<input id="sp_nama" placeholder="cth: LCD Samsung A12" /></label>
+      <label>Nomor SKU *<span class="sku-row"><input id="sp_sku" placeholder="ketik manual atau scan" /><button type="button" class="btn small primary" id="btnScanSku">📷 Scan</button></span></label>
+      <div class="row2"><label>Merk<input id="sp_merk" placeholder="cth: Samsung" /></label><label>Stok Minimum<input id="sp_min" type="number" min="0" value="0" /></label></div>
+      <div class="row3"><label>HPP (Rp)<input id="sp_hpp" type="number" min="0" value="0" /></label><label>Harga Jual (Rp)<input id="sp_jual" type="number" min="0" value="0" /></label><label>Jumlah Stok<input id="sp_stok" type="number" min="0" value="0" /></label></div>
+      <p class="muted" id="spMargin"></p>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn ghost" id="btnCancelSpare" data-close>Batal</button><button type="button" class="btn primary" id="btnSaveSpare">Simpan</button></div>
+  </div>
+</div>
+
+<!-- MODAL SCAN SKU -->
+<div class="modal-bg hidden" id="modalScan">
+  <div class="modal">
+    <div class="modal-head"><h3>Scan SKU</h3><button class="x" data-close>✕</button></div>
+    <div class="modal-body">
+      <video id="scanVideo" class="scan-video" playsinline muted></video>
+      <p class="muted" id="scanStatus">Arahkan kamera ke barcode / QR SKU...</p>
+    </div>
+    <div class="modal-foot"><button class="btn ghost" data-close>Batal</button></div>
+  </div>
+</div>
+
+<!-- PRINT AREA -->
+<div id="printArea" class="print-only"></div>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="bottom-nav hidden" id="bottomNav">
+  <button data-page="dashboard" class="active">📊<small>Home</small></button>
+  <button data-page="tambah">📝<small>Form</small></button>
+  <button data-page="data">📲<small>Data</small></button>
+  <button data-page="lacak">🔍<small>Lacak</small></button>
+</nav>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
