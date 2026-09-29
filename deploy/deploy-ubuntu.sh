@@ -60,6 +60,10 @@ if [[ ! -f "backend/.env" ]]; then
 else
   echo "==> [2/7] backend/.env sudah ada, tidak ditimpa."
 fi
+# Compose membaca interpolasi ${SECRET_KEY} dari .env di ROOT project (bukan backend/.env),
+# jadi salin agar `docker compose up` tidak error "required variable SECRET_KEY".
+cp backend/.env ./.env
+chmod 600 ./.env || true
 
 mkdir -p backend/app/uploads
 chmod -R 775 backend/app/uploads || true
@@ -144,12 +148,65 @@ else
   echo "==> [6/7] Tanpa domain: akses via http://IP_SERVER/ (tambah --domain untuk HTTPS)."
 fi
 
-# --- Cloudflare Tunnel opsional ---
+# --- Cloudflare Tunnel opsional (ALWAYS-ON: bikin VPS tetap online walau PC Windows mati) ---
 if [[ -n "$TUNNEL_NAME" ]]; then
-  echo "==> [7/7] Cloudflare Tunnel ($TUNNEL_NAME) diminta."
-  echo "    Install manual: curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | tee /usr/share/keyrings/cloudflare-main.gpg"
-  echo "    Lalu: apt-get update && apt-get install -y cloudflared && cloudflared tunnel login && cloudflared tunnel run $TUNNEL_NAME"
-  echo "    (Tidak otomatis agar tidak menimpa tunnel Windows yang sudah jalan.)"
+  echo "==> [7/7] Cloudflare Tunnel always-on ($TUNNEL_NAME) ..."
+  # Install cloudflared bila belum ada (repo resmi Cloudflare)
+  if ! command -v cloudflared >/dev/null 2>&1; then
+    echo "    Install cloudflared dari repo resmi..."
+    mkdir -p --mode=0755 /usr/share/keyrings
+    curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+    echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | tee /etc/apt/sources.list.d/cloudflared.list
+    apt-get update -y
+    apt-get install -y cloudflared
+  fi
+  # Pasang systemd service agar tunnel hidup terus + auto-start saat reboot
+  if [[ -f "$APP_DIR/deploy/cloudflared-pos-konter.service" ]]; then
+    # Sesuaikan nama tunnel bila user pakai nama selain pos-konter
+    sed "s/run pos-konter$/run $TUNNEL_NAME/; s/tunnel: pos-konter/tunnel: $TUNNEL_NAME/" \
+      "$APP_DIR/deploy/cloudflared-ubuntu.yml" > /tmp/cloudflared-ubuntu.yml.tmp || true
+    # Hanya timpa bila pakai nama custom; aman karena isi sama kecuali nama
+    if [[ "$TUNNEL_NAME" != "pos-konter" ]]; then
+      cp /tmp/cloudflared-ubuntu.yml.tmp "$APP_DIR/deploy/cloudflared-ubuntu.yml" || true
+    fi
+    # Auto-cocokkan credentials-file dengan file *.json yang ada
+    # (nama file asli = <TUNNEL-ID>.json, bukan pos-konter.json)
+    REAL_JSON="$(ls -t /root/.cloudflared/*.json 2>/dev/null | head -n1 || true)"
+    if [[ -n "${REAL_JSON:-}" ]]; then
+      echo "    Kredensial tunnel ditemukan: $REAL_JSON"
+      sed -i "s|^credentials-file:.*|credentials-file: $REAL_JSON|" "$APP_DIR/deploy/cloudflared-ubuntu.yml"
+    else
+      echo "    Belum ada /root/.cloudflared/*.json (wajar bila belum login / belum copy dari Windows)."
+    fi
+    sed "s/run pos-konter$/run $TUNNEL_NAME/" \
+      "$APP_DIR/deploy/cloudflared-pos-konter.service" > /etc/systemd/system/cloudflared-pos-konter.service
+    systemctl daemon-reload
+    systemctl enable cloudflared-pos-konter || true
+    echo ""
+    echo "    Service cloudflared-pos-konter dipasang (enable), TAPI belum di-start."
+    echo "    PILIH SALAH SATU (cukup sekali):"
+    echo "    A. PINDAHKAN tunnel lama dari Windows (TANPA buat baru, DNS tetap):"
+    echo "       # di Windows (PowerShell):"
+    echo "       scp \"\$env:USERPROFILE\\.cloudflared\\*.json\" ubuntu@SERVER:/tmp/"
+    echo "       # di Ubuntu:"
+    echo "       sudo mkdir -p /root/.cloudflared && sudo cp /tmp/*.json /root/.cloudflared/"
+    echo "       sudo sed -i \"s|^credentials-file:.*|credentials-file: \$(ls -t /root/.cloudflared/*.json | head -n1)|\" /opt/pos-konter/deploy/cloudflared-ubuntu.yml"
+    echo "       sudo systemctl restart cloudflared-pos-konter"
+    echo "    B. BUAT BARU di Ubuntu (bila tunnel lama mau dibuang):"
+    echo "      sudo cloudflared tunnel login"
+    echo "      sudo cloudflared tunnel create $TUNNEL_NAME   # lewati bila tunnel sudah ada di dashboard"
+    echo "      sudo cloudflared tunnel route dns $TUNNEL_NAME pos.pitujaya.my.id"
+    echo "      sudo cloudflared tunnel route dns $TUNNEL_NAME api.pitujaya.my.id"
+    echo "      sudo systemctl restart cloudflared-pos-konter"
+    echo "      journalctl -u cloudflared-pos-konter -f"
+    echo ""
+    echo "    PENTING: setelah tunnel VPS jalan, MATIKAN tunnel di Windows"
+    echo "    (tutup server.bat / tunnel-named.bat) agar tidak rebutan nama tunnel."
+    # Coba start; bila belum login pasti gagal — itu normal, tampilkan warning saja
+    systemctl restart cloudflared-pos-konter 2>/dev/null || echo "    (Belum login Cloudflare — selesaikan langkah login di atas, lalu restart service.)"
+  else
+    echo "    WARN: file deploy/cloudflared-pos-konter.service tidak ditemukan, lewati auto-install."
+  fi
 else
   echo "==> [7/7] Selesai."
 fi

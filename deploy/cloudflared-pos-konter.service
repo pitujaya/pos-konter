@@ -1,0 +1,28 @@
+[Unit]
+Description=Cloudflare Tunnel pos-konter (always-on, akses internet walau PC toko mati)
+After=network-online.target pos-konter.service docker.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# Jalankan sebagai root agar bisa baca /root/.cloudflared/*.json hasil `cloudflared tunnel login`.
+# Bila kredensial dipindah ke /etc/cloudflared, ganti User=root -> User=cloudflared + chown.
+User=root
+ExecStart=/usr/bin/cloudflared tunnel --config /opt/pos-konter/deploy/cloudflared-ubuntu.yml run pos-konter
+Restart=always
+RestartSec=5
+
+# Batas restart tak hingga (penting untuk always-on)
+StartLimitBurst=0
+
+# Log via journalctl -u cloudflared-pos-konter -f
+StandardOutput=journal
+StandardError=journal
+
+# Keamanan ringan (jangan ProtectHome=true karena kredensial di /root)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

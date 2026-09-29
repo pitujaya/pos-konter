@@ -1,16 +1,24 @@
-/* ServisHP Pro — KONFIG SERVER UBUNTU (frontend)
+/* ServisHP Pro — KONFIG SERVER (frontend, mode ALWAYS-ON)
  * ============================================================
- * CARA PAKAI (pilih salah satu, urutan prioritas):
- *   1. Isi SERVER_URL di bawah dengan IP/domain Ubuntu, contoh:
- *        window.SERVISHP_SERVER = "http://103.147.9.25:8000";
- *        window.SERVISHP_SERVER = "https://pos.pitujaya.my.id";
- *      Lalu upload file ini ke server. Semua HP/laptop otomatis nyambung.
- *   2. Atau kosongkan ("") -> otomatis pakai origin yang sama (disarankan
- *      bila frontend dibuka dari http://SERVER/ langsung, mis. via Nginx).
- *   3. User tetap bisa override via Pengaturan > Backend Server
- *      (disimpan di localStorage 'servishp_api_base') atau via URL:
- *        https://pos.kamu/?api=https://api.kamu
+ * Agar bisa diakses dari jaringan mana saja MESKI PC Windows mati,
+ * backend harus pindah ke server yang hidup 24/7 (VPS Ubuntu).
+ * Setelah pindah, frontend disajikan backend yang sama, jadi:
+ *
+ *   window.SERVISHP_SERVER = "";
+ *     -> api.js otomatis pakai origin yang sama (http://IP-VPS/ atau
+ *        https://pos.pitujaya.my.id). TIDAK perlu ganti IP tiap pindah jaringan.
+ *        Ini mode yang DISARANKAN untuk VPS/Docker/native.
+ *
+ * Opsi lain (bila perlu kunci manual, sekali saja):
+ *   window.SERVISHP_SERVER = "https://pos.pitujaya.my.id";
+ *
+ * JANGAN isi IP LAN lokal (mis. 192.168.x.x) bila mau diakses dari internet,
+ * karena IP LAN tidak bisa dibuka dari luar.
+ *
+ * User tetap bisa override via Pengaturan > Backend Server
+ * (disimpan di localStorage 'servishp_api_base') atau via URL:
+ *   https://pos.kamu/?api=https://api.kamu
  *
  * File ini dimuat SEBELUM api.js (lihat index.html).
  */
-window.SERVISHP_SERVER = "http://192.168.18.50"; // server Ubuntu native (nginx :80 -> backend :8000)
+window.SERVISHP_SERVER = "";

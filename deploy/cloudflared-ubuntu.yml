@@ -1,12 +1,33 @@
-# Contoh Cloudflare Tunnel di UBUNTU (bila IP server tidak publik)
-# Taruh di: /etc/cloudflared/config.yml  ATAU  /opt/pos-konter/deploy/cloudflared-ubuntu.yml
-# Jalankan: cloudflared tunnel --config /opt/pos-konter/deploy/cloudflared-ubuntu.yml run pos-konter
-# Prasyarat di Ubuntu: cloudflared tunnel login && cloudflared tunnel create pos-konter
+# Cloudflare Tunnel di UBUNTU (ALWAYS-ON — pengganti tunnel Windows)
+# ============================================================
+# Tujuannya: pos.pitujaya.my.id tetap online MESKI PC Windows toko mati,
+# karena tunnel + backend jalan di VPS Ubuntu 24/7 (systemd auto-start).
+#
+# Lokasi file ini di server: /opt/pos-konter/deploy/cloudflared-ubuntu.yml
+# Service systemd: /etc/systemd/system/cloudflared-pos-konter.service
+#   (lihat deploy/cloudflared-pos-konter.service)
+#
+# Setup SEKALI di VPS (setelah backend jalan):
+#   sudo apt update && sudo apt install -y cloudflared  # atau via deploy-ubuntu.sh --tunnel=pos-konter
+#   sudo cloudflared tunnel login                        # buka URL, pilih pitujaya.my.id
+#   sudo cloudflared tunnel create pos-konter            # cukup sekali (bila belum ada)
+#   sudo cloudflared tunnel route dns pos-konter pos.pitujaya.my.id
+#   sudo cloudflared tunnel route dns pos-konter api.pitujaya.my.id
+#   # pastikan credentials-file di bawah sesuai hasil `create` (cek ls ~/.cloudflared/*.json)
+#   sudo systemctl enable --now cloudflared-pos-konter
+#   journalctl -u cloudflared-pos-konter -f
+#
+# PENTING: hanya 1 tunnel 'pos-konter' boleh jalan dalam satu waktu.
+# Setelah VPS aktif, MATIKAN tunnel di Windows (tutup server.bat / tunnel-named.bat),
+# kalau tidak muncul error "already connected to this server".
 tunnel: pos-konter
 credentials-file: /root/.cloudflared/pos-konter.json
+originRequest:
+  connectTimeout: 10s
+  noTLSVerify: false
 ingress:
   - hostname: pos.pitujaya.my.id
-    service: http://localhost:8000
+    service: http://127.0.0.1:8000
   - hostname: api.pitujaya.my.id
-    service: http://localhost:8000
+    service: http://127.0.0.1:8000
   - service: http_status:404
