@@ -63,7 +63,7 @@ if (-not $?) { throw "SCP gagal. Cek IP/user/SSH server." }
 Write-Host "==> Extract di server ke $RemotePath ..."
 Write-Host "    (ketik password sudo Ubuntu bila diminta di bawah)" -ForegroundColor Yellow
 # -t = alokasi TTY agar `sudo` bisa minta password (tanpa ini: 'sudo: A terminal is required to authenticate')
-$RemoteCmd = "sudo mkdir -p $RemotePath && sudo chown -R `$(whoami):`$(whoami) $RemotePath && apt-get update -y >/dev/null 2>&1; sudo apt-get install -y unzip >/dev/null 2>&1; unzip -o /tmp/pos-konter.zip -d $RemotePath && chmod +x $RemotePath/deploy/*.sh && echo OK"
+$RemoteCmd = "sudo mkdir -p $RemotePath; sudo chown -R `$(whoami):`$(whoami) $RemotePath; sudo apt-get install -y unzip >/dev/null 2>&1 || true; unzip -o /tmp/pos-konter.zip -d $RemotePath; chmod +x $RemotePath/deploy/*.sh; echo OK"
 & ssh -t -p $SshPort "${User}@${Server}" $RemoteCmd
 if (-not $?) { throw "SSH extract gagal." }
 

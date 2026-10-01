@@ -158,18 +158,14 @@
       // ?api= selalu menang & langsung disimpan
       const q = queryApi();
       if (q) this.setBase(q);
-      for (const c of candidates()) {
-        // dahulukan base aktif saat ini
-        const ordered = [this.base].concat(candidates().filter((x) => x !== this.base));
-        for (const base of ordered) {
-          const h = await ping(base, timeoutMs || 4000);
-          if (h) {
-            this.base = base;
-            try { localStorage.setItem(LS_KEY, base); } catch {}
-            return { base, health: h };
-          }
+      const ordered = [this.base].concat(candidates().filter((x) => x !== this.base));
+      for (const base of ordered) {
+        const h = await ping(base, timeoutMs || 4000);
+        if (h) {
+          this.base = base;
+          try { localStorage.setItem(LS_KEY, base); } catch {}
+          return { base, health: h };
         }
-        break;
       }
       return null;
     },

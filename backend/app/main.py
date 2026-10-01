@@ -58,10 +58,14 @@ def _cors_origins():
 
 
 _CORS = _cors_origins()
+# allow_credentials=True tidak boleh digabung allow_origins=["*"]
+# (browser menolak + Starlette warning). Aktifkan credentials hanya bila
+# origin dikunci spesifik via CORS_ORIGINS.
+_ALLOW_CREDS = not (_CORS == ["*"])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_CORS,
-    allow_credentials=True,
+    allow_credentials=_ALLOW_CREDS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
