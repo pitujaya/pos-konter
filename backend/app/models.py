@@ -1,6 +1,6 @@
 """Tabel database: users, services, service_histories, settings."""
 from datetime import datetime
-from sqlalchemy import String, Integer, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import String, Integer, Float, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -40,7 +40,7 @@ class Service(Base):
     dp: Mapped[int] = mapped_column(Integer, default=0)
     estimasi: Mapped[str] = mapped_column(String(20), default="")
     catatan: Mapped[str] = mapped_column(Text, default="")
-    status: Mapped[str] = mapped_column(String(30), default="Antri", index=True)
+    status: Mapped[str] = mapped_column(String(30), default="Dikerjakan", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -103,3 +103,114 @@ class Sparepart(Base):
     stok_min: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Sale(Base):
+    """Penjualan barang/sparepart langsung (tanpa service). Stok otomatis berkurang."""
+
+    __tablename__ = "sales"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    no_nota: Mapped[str] = mapped_column(String(30), unique=True, index=True, nullable=False)
+    tanggal: Mapped[str] = mapped_column(String(20), default="", index=True)
+    pelanggan: Mapped[str] = mapped_column(String(120), default="")
+    telp: Mapped[str] = mapped_column(String(30), default="")
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    hpp_total: Mapped[int] = mapped_column(Integer, default=0)
+    laba: Mapped[int] = mapped_column(Integer, default=0)
+    metode: Mapped[str] = mapped_column(String(30), default="Tunai")
+    catatan: Mapped[str] = mapped_column(Text, default="")
+    kasir: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    items: Mapped[list["SaleItem"]] = relationship(
+        "SaleItem", back_populates="sale", cascade="all, delete-orphan"
+    )
+
+
+class SaleItem(Base):
+    __tablename__ = "sale_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sale_id: Mapped[int] = mapped_column(ForeignKey("sales.id", ondelete="CASCADE"), index=True)
+    sparepart_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sku: Mapped[str] = mapped_column(String(80), default="")
+    nama: Mapped[str] = mapped_column(String(160), default="")
+    hpp: Mapped[int] = mapped_column(Integer, default=0)
+    harga: Mapped[int] = mapped_column(Integer, default=0)
+    qty: Mapped[int] = mapped_column(Integer, default=1)
+    subtotal: Mapped[int] = mapped_column(Integer, default=0)
+
+    sale: Mapped[Sale] = relationship("Sale", back_populates="items")
+
+
+class Expense(Base):
+    """Pengeluaran / biaya operasional. Mengurangi laba bersih di laporan."""
+
+    __tablename__ = "expenses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tanggal: Mapped[str] = mapped_column(String(20), default="", index=True)
+    kategori: Mapped[str] = mapped_column(String(80), default="Lainnya", index=True)
+    keterangan: Mapped[str] = mapped_column(Text, default="")
+    jumlah: Mapped[int] = mapped_column(Integer, default=0)
+    dicatat_oleh: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AiProvider(Base):
+    """Provider LLM untuk AI Router (gemini, ollama, nvidia, kiro, custom)."""
+    __tablename__ = "ai_providers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True, index=True, nullable=False)
+    kind: Mapped[str] = mapped_column(String(30), default="openai")  # gemini|openai|ollama|custom
+    base_url: Mapped[str] = mapped_column(String(255), default="")
+    api_key: Mapped[str] = mapped_column(String(255), default="")
+    model: Mapped[str] = mapped_column(String(120), default="")
+    price_prompt_per_1k: Mapped[float] = mapped_column(default=0.0)
+    price_completion_per_1k: Mapped[float] = mapped_column(default=0.0)
+    priority: Mapped[int] = mapped_column(Integer, default=1)
+    is_active: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(20), default="idle")  # idle|live|error|offline
+    last_latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    last_check_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AiClient(Base):
+    """API key klien yang memakai router (Default Key, Opencode, kasir, dll)."""
+    __tablename__ = "ai_clients"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True, index=True, nullable=False)
+    api_key: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
+    rate_limit_per_min: Mapped[int] = mapped_column(Integer, default=60)
+    is_active: Mapped[int] = mapped_column(Integer, default=1)
+    total_requests: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AiRequestLog(Base):
+    __tablename__ = "ai_request_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    client_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    client_name: Mapped[str] = mapped_column(String(80), default="")
+    provider_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    provider_name: Mapped[str] = mapped_column(String(80), default="")
+    model: Mapped[str] = mapped_column(String(120), default="")
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(default=0.0)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(10), default="ok", index=True)  # ok|error
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

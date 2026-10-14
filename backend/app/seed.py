@@ -55,13 +55,35 @@ def seed(db: Session):
             merk="Xiaomi", tipe="Redmi 12C", sandi="-",
             kelengkapan=["HP Saja"], keluhan="Baterai ngedrop, cepat panas",
             kondisi="Mulus", teknisi="Budi", biaya=150000, dp=0,
-            estimasi=today, catatan="", status="Antri",
+            estimasi=today, catatan="", status="Dikerjakan",
         )
         db.add_all([s1, s2])
         db.flush()
         db.add_all([
-            models.ServiceHistory(service_id=s1.id, status="Antri"),
             models.ServiceHistory(service_id=s1.id, status="Dikerjakan"),
-            models.ServiceHistory(service_id=s2.id, status="Antri"),
+            models.ServiceHistory(service_id=s2.id, status="Dikerjakan"),
         ])
         db.commit()
+    # --- migrasi status lama -> baru (jalan tiap startup, aman diulang) ---
+    _migrate_status(db)
+
+
+def _migrate_status(db: Session):
+    mapping = {"Antri": "Dikerjakan", "Menunggu Sparepart": "Dikerjakan", "Batal": "Cancel"}
+    try:
+        changed = False
+        for old, new in mapping.items():
+            n = db.query(models.Service).filter(models.Service.status == old).update(
+                {models.Service.status: new}, synchronize_session=False
+            )
+            if n:
+                changed = True
+            n2 = db.query(models.ServiceHistory).filter(models.ServiceHistory.status == old).update(
+                {models.ServiceHistory.status: new}, synchronize_session=False
+            )
+            if n2:
+                changed = True
+        if changed:
+            db.commit()
+    except Exception:
+        db.rollback()

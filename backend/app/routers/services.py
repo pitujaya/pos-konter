@@ -8,7 +8,15 @@ from .. import models, schemas
 from ..auth import get_current_user, require_admin
 
 router = APIRouter(tags=["services"])
-STATUS = ["Antri", "Dikerjakan", "Menunggu Sparepart", "Selesai", "Diambil", "Batal"]
+STATUS = ["Dikerjakan", "Selesai", "Diambil", "Cancel"]
+# Migrasi status lama -> baru (Antri/Menunggu Sparepart -> Dikerjakan, Batal -> Cancel)
+STATUS_NORM = {"Antri": "Dikerjakan", "Menunggu Sparepart": "Dikerjakan", "Batal": "Cancel"}
+
+
+def norm_status(s: str | None) -> str:
+    s = (s or "").strip()
+    s = STATUS_NORM.get(s, s)
+    return s if s in STATUS else "Dikerjakan"
 
 
 def to_out(s: models.Service) -> dict:
@@ -44,7 +52,8 @@ def list_services(
 ):
     rows = db.query(models.Service).all()
     if status and status != "Semua":
-        rows = [r for r in rows if (r.status or "Antri") == status]
+        status = norm_status(status)
+        rows = [r for r in rows if norm_status(r.status) == status]
     if q:
         ql = q.lower()
         rows = [r for r in rows if ql in " ".join([
@@ -64,6 +73,7 @@ def create_service(body: schemas.ServiceIn, db: Session = Depends(get_db), _: mo
     for f in ("nama", "telp", "merk", "tipe", "keluhan"):
         if not (getattr(body, f) or "").strip():
             raise HTTPException(400, f"{f} wajib diisi")
+    body.status = norm_status(body.status)
     if body.status not in STATUS:
         raise HTTPException(400, "Status tidak valid")
     s = models.Service(
@@ -109,7 +119,8 @@ def update_service(service_id: int, body: schemas.ServiceUpdateIn,
     for k, v in data.items():
         if v is not None:
             setattr(s, k, v)
-    if new_status and new_status != s.status:
+    if new_status and norm_status(new_status) != norm_status(s.status):
+        new_status = norm_status(new_status)
         if new_status not in STATUS:
             raise HTTPException(400, "Status tidak valid")
         s.status = new_status
@@ -122,6 +133,7 @@ def update_service(service_id: int, body: schemas.ServiceUpdateIn,
 @router.patch("/services/{service_id}/status", response_model=schemas.ServiceOut)
 def set_status(service_id: int, body: schemas.StatusUpdateIn,
                db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+    body.status = norm_status(body.status)
     if body.status not in STATUS:
         raise HTTPException(400, "Status tidak valid")
     s = db.get(models.Service, service_id)
@@ -147,12 +159,13 @@ def delete_service(service_id: int, db: Session = Depends(get_db), __: models.Us
 @router.get("/stats/dashboard")
 def dashboard(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     rows = db.query(models.Service).all()
-    c = lambda st: sum(1 for r in rows if r.status == st)
-    omzet = sum(int(r.biaya or 0) for r in rows if r.status != "Batal")
+    c = lambda st: sum(1 for r in rows if norm_status(r.status) == st)
+    # Omzet hanya dari service yang SUDAH DIAMBIL
+    omzet = sum(int(r.biaya or 0) for r in rows if norm_status(r.status) == "Diambil")
     return {
-        "total": len(rows), "antri": c("Antri"),
-        "proses": c("Dikerjakan") + c("Menunggu Sparepart"),
-        "selesai": c("Selesai") + c("Diambil"),
+        "total": len(rows), "antri": c("Dikerjakan"),
+        "proses": c("Selesai"),
+        "selesai": c("Diambil"),
         "omzet": omzet,
         "per_status": {st: c(st) for st in STATUS},
     }

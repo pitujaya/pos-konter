@@ -2,16 +2,38 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
 <meta name="theme-color" content="#0f172a" />
 <link rel="icon" type="image/png" href="icon.png" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <title>ServisHP Pro - Management Service HP</title>
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=1.8.1" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
+
+<!-- ONLINE-ONLY GATE: APK/Web hanya jalan saat ada internet -->
+<div id="netBlock" style="display:none;position:fixed;inset:0;z-index:99999;background:#0f172a;color:#fff;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;gap:12px">
+  <div style="font-size:56px">📶</div>
+  <h2 style="font-size:22px;margin:0">Tidak Ada Koneksi Internet</h2>
+  <p style="color:#cbd5e1;max-width:420px;line-height:1.6">APK POS Konter ini <b>hanya bisa dijalankan saat online</b>.<br/>Aktifkan WiFi / Data seluler lalu coba lagi.</p>
+  <button onclick="location.reload()" style="background:#2563eb;color:#fff;border:0;border-radius:10px;padding:12px 28px;font-size:16px;font-weight:700;cursor:pointer">🔄 Coba Lagi</button>
+</div>
+<script>
+(function(){
+  function gate(){
+    var el = document.getElementById('netBlock');
+    if(!el) return;
+    var offline = (typeof navigator !== 'undefined' && 'onLine' in navigator) ? !navigator.onLine : false;
+    el.style.display = offline ? 'flex' : 'none';
+  }
+  window.addEventListener('online', gate);
+  window.addEventListener('offline', gate);
+  document.addEventListener('DOMContentLoaded', gate);
+  gate();
+})();
+</script>
 
 <!-- AUTH SCREEN -->
 <div id="authScreen" class="auth-screen">
@@ -72,8 +94,11 @@
 
     <nav class="nav">
       <button class="nav-btn active" data-page="dashboard">📊 <span>Dashboard</span></button>
+      <button class="nav-btn" data-page="penjualan">🛒 <span>Penjualan</span></button>
+      <button class="nav-btn" data-page="pengeluaran">💸 <span>Pengeluaran</span></button>
       <button class="nav-btn" data-page="data">📲 <span>Data Service</span></button>
       <button class="nav-btn" data-page="sparepart">🔧 <span>Data Sparepart</span></button>
+      <button class="nav-btn" data-page="laporan">📑 <span>Laporan</span></button>
       <button class="nav-btn" data-page="lacak">🔍 <span>Lacak Service</span></button>
       <button class="nav-btn" data-page="pengaturan" id="navPengaturan">⚙️ <span>Pengaturan</span></button>
       <button class="nav-btn" data-page="pengguna" id="navPengguna">👥 <span>Pengguna</span></button>
@@ -119,32 +144,32 @@
       </div>
 
       <h1 class="page-title">Dashboard</h1>
-      <p class="page-sub">Ringkasan operasional service HP hari ini</p>
+      <p class="page-sub">Ringkasan operasional service HP hari ini • klik status untuk melihat datanya</p>
 
       <div class="stats">
-        <div class="stat"><div class="stat-icon blue">📥</div><div><small>Total Masuk</small><h3 id="stTotal">0</h3></div></div>
-        <div class="stat"><div class="stat-icon yellow">⏳</div><div><small>Antri</small><h3 id="stAntri">0</h3></div></div>
-        <div class="stat"><div class="stat-icon purple">🔧</div><div><small>Dikerjakan</small><h3 id="stProses">0</h3></div></div>
-        <div class="stat"><div class="stat-icon green">✅</div><div><small>Selesai / Diambil</small><h3 id="stSelesai">0</h3></div></div>
-        <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Estimasi Pendapatan</small><h3 id="stOmzet">Rp 0</h3></div></div>
+        <div class="stat linkable" onclick="goto('data','Semua')" title="Lihat semua data"><div class="stat-icon blue">📥</div><div><small>Total Masuk</small><h3 id="stTotal">0</h3></div></div>
+        <div class="stat linkable" onclick="goto('data','Dikerjakan')" title="Lihat yg Dikerjakan"><div class="stat-icon purple">🔧</div><div><small>Dikerjakan</small><h3 id="stAntri">0</h3></div></div>
+        <div class="stat linkable" onclick="goto('data','Selesai')" title="Lihat yg Selesai"><div class="stat-icon yellow">⏳</div><div><small>Selesai</small><h3 id="stProses">0</h3></div></div>
+        <div class="stat linkable" onclick="goto('data','Diambil')" title="Lihat yg Diambil"><div class="stat-icon green">✅</div><div><small>Diambil</small><h3 id="stSelesai">0</h3></div></div>
+        <div class="stat money linkable" onclick="goto('laporan')" title="Lihat laporan"><div class="stat-icon money-i">💰</div><div><small>Omzet (Diambil)</small><h3 id="stOmzet">Rp 0</h3></div></div>
       </div>
 
-      <div class="grid2">
-        <div class="card">
-          <div class="card-head"><h3>Service Terbaru</h3><button class="link" data-goto="data">Lihat semua →</button></div>
-          <div class="table-wrap"><table>
-            <thead><tr><th>No. Service</th><th>Pelanggan</th><th>HP</th><th>Status</th></tr></thead>
-            <tbody id="recentTable"></tbody>
-          </table></div>
-        </div>
-        <div class="card">
-          <div class="card-head"><h3>Status Service</h3></div>
-          <div id="statusChart" class="status-list"></div>
-          <hr class="sep"/>
-          <h4>Perlu Perhatian ⚠️</h4>
-          <div id="attentionList" class="attention"></div>
-        </div>
+      <div class="card">
+        <div class="card-head"><h3>🔗 Status Service</h3><small class="muted">ketuk untuk filter Data Service</small></div>
+        <div class="status-links" id="statusLinks"></div>
       </div>
+
+      <div class="card">
+        <div class="card-head"><h3 id="omzetTitle">📈 Performa Penjualan</h3><div class="btn-row">
+          <button class="fbtn" id="btnOmPrev">‹</button>
+          <button class="fbtn" id="btnOmNow">Bulan Ini</button>
+          <button class="fbtn" id="btnOmNext">›</button>
+        </div></div>
+        <p class="muted" id="omzetInfo">Memuat...</p>
+        <div class="omzet-wrap"><div id="omzetChart" class="omzet-chart"></div></div>
+        <p class="muted" style="margin-top:8px;margin-bottom:0">Garis = total omzet harian (service Diambil + penjualan barang).</p>
+      </div>
+
     </section>
 
     <!-- FORM PELANGGAN + DATA HP -->
@@ -174,7 +199,71 @@
               <label>Merk HP *<input id="f_merk" list="listMerk" required placeholder="Samsung, iPhone, Xiaomi..." /><datalist id="listMerk"></datalist></label>
               <label>Tipe / Model *<input id="f_tipe" required placeholder="cth: Galaxy A12 / Redmi 12C" /></label>
             </div>
-            <label>Kunci Layar / Sandi<input id="f_sandi" placeholder="123456 / pola" /></label>
+            <div class="lock-field">
+              <span class="lock-label">🔒 Kunci Layar / Sandi</span>
+              <input type="hidden" id="f_sandi" value="" />
+              <div class="lock-tabs" id="lockTabs" role="tablist">
+                <button type="button" class="lock-tab active" data-lock="none">Tanpa Kunci</button>
+                <button type="button" class="lock-tab" data-lock="pin">🔢 PIN</button>
+                <button type="button" class="lock-tab" data-lock="pola">🔏 Pola</button>
+              </div>
+              <!-- PIN ala layar HP -->
+              <div class="phone-mock hidden" id="phonePin">
+                <div class="phone-notch"></div>
+                <div class="phone-screen">
+                  <div class="phone-status"><span id="pinClock">09:41</span><span>📶 🔋</span></div>
+                  <div class="phone-lockicon">🔒</div>
+                  <p class="phone-title">Masukkan PIN</p>
+                  <div class="pin-dots" id="pinDots"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                  <p class="pin-value" id="pinValue">-</p>
+                  <div class="pin-pad" id="pinPad">
+                    <button type="button" data-pin="1">1</button>
+                    <button type="button" data-pin="2">2</button>
+                    <button type="button" data-pin="3">3</button>
+                    <button type="button" data-pin="4">4</button>
+                    <button type="button" data-pin="5">5</button>
+                    <button type="button" data-pin="6">6</button>
+                    <button type="button" data-pin="7">7</button>
+                    <button type="button" data-pin="8">8</button>
+                    <button type="button" data-pin="9">9</button>
+                    <button type="button" class="pin-fn" id="pinClear" title="Hapus semua">✕</button>
+                    <button type="button" data-pin="0">0</button>
+                    <button type="button" class="pin-fn" id="pinBack" title="Hapus 1 angka">⌫</button>
+                  </div>
+                  <label class="pin-manual">atau ketik manual<input id="pinManual" inputmode="numeric" placeholder="cth: 123456" /></label>
+                </div>
+              </div>
+              <!-- POLA ala layar HP Android -->
+              <div class="phone-mock hidden" id="phonePola">
+                <div class="phone-notch"></div>
+                <div class="phone-screen">
+                  <div class="phone-status"><span id="polaClock">09:41</span><span>📶 🔋</span></div>
+                  <div class="phone-lockicon">🔏</div>
+                  <p class="phone-title">Gambar pola kunci</p>
+                  <p class="pola-hint">Ketuk titik satu-satu atau tahan &amp; geser (min. 4 titik). Tekan ↺ Ulangi bila salah.</p>
+                  <div class="pola-wrap" id="polaWrap">
+                    <svg class="pola-svg" id="polaSvg"></svg>
+                    <div class="pola-grid" id="polaGrid">
+                      <button type="button" class="pola-dot" data-dot="1"><i></i><span>1</span></button>
+                      <button type="button" class="pola-dot" data-dot="2"><i></i><span>2</span></button>
+                      <button type="button" class="pola-dot" data-dot="3"><i></i><span>3</span></button>
+                      <button type="button" class="pola-dot" data-dot="4"><i></i><span>4</span></button>
+                      <button type="button" class="pola-dot" data-dot="5"><i></i><span>5</span></button>
+                      <button type="button" class="pola-dot" data-dot="6"><i></i><span>6</span></button>
+                      <button type="button" class="pola-dot" data-dot="7"><i></i><span>7</span></button>
+                      <button type="button" class="pola-dot" data-dot="8"><i></i><span>8</span></button>
+                      <button type="button" class="pola-dot" data-dot="9"><i></i><span>9</span></button>
+                    </div>
+                  </div>
+                  <p class="pin-value" id="polaValue">Pola: -</p>
+                  <div class="btn-row" style="justify-content:center">
+                    <button type="button" class="btn small ghost" id="polaReset">↺ Ulangi</button>
+                    <button type="button" class="btn small ghost" id="polaClear">✕ Hapus</button>
+                  </div>
+                </div>
+              </div>
+              <p class="muted" id="lockHint" style="margin:8px 0 0">Tidak ada kunci layar.</p>
+            </div>
             <label>Kelengkapan
               <div class="chips" id="chipKelengkapan">
                 <button type="button" class="chip">HP Saja</button>
@@ -201,10 +290,10 @@
             <label>Catatan Teknisi<textarea id="f_catatan" rows="1" placeholder="Catatan internal..."></textarea></label>
             <label>Status Awal
               <select id="f_status">
-                <option>Antri</option>
-                <option>Dikerjakan</option>
-                <option>Menunggu Sparepart</option>
+                <option selected>Dikerjakan</option>
                 <option>Selesai</option>
+                <option>Diambil</option>
+                <option>Cancel</option>
               </select>
             </label>
           </fieldset>
@@ -232,12 +321,10 @@
       <div class="toolbar">
         <div class="filters">
           <button class="fbtn active" data-filter="Semua">Semua</button>
-          <button class="fbtn" data-filter="Antri">Antri</button>
           <button class="fbtn" data-filter="Dikerjakan">Dikerjakan</button>
-          <button class="fbtn" data-filter="Menunggu Sparepart">Sparepart</button>
           <button class="fbtn" data-filter="Selesai">Selesai</button>
           <button class="fbtn" data-filter="Diambil">Diambil</button>
-          <button class="fbtn" data-filter="Batal">Batal</button>
+          <button class="fbtn" data-filter="Cancel">Cancel</button>
         </div>
         <div class="toolbar-right">
           <select id="sortData">
@@ -252,7 +339,7 @@
       <div class="card table-wrap">
         <table>
           <thead><tr>
-            <th>No. Service</th><th>Tgl</th><th>Pelanggan</th><th>HP</th><th>Keluhan</th><th>Biaya</th><th>Status</th><th>Aksi</th>
+            <th>No. Service</th><th>Pelanggan</th><th>HP</th><th>Keluhan</th><th>Biaya</th><th>Status</th><th>Aksi</th>
           </tr></thead>
           <tbody id="dataTable"></tbody>
         </table>
@@ -295,6 +382,219 @@
       </div>
       <div class="bottom-cta">
         <button class="btn primary big full" id="btnAddSpareBottom">+ Input Sparepart Baru</button>
+      </div>
+    </section>
+
+    <!-- PENJUALAN BARANG -->
+    <section class="page" id="page-penjualan">
+      <h1 class="page-title">Penjualan Barang</h1>
+      <p class="page-sub">Jual sparepart / aksesoris langsung ke pembeli • stok otomatis berkurang • <b id="jlCount">0 nota</b></p>
+      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Omzet Penjualan</small><h3 id="slOmzet">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon blue">🧾</div><div><small>Jumlah Nota</small><h3 id="slNota">0</h3></div></div>
+        <div class="stat"><div class="stat-icon green">📈</div><div><small>Laba Penjualan</small><h3 id="slLaba">Rp 0</h3></div></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3>🛒 Kasir Penjualan</h3>
+          <p class="muted">Cari barang dari stok sparepart, masukkan ke keranjang, lalu simpan.</p>
+          <div class="row2">
+            <label>Nama Pembeli<input id="j_nama" placeholder="Umum / nama pembeli" /></label>
+            <label>No. HP<input id="j_telp" placeholder="08xx-xxxx-xxxx" /></label>
+          </div>
+          <div class="row2">
+            <label>Tanggal<input id="j_tanggal" type="date" /></label>
+            <label>Metode Bayar<select id="j_metode"><option>Tunai</option><option>Transfer</option><option>QRIS</option><option>Tempo</option></select></label>
+          </div>
+          <label>Cari Barang (nama / SKU)<input id="j_search" placeholder="cth: LCD, BAT-R12C..." autocomplete="off" /></label>
+          <div id="j_hasil" class="search-result"></div>
+          <h4 style="margin:10px 0 6px">Keranjang (<span id="j_itemCount">0</span>)</h4>
+          <div class="table-wrap"><table style="min-width:0">
+            <thead><tr><th>Barang</th><th>Harga</th><th>Qty</th><th>Subtotal</th><th></th></tr></thead>
+            <tbody id="j_cart"></tbody>
+          </table>
+          <div id="j_empty" class="empty">Keranjang kosong. Cari barang di atas untuk menambah.</div>
+          </div>
+          <div class="kv" style="margin-top:10px"><b>Total Bayar</b><span><b id="j_total" style="font-size:18px">Rp 0</b></span></div>
+          <div class="row2">
+            <label>Uang Diterima (Rp)<input id="j_bayar" type="number" min="0" value="0" /></label>
+            <label>Kembalian<input id="j_kembali" readonly value="Rp 0" /></label>
+          </div>
+          <label>Catatan<textarea id="j_catatan" rows="1" placeholder="cth: garansi toko 3 hari..."></textarea></label>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="btnBatalJual">Batal</button>
+            <button type="button" class="btn primary big" id="btnSimpanJual">💾 Simpan Penjualan</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Riwayat Penjualan</h3></div>
+          <div class="search-wrap" style="margin-bottom:10px"><span>🔍</span><input id="jl_search" placeholder="Cari no. nota / pembeli..." /></div>
+          <p class="muted" id="jlInfo"></p>
+          <div class="table-wrap"><table style="min-width:0">
+            <thead><tr><th>Nota / Tgl</th><th>Pembeli</th><th>Total</th><th>Aksi</th></tr></thead>
+            <tbody id="jl_table"></tbody>
+          </table>
+          <div id="jl_empty" class="empty hidden">Belum ada penjualan.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PENGELUARAN / BIAYA -->
+    <section class="page" id="page-pengeluaran">
+      <h1 class="page-title">Pengeluaran / Biaya</h1>
+      <p class="page-sub">Catat biaya operasional (sewa, listrik, gaji, dll) • otomatis <b>mengurangi laba bersih</b> di Laporan • <b id="exCount">0 transaksi</b></p>
+      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat"><div class="stat-icon yellow">💸</div><div><small>Total Pengeluaran</small><h3 id="exTotal">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon blue">📅</div><div><small>Bulan Ini</small><h3 id="exBulan">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon green">🧾</div><div><small>Hari Ini</small><h3 id="exHari">Rp 0</h3></div></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3>➕ Input Pengeluaran</h3>
+          <p class="muted">Setiap input tersimpan & langsung memotong laba bersih.</p>
+          <div class="row2">
+            <label>Tanggal *<input id="ex_tanggal" type="date" /></label>
+            <label>Kategori *<select id="ex_kategori">
+              <option>Sewa</option>
+              <option>Listrik</option>
+              <option>Gaji</option>
+              <option>Belanja Stok</option>
+              <option>Sparepart Service</option>
+              <option>Konsumsi</option>
+              <option>Transport</option>
+              <option>Internet / Pulsa</option>
+              <option selected>Lainnya</option>
+            </select></label>
+          </div>
+          <label>Keterangan *<input id="ex_ket" placeholder="cth: Bayar listrik bulan Oktober" /></label>
+          <label>Jumlah (Rp) *<input id="ex_jumlah" type="number" min="0" value="0" placeholder="cth: 150000" /></label>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="btnBatalEx">Batal</button>
+            <button type="button" class="btn primary big" id="btnSimpanEx">💾 Simpan Pengeluaran</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Riwayat Pengeluaran</h3><button class="btn small primary" id="btnLihatLaporan">📑 Lihat di Laporan</button></div>
+          <div class="row2">
+            <label>Dari<input id="ex_dari" type="date" /></label>
+            <label>Sampai<input id="ex_sampai" type="date" /></label>
+          </div>
+          <div class="search-wrap" style="margin-bottom:10px"><span>🔍</span><input id="ex_search" placeholder="Cari kategori / keterangan..." /></div>
+          <p class="muted" id="exInfo"></p>
+          <div class="table-wrap"><table style="min-width:0">
+            <thead><tr><th>Tanggal</th><th>Keterangan</th><th style="text-align:right">Jumlah</th><th>Aksi</th></tr></thead>
+            <tbody id="ex_table"></tbody>
+          </table>
+          <div id="ex_empty" class="empty hidden">Belum ada pengeluaran. Input di samping untuk mencatat.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LAPORAN -->
+    <section class="page" id="page-laporan">
+      <h1 class="page-title">Laporan</h1>
+      <p class="page-sub">Rekap stok, service masuk, penjualan & laba rugi • <span id="lpInfo" class="muted">Semua periode</span></p>
+      <div class="card">
+        <h3>📅 Periode Laporan</h3>
+        <div class="row2">
+          <label>Dari<input id="lp_dari" type="date" /></label>
+          <label>Sampai<input id="lp_sampai" type="date" /></label>
+        </div>
+        <div class="btn-row">
+          <button class="btn small ghost" id="lpToday">Hari ini</button>
+          <button class="btn small ghost" id="lp7">7 hari</button>
+          <button class="btn small ghost" id="lp30">30 hari</button>
+          <button class="btn small ghost" id="lpAll">Semua</button>
+          <button class="btn small primary" id="btnLpTampil">📊 Tampilkan</button>
+          <button class="btn small" id="btnLpCSV">⬇ CSV</button>
+          <button class="btn small" id="btnLpPrint">🖨 Cetak</button>
+        </div>
+      </div>
+      <div class="ltabs" id="lpTabs">
+        <button class="ltab active" data-ltab="laba">💹 <span>Laba Rugi</span></button>
+        <button class="ltab" data-ltab="service">📲 <span>Service</span></button>
+        <button class="ltab" data-ltab="jual">🛒 <span>Penjualan</span></button>
+        <button class="ltab" data-ltab="stok">📦 <span>Stok Sparepart</span></button>
+      </div>
+
+      <!-- SUB: LAPORAN LABA RUGI -->
+      <div class="ltab-pane active" id="ltab-laba">
+      <div class="stats" style="grid-template-columns:repeat(4,1fr)" id="lpStats">
+        <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Total Pendapatan</small><h3 id="lpPendapatan">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon green">📈</div><div><small>Laba Bersih</small><h3 id="lpLaba">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon blue">🔧</div><div><small>Omzet Service</small><h3 id="lpService">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon purple">🛒</div><div><small>Omzet Penjualan</small><h3 id="lpJual">Rp 0</h3></div></div>
+      </div>
+      <div class="stats" style="grid-template-columns:repeat(2,1fr)">
+        <div class="stat"><div class="stat-icon yellow">💸</div><div><small>Total Pengeluaran</small><h3 id="lpExpense">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon blue">🧾</div><div><small>Transaksi Biaya</small><h3 id="lpExpenseCount">0</h3></div></div>
+      </div>
+      <div class="card" id="lpPrintArea">
+        <div class="card-head"><h3>💹 Laporan Laba Rugi</h3><small class="muted" id="lpPeriode">-</small></div>
+        <div class="table-wrap"><table style="min-width:0">
+          <thead><tr><th>Keterangan</th><th style="text-align:right">Nilai</th></tr></thead>
+          <tbody id="lpLabaBody"></tbody>
+        </table></div>
+        <p class="muted" style="margin-top:8px">* Laba service = omzet jasa (belum dikurangi biaya sparepart service karena tidak tercatat per-service). Laba penjualan = harga jual − HPP. <b>Laba bersih = service + laba jual − pengeluaran.</b></p>
+      </div>
+      </div>
+
+      <!-- SUB: LAPORAN SERVICE -->
+      <div class="ltab-pane" id="ltab-service">
+      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat"><div class="stat-icon blue">📥</div><div><small>Service Masuk</small><h3 id="lpSvcMasuk">0</h3></div></div>
+        <div class="stat"><div class="stat-icon green">✅</div><div><small>Diambil</small><h3 id="lpSvcSelesai">0</h3></div></div>
+        <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Omzet Service (Diambil)</small><h3 id="lpSvcOmzet">Rp 0</h3></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>📲 Laporan Service (<span id="lpServiceCount">0</span>)</h3></div>
+        <div class="table-wrap"><table style="min-width:0">
+          <thead><tr><th>Status</th><th style="text-align:right">Jumlah</th></tr></thead>
+          <tbody id="lpServiceBody"></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>✅ Service Sudah Diambil (<span id="lpDiambilCount">0</span>) — masuk omzet</h3></div>
+        <div class="table-wrap"><table style="min-width:0">
+          <thead><tr><th>No. Service</th><th>Pelanggan</th><th style="text-align:right">Biaya</th></tr></thead>
+          <tbody id="lpDiambilBody"></tbody>
+        </table></div>
+      </div>
+      </div>
+
+      <!-- SUB: LAPORAN PENJUALAN -->
+      <div class="ltab-pane" id="ltab-jual">
+      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat"><div class="stat-icon blue">🧾</div><div><small>Jumlah Nota</small><h3 id="lpJlNota">0</h3></div></div>
+        <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Omzet Penjualan</small><h3 id="lpJlOmzet">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon green">📈</div><div><small>Laba Penjualan</small><h3 id="lpJlLaba">Rp 0</h3></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>🛒 Laporan Penjualan (<span id="lpJualCount">0</span> nota)</h3></div>
+        <div class="table-wrap"><table style="min-width:0">
+          <thead><tr><th>Nota</th><th>Pembeli</th><th style="text-align:right">Total</th></tr></thead>
+          <tbody id="lpJualBody"></tbody>
+        </table></div>
+      </div>
+      </div>
+
+      <!-- SUB: LAPORAN STOK SPAREPART -->
+      <div class="ltab-pane" id="ltab-stok">
+      <div class="stats" style="grid-template-columns:repeat(4,1fr)" id="lpStokStats">
+        <div class="stat"><div class="stat-icon blue">📦</div><div><small>Total Item</small><h3 id="lpStItem">0</h3></div></div>
+        <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Nilai Stok (HPP)</small><h3 id="lpStHpp">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon purple">🏷️</div><div><small>Nilai Stok (Jual)</small><h3 id="lpStJual">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon yellow">⚠️</div><div><small>Stok Menipis</small><h3 id="lpStLow">0</h3></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>📦 Laporan Stok Sparepart (<span id="lpStokCount">0</span> item)</h3></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>SKU</th><th>Barang</th><th>HPP</th><th>Jual</th><th>Stok</th><th style="text-align:right">Nilai (HPP)</th></tr></thead>
+          <tbody id="lpStokBody"></tbody>
+        </table></div>
+      </div>
       </div>
     </section>
 
@@ -391,15 +691,31 @@
           <div id="slideList" class="pill-list"></div>
         </div>
         <div class="card">
+          <h3>🖨️ Printer Bluetooth Thermal</h3>
+          <p class="muted">Cetak struk 58mm langsung ke printer (XPrinter / RPP02 / sejenis) via <b>APK Android</b>. Pairing dulu di <b>Settings HP → Bluetooth</b>, lalu Scan di sini.</p>
+          <div class="kv"><b>Status</b><span id="btStatus">⏳ mengecek...</span></div>
+          <label>Perangkat paired<select id="btDevice"><option value="">— klik Scan dulu —</option></select></label>
+          <div class="btn-row">
+            <button class="btn small ghost" id="btnBtPerm">🔑 Minta Izin</button>
+            <button class="btn small" id="btnBtScan">🔍 Scan</button>
+            <button class="btn small primary" id="btnBtConnect">🔗 Sambungkan</button>
+          </div>
+          <div class="btn-row" style="margin-top:8px">
+            <button class="btn small" id="btnBtTest">🧪 Tes Cetak</button>
+            <button class="btn small ghost" id="btnBtDisconnect">⏏ Putuskan</button>
+          </div>
+          <p class="muted" style="margin-top:8px">Di browser laptop: tombol 🖨 tetap pakai print biasa. Di APK + printer tersambung: nota otomatis keluar via Bluetooth.</p>
+        </div>
+        <div class="card">
           <h3>🔌 Backend Server (FastAPI)</h3>
-          <p class="muted">Status koneksi ke server + database. Hijau = tersambung, merah = offline (pakai LocalStorage).</p>
+          <p class="muted">Status koneksi ke server Ubuntu + database. Hijau = tersambung, merah = offline (pakai LocalStorage).</p>
           <div class="kv"><b>Status</b><span id="backendStatus">⏳ mengecek...</span></div>
-          <label>API Base URL<input id="s_apiBase" placeholder="http://127.0.0.1:8000/api" /></label>
+          <label>API Base URL<input id="s_apiBase" placeholder="http://IP-UBUNTU:8000/api atau https://domain/api" /></label>
           <div class="btn-row">
             <button class="btn small primary" id="btnTestBackend">🔄 Tes Koneksi</button>
             <button class="btn small" id="btnSaveApiBase">Simpan URL</button>
           </div>
-          <p class="muted" style="margin-top:8px">Jalankan server: <code>cd backend</code> lalu <code>uvicorn app.main:app --reload --port 8000</code>. Buka <code>http://localhost:8000</code> untuk versi tersambung penuh.</p>
+          <p class="muted" style="margin-top:8px">Di server Ubuntu jalankan <code>sudo ./deploy/deploy-ubuntu.sh</code>, lalu buka <code>http://IP-SERVER/</code>. Bisa juga override cepat via URL: <code>?api=http://IP:8000</code>. Detail: <code>DEPLOY-UBUNTU.md</code>.</p>
         </div>
       </div>
     </section>
@@ -428,7 +744,7 @@
           <button class="btn primary" id="btnAddUser">+ Tambah Pengguna</button>
           <hr class="sep"/>
           <h4>Hak akses 📋</h4>
-          <small class="muted">🧾 <b>Kasir</b>: input service, lihat data & sparepart, ubah status & stok, cetak nota & lacak. <b>Tidak bisa</b> edit/hapus data, tambah/hapus sparepart, pengaturan, kelola pengguna.<br>🛠 <b>Admin</b>: semua operasional + pengaturan & backup. <b>Tidak bisa</b> kelola pengguna.<br>👑 <b>Super Admin</b>: akses penuh termasuk tambah/ubah role/hapus pengguna & hapus semua data.</small>
+          <small class="muted">🧾 <b>Kasir</b>: input service / penjualan / pengeluaran, lihat data & sparepart, ubah status & stok, cetak nota & lacak. <b>Tidak bisa</b> edit/hapus data, tambah/hapus sparepart, edit/hapus pengeluaran, pengaturan, kelola pengguna.<br>🛠 <b>Admin</b>: semua operasional + pengaturan & backup. <b>Tidak bisa</b> kelola pengguna.<br>👑 <b>Super Admin</b>: akses penuh termasuk tambah/ubah role/hapus pengguna & hapus semua data.</small>
         </div>
         <div class="card">
           <div class="card-head"><h3>Daftar Pengguna (<span id="userCount">0</span>)</h3></div>
@@ -461,8 +777,8 @@
       <label>Keluhan<textarea id="e_keluhan" rows="2"></textarea></label>
       <div class="row2"><label>Biaya<input id="e_biaya" type="number"/></label><label>Teknisi<select id="e_teknisi"></select></label></div>
       <label>Status<select id="e_status">
-        <option>Antri</option><option>Dikerjakan</option><option>Menunggu Sparepart</option>
-        <option>Selesai</option><option>Diambil</option><option>Batal</option>
+        <option>Dikerjakan</option>
+        <option>Selesai</option><option>Diambil</option><option>Cancel</option>
       </select></label>
       <label>Catatan<textarea id="e_catatan" rows="2"></textarea></label>
     </div>
@@ -485,6 +801,23 @@
   </div>
 </div>
 
+<!-- MODAL EDIT PENGELUARAN -->
+<div class="modal-bg hidden" id="modalExpense">
+  <div class="modal">
+    <div class="modal-head"><h3>Edit Pengeluaran</h3><button class="x" data-close>✕</button></div>
+    <div class="modal-body">
+      <div class="row2"><label>Tanggal<input id="mex_tanggal" type="date" /></label><label>Kategori<select id="mex_kategori">
+        <option>Sewa</option><option>Listrik</option><option>Gaji</option><option>Belanja Stok</option>
+        <option>Sparepart Service</option><option>Konsumsi</option><option>Transport</option>
+        <option>Internet / Pulsa</option><option>Lainnya</option>
+      </select></label></div>
+      <label>Keterangan<input id="mex_ket" /></label>
+      <label>Jumlah (Rp)<input id="mex_jumlah" type="number" min="0" /></label>
+    </div>
+    <div class="modal-foot"><button class="btn ghost" data-close>Batal</button><button class="btn primary" id="btnSaveExEdit">Simpan Perubahan</button></div>
+  </div>
+</div>
+
 <!-- MODAL SCAN SKU -->
 <div class="modal-bg hidden" id="modalScan">
   <div class="modal">
@@ -503,14 +836,18 @@
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <nav class="bottom-nav hidden" id="bottomNav">
   <button data-page="dashboard" class="active">📊<small>Home</small></button>
+  <button data-page="penjualan">🛒<small>Jual</small></button>
+  <button data-page="pengeluaran">💸<small>Biaya</small></button>
   <button data-page="tambah">📝<small>Form</small></button>
   <button data-page="data">📲<small>Data</small></button>
+  <button data-page="laporan">📑<small>Laporan</small></button>
   <button data-page="lacak">🔍<small>Lacak</small></button>
 </nav>
 
 <div class="toast-wrap" id="toastWrap"></div>
 
-<script src="api.js"></script>
-<script src="script.js"></script>
+<script src="config.js?v=1.2.0"></script>
+<script src="api.js?v=1.3.0"></script>
+<script src="script.js?v=1.9.0"></script>
 </body>
 </html>

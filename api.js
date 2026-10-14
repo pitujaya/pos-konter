@@ -265,6 +265,30 @@
     adjustStock(id, delta) { return this.req("/spareparts/" + id + "/stock", { method: "PATCH", body: { delta } }); },
     getBySku(sku) { return this.req("/spareparts/sku/" + encodeURIComponent(sku)); },
     deleteSparepart(id) { return this.req("/spareparts/" + id, { method: "DELETE" }); },
+    listSales(params = {}) {
+      const qs = new URLSearchParams({
+        q: params.q || "", dari: params.dari || "", sampai: params.sampai || "",
+        skip: String(params.skip || 0), limit: String(params.limit || 1000),
+      }).toString();
+      return this.req("/sales?" + qs);
+    },
+    createSale(payload) { return this.req("/sales", { method: "POST", body: payload }); },
+    getSale(id) { return this.req("/sales/" + id); },
+    deleteSale(id) { return this.req("/sales/" + id, { method: "DELETE" }); },
+    listExpenses(params = {}) {
+      const qs = new URLSearchParams({
+        q: params.q || "", dari: params.dari || "", sampai: params.sampai || "",
+        skip: String(params.skip || 0), limit: String(params.limit || 1000),
+      }).toString();
+      return this.req("/expenses?" + qs);
+    },
+    createExpense(payload) { return this.req("/expenses", { method: "POST", body: payload }); },
+    updateExpense(id, payload) { return this.req("/expenses/" + id, { method: "PUT", body: payload }); },
+    deleteExpense(id) { return this.req("/expenses/" + id, { method: "DELETE" }); },
+    report(dari = "", sampai = "") {
+      const qs = new URLSearchParams({ dari: dari || "", sampai: sampai || "" }).toString();
+      return this.req("/stats/report?" + qs);
+    },
     async uploadSlide(file) {
       const tok = this.getToken();
       const fd = new FormData();

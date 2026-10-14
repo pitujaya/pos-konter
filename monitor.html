@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NEXORA Monitor AI — POS Konter</title>
+<style>
+:root{--bg:#0b1220;--card:#131c31;--line:#22304d;--txt:#e6edf7;--mut:#8fa1bd;--blue:#2f7bff;--green:#22c55e;--purple:#a855f7;--amber:#f59e0b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,Arial}
+.wrap{max-width:1200px;margin:0 auto;padding:18px}
+.top{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.badge{background:#0f3d26;color:#4ade80;border:1px solid #1d5c3a;padding:4px 12px;border-radius:20px;font-size:12px}
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:14px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;min-height:96px}
+.card small{color:var(--mut);letter-spacing:.4px;font-size:11px}
+.card h2{margin:6px 0 2px;font-size:26px}
+.card p{margin:0;color:var(--mut);font-size:12px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+.panel h3{margin:0 0 8px;font-size:14px;letter-spacing:.5px}
+canvas{width:100%;height:220px;background:#0d1526;border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-size:11px;letter-spacing:.4px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:6px}
+.dot.err{background:#ef4444}.dot.off{background:#64748b}
+input,select,button{background:#0d1526;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px}
+button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.mut{color:var(--mut);font-size:12px}
+@media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><b>NEXORA Monitor AI</b> <span class="mut">• AI Router di backend POS</span></div>
+    <div class="row"><span class="badge" id="onlineBadge">● connecting…</span>
+      <select id="range"><option value="60" selected>60 min</option><option value="180">3 jam</option><option value="720">12 jam</option></select>
+      <button class="primary" id="btnRefresh">Refresh</button>
+      <a href="index.html" style="color:#8fa1bd;font-size:13px">← POS</a></div>
+  </div>
+  <div class="mut" id="apiInfo">…</div>
+
+  <div class="cards">
+    <div class="card"><small>REQUESTS</small><h2 id="cReq">0</h2><p id="cRate">0.00 /menit</p></div>
+    <div class="card"><small>PROMPT TOKENS</small><h2 id="cPt">0</h2><p>input</p></div>
+    <div class="card"><small>COMPLETION TOKENS</small><h2 id="cCt">0</h2><p>output</p></div>
+    <div class="card"><small>ESTIMASI COST</small><h2 id="cCost">$0.0000</h2><p id="cErr">0 error</p></div>
+    <div class="card"><small>PROVIDERS LIVE</small><h2 id="cProv">0 / 0</h2><p id="cCli">0 client</p></div>
+  </div>
+
+  <div class="panel"><h3>TRAFFIC <span class="mut" id="tRange">60 menit</span></h3><canvas id="chart" width="1000" height="220"></canvas>
+    <div class="mut">biru=prompt • hijau=completion • ungu=request</div></div>
+
+  <div class="panel"><h3>PROVIDERS</h3><div class="mut">Isi api_key untuk gemini/nvidia bila mau live. Ollama jalan lokal tanpa key. Klik Tes untuk cek koneksi.</div>
+    <table><thead><tr><th>PROVIDER</th><th>MODEL</th><th>BASE URL</th><th>API KEY</th><th>STATE</th><th>AKSI</th></tr></thead><tbody id="provBody"></tbody></table></div>
+
+  <div class="panel"><h3>TES CHAT (gateway beneran)</h3>
+    <div class="row"><select id="tProv"></select><input id="tMsg" style="flex:1;min-width:220px" placeholder="cth: halo, siapa kamu?" value="halo, jawab singkat saja" /><button class="primary" id="btnChat">Kirim</button></div>
+    <pre id="chatOut" class="mut" style="white-space:pre-wrap"></pre></div>
+</div>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+async function jget(p){const r=await API.req(p);return r;}
+async function refresh(){
+  const m=parseInt($('range').value||'60',10);
+  $('tRange').textContent=m+' menit';
+  try{
+    await API.autoConnect(2500);
+    $('apiInfo').textContent='API: '+API.base;
+    const s=await jget('/ai/stats?minutes='+m);
+    $('cReq').textContent=s.requests; $('cRate').textContent=s.requests_per_min+' /menit';
+    $('cPt').textContent=s.prompt_tokens; $('cCt').textContent=s.completion_tokens;
+    $('cCost').textContent='$'+Number(s.cost_usd).toFixed(4); $('cErr').textContent=s.errors+' error';
+    $('cProv').textContent=s.providers_live+' / '+s.providers_total; $('cCli').textContent=s.clients_total+' client';
+    $('onlineBadge').textContent='● Online';
+    const t=await jget('/ai/traffic?minutes='+m);
+    draw(t);
+    const provs=await jget('/ai/providers');
+    renderProv(provs);
+  }catch(e){ $('onlineBadge').textContent='● Offline'; $('apiInfo').textContent='Gagal: '+e.message; }
+}
+function draw(t){
+  const c=$('chart'),x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);
+  const series=[t.prompt,t.completion,t.requests],cols=['#2f7bff','#22c55e','#a855f7'];
+  const max=Math.max(1,...series.flat());
+  x.strokeStyle='#22304d';x.fillStyle='#8fa1bd';x.font='10px Arial';
+  for(let g=0;g<4;g++){const y=10+(c.height-30)*g/3;x.beginPath();x.moveTo(34,y);x.lineTo(c.width-6,y);x.stroke();
+    x.fillText(Math.round(max*(1-g/3)),4,y+3);}
+  series.forEach((s,si)=>{x.strokeStyle=cols[si];x.lineWidth=2;x.beginPath();
+    s.forEach((v,i)=>{const px=34+(c.width-44)*i/(s.length-1||1),py=10+(c.height-30)*(1-v/max);
+      i?x.lineTo(px,py):x.moveTo(px,py);});x.stroke();});
+  x.fillStyle='#8fa1bd';const L=t.labels||[];
+  for(let i=0;i<L.length;i+=6){const px=34+(c.width-44)*i/(L.length-1||1);x.fillText(L[i],px-10,c.height-6);}
+}
+function renderProv(provs){
+  const tb=$('provBody');tb.innerHTML='';
+  const sel=$('tProv');sel.innerHTML='<option value="">auto (prioritas)</option>';
+  provs.forEach(p=>{
+    sel.innerHTML+='<option value="'+p.name+'">'+p.name+'</option>';
+    const tr=document.createElement('tr');
+    const st=p.status==='live'?'<span class="dot"></span>live':(p.status==='error'?'<span class="dot err"></span>error':'<span class="dot off"></span>'+p.status);
+    tr.innerHTML='<td><b>'+p.name+'</b><br><span class="mut">'+p.kind+' • prio '+p.priority+'</span></td><td class="mut">'+
+      (p.model||'-')+'</td><td class="mut">'+(p.base_url||'-')+'</td>'+
+      '<td><input data-k="'+p.name+'" placeholder="api key" style="width:130px" /></td><td>'+st+'<br><span class="mut">'+(p.last_error||'')+'</span></td>'+
+      '<td><div class="row"><button data-test="'+p.id+'">Tes</button><button data-save="'+p.name+'">Simpan Key</button></div></td>';
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('[data-test]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await API.req('/ai/providers/'+b.dataset.test+'/test',{method:'POST'});refresh();}catch(e){alert(e.message);}b.disabled=false;});
+  tb.querySelectorAll('[data-save]').forEach(b=>b.onclick=async()=>{const inp=tb.querySelector('input[data-k="'+b.dataset.save+'"]');try{await API.req('/ai/providers',{method:'POST',body:{name:b.dataset.save,api_key:inp.value}});alert('tersimpan');refresh();}catch(e){alert(e.message);}});
+}
+$('btnRefresh').onclick=refresh; $('range').onchange=refresh;
+$('btnChat').onclick=async()=>{
+  $('chatOut').textContent='mengirim…';
+  try{
+    const r=await API.req('/ai/chat/completions',{method:'POST',body:{messages:[{role:'user',content:$('tMsg').value}],provider:$('tProv').value}});
+    $('chatOut').textContent='['+r.provider+' / '+r.model+'] '+r.reply+'\n\ntoken '+r.total_tokens+' • $'+r.cost_usd+' • '+r.latency_ms+'ms';
+    refresh();
+  }catch(e){$('chatOut').textContent='GAGAL: '+e.message;}
+};
+refresh(); setInterval(refresh,15000);
+</script>
+</body>
+</html>
