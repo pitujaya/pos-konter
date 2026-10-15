@@ -264,6 +264,7 @@ function goto(page, filter){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.page===page));
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');
+  try{ hideGlobalResults(); }catch{}
   $('sidebar').classList.remove('open');
   const ov=$('sidebarOverlay'); if(ov) ov.classList.remove('show');
   // Buka menu Data HP: tanpa filter -> tampilkan SEMUA (reset);
@@ -654,9 +655,78 @@ function renderData(){
 
 // filter + search + sort
 document.querySelectorAll('.fbtn').forEach(b=>b.onclick=()=>{ document.querySelectorAll('.fbtn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); activeFilter=b.dataset.filter; renderData(); });
-$('globalSearch').addEventListener('input',()=>{ renderData(); });
+$('globalSearch').addEventListener('input',()=>{ renderData(); renderGlobalResults(); });
 $('sortData').onchange=renderData;
 if($('btnTampilSemua')) $('btnTampilSemua').onclick=()=>{ resetDataView(); toast('Menampilkan semua data HP ✅'); };
+
+// ===== PENCARIAN GLOBAL: service/lacak + produk dalam satu kolom =====
+function hideGlobalResults(){ const g=$('globalResults'); if(g) g.classList.add('hidden'); }
+try{ window.hideGlobalResults=hideGlobalResults; }catch{}
+function renderGlobalResults(){
+  const box=$('globalResults'), inp=$('globalSearch');
+  if(!box||!inp) return;
+  const raw=(inp.value||'').trim(), q=raw.toLowerCase();
+  if(q.length<2){ hideGlobalResults(); return; }
+  const svc=(typeof DB!=='undefined'?DB:[]).filter(x=>[(x.noService||''),(x.nama||''),(x.telp||''),(x.merk||''),(x.tipe||''),(x.keluhan||'')].join(' ').toLowerCase().includes(q)).slice(0,6);
+  const spr=(typeof SPARE!=='undefined'?SPARE:[]).filter(x=>[(x.nama||''),(x.sku||''),(x.merk||''),((x&&x.kategori)||'')].join(' ').toLowerCase().includes(q)).slice(0,6);
+  if(!svc.length&&!spr.length){
+    box.innerHTML=`<div class="gr-empty">Tidak ketemu "<b>${esc(raw.slice(0,40))}</b>" di service maupun produk.</div>`;
+    box.classList.remove('hidden'); return;
+  }
+  let h='';
+  if(svc.length){
+    h+=`<div class="gr-group">📲 Service & Lacak (${svc.length})</div>`+svc.map(x=>`<button type="button" class="gr-item" onclick="gGoDetail(${x.id})"><span><b>${esc(x.noService)}</b> • ${esc(x.nama)}<br><small class="muted">${esc(x.merk)} ${esc(x.tipe)} • ${esc(x.telp)}</small></span>${badge(x.status)}</button>`).join('')
+      +`<button type="button" class="gr-more" onclick="gAllService()">Lihat semua di Data Service →</button>`
+      +`<button type="button" class="gr-more" onclick="gOpenLacak()">Lacak di halaman Lacak →</button>`;
+  }
+  if(spr.length){
+    h+=`<div class="gr-group">🔧 Produk / Sparepart (${spr.length})</div>`+spr.map(x=>`<button type="button" class="gr-item" onclick="gGoSpare('${esc(String(x.id))}')"><span><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.sku)} • stok ${esc(x.stok)} • ${fmtRp(x.harga_jual)}</small></span></button>`).join('')
+      +`<button type="button" class="gr-more" onclick="gAllSpare()">Lihat semua di Data Sparepart →</button>`;
+  }
+  box.innerHTML=h; box.classList.remove('hidden');
+}
+window.gGoDetail=function(id){ hideGlobalResults(); if(typeof detail==='function') detail(id); };
+window.gGoSpare=function(id){
+  hideGlobalResults();
+  const x=(typeof findSpare==='function')?findSpare(id):null;
+  goto('sparepart');
+  if($('spSearch')) $('spSearch').value=x?String(x.sku||''):'';
+  try{ renderSpareparts(); }catch{}
+};
+window.gAllService=function(){
+  hideGlobalResults(); closeSidebar();
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.page==='data'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  $('page-data').classList.add('active');
+  activeFilter='Semua';
+  document.querySelectorAll('.fbtn').forEach(x=>x.classList.toggle('active', x.dataset.filter==='Semua'));
+  if($('sortData')) $('sortData').value='baru';
+  renderData();
+  if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); }
+  window.scrollTo({top:0});
+};
+window.gAllSpare=function(){
+  const q=($('globalSearch')||{}).value||'';
+  hideGlobalResults(); goto('sparepart');
+  if($('spSearch')) $('spSearch').value=q;
+  try{ renderSpareparts(); }catch{}
+};
+window.gOpenLacak=function(){
+  const q=($('globalSearch')||{}).value||'';
+  hideGlobalResults(); goto('lacak');
+  if($('lacakInput')) $('lacakInput').value=q;
+  try{ doLacak(); }catch{}
+};
+// Tutup dropdown: klik di luar / tombol Escape
+document.addEventListener('click',(e)=>{
+  try{
+    const box=$('globalResults');
+    if(!box||box.classList.contains('hidden')) return;
+    if(e.target&&e.target.closest&&(e.target.closest('.search-wrap')||e.target.closest('#globalResults'))) return;
+    hideGlobalResults();
+  }catch{}
+});
+document.addEventListener('keydown',(e)=>{ if(e.key==='Escape'){ try{ hideGlobalResults(); }catch{} } });
 
 // ===== DETAIL =====
 window.detail=function(id){

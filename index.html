@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="icon.png" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <title>ServisHP Pro - Management Service HP</title>
-<link rel="stylesheet" href="style.css?v=1.8.4" />
+<link rel="stylesheet" href="style.css?v=1.8.5" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -90,8 +90,6 @@
       </div>
     </div>
 
-    <button class="btn primary side-cta" data-goto="tambah">+ Service Baru</button>
-
     <nav class="nav">
       <button class="nav-btn active" data-page="dashboard">📊 <span>Dashboard</span></button>
       <button class="nav-btn" data-page="tambah">📝 <span>Form Service</span></button>
@@ -100,7 +98,6 @@
       <button class="nav-btn" data-page="data">📲 <span>Data Service</span></button>
       <button class="nav-btn" data-page="sparepart">🔧 <span>Data Sparepart</span></button>
       <button class="nav-btn" data-page="laporan">📑 <span>Laporan</span></button>
-      <button class="nav-btn" data-page="lacak">🔍 <span>Lacak Service</span></button>
       <button class="nav-btn" data-page="pengaturan" id="navPengaturan">⚙️ <span>Pengaturan</span></button>
       <button class="nav-btn" data-page="pengguna" id="navPengguna">👥 <span>Pengguna</span></button>
     </nav>
@@ -130,7 +127,8 @@
       <button class="hamburger" id="openSidebar">☰</button>
       <div class="search-wrap">
         <span>🔍</span>
-        <input id="globalSearch" type="text" placeholder="Cari nama, no HP, merk, No. service..." />
+        <input id="globalSearch" type="text" placeholder="Cari semua: service, no HP, produk / SKU..." autocomplete="off" />
+        <div id="globalResults" class="global-results hidden"></div>
       </div>
     </header>
 
@@ -841,6 +839,6 @@
 
 <script src="config.js?v=1.2.0"></script>
 <script src="api.js?v=1.3.0"></script>
-<script src="script.js?v=1.9.3"></script>
+<script src="script.js?v=1.9.4"></script>
 </body>
 </html>
