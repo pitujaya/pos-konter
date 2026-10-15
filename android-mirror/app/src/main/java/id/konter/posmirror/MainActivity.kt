@@ -712,8 +712,63 @@ class MainActivity : AppCompatActivity() {
             super.onBackPressed()
             return
         }
-        if (::web.isInitialized && web.canGoBack()) web.goBack()
-        else super.onBackPressed()
+        if (!::web.isInitialized) {
+            super.onBackPressed()
+            return
+        }
+        // UX baru: TIDAK ada bottom-nav, semua menu di sidebar.
+        // Back ke-1: tutup modal bila ada, kalau tidak -> BUKA sidebar untuk pilih menu.
+        // Back ke-2 (sidebar sudah terbuka): keluar aplikasi.
+        try {
+            web.evaluateJavascript(
+                "(function(){try{var s=document.getElementById('sidebar');var o=(s&&s.classList.contains('open'))?1:0;var m=document.querySelector('.modal-bg:not(.hidden)')?1:0;return o+'|'+m;}catch(e){return '0|0';}})()"
+            ) { raw ->
+                try {
+                    var r = (raw ?: "").trim()
+                    if (r.length >= 2 && r.startsWith("\"") && r.endsWith("\"")) {
+                        r = r.substring(1, r.length - 1).replace("\\n", "").replace("\\\"", "\"")
+                    }
+                    val parts = r.split("|")
+                    val sidebarOpen = parts.getOrNull(0)?.trim() == "1"
+                    val modalOpen = parts.getOrNull(1)?.trim() == "1"
+                    if (modalOpen) {
+                        try {
+                            web.evaluateJavascript(
+                                "(function(){try{if(typeof closeAllModals==='function'){closeAllModals();}else{document.querySelectorAll('.modal-bg').forEach(function(x){x.classList.add('hidden')});}if(typeof closeScan==='function'){try{closeScan();}catch(_){}}}catch(e){} return 1;})()",
+                                null
+                            )
+                        } catch (_: Exception) {}
+                        return@evaluateJavascript
+                    }
+                    if (!sidebarOpen) {
+                        try {
+                            web.evaluateJavascript(
+                                "(function(){try{if(typeof openSidebar==='function'){openSidebar();}else{var s=document.getElementById('sidebar');if(s)s.classList.add('open');var o=document.getElementById('sidebarOverlay');if(o)o.classList.add('show');}return 1;}catch(e){return 0;}})()",
+                                null
+                            )
+                        } catch (_: Exception) {}
+                        // konsumsi back, jangan keluar / jangan web.goBack
+                        return@evaluateJavascript
+                    }
+                    // Sidebar sudah terbuka -> tekan back lagi = keluar
+                    try {
+                        super.onBackPressed()
+                    } catch (_: Exception) {}
+                } catch (_: Exception) {
+                    // fallback aman: coba buka sidebar, jangan keluar
+                    try {
+                        web.evaluateJavascript(
+                            "(function(){try{if(typeof openSidebar==='function'){openSidebar();return 1;}var s=document.getElementById('sidebar');if(s)s.classList.add('open');return 1;}catch(e){return 0;}})()",
+                            null
+                        )
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (_: Exception) {
+            try {
+                super.onBackPressed()
+            } catch (_: Exception) {}
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

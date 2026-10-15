@@ -139,13 +139,13 @@ function showApp(user){
   if($('sideUserId')) $('sideUserId').textContent=(user.email||'')+(user.email&&user.hp?' • ':'')+(user.hp||'');
   if($('sideAvatar')) $('sideAvatar').textContent=String(user.nama||'👤').trim().charAt(0).toUpperCase()||'👤';
   $('accNama').textContent=user.nama; $('accRole').textContent=roleLabel(role); $('accEmail').textContent=user.email||'-'; $('accHp').textContent=user.hp||'-';
-  if($('bottomNav')) $('bottomNav').classList.remove('hidden');
+  try{ var bn=$('bottomNav'); if(bn&&bn.parentNode) bn.parentNode.removeChild(bn); }catch{}
   applyRoleUI(); renderUsers();
 }
 function showAuth(){
   $('authScreen').classList.remove('hidden');
   $('mainApp').classList.add('hidden');
-  if($('bottomNav')) $('bottomNav').classList.add('hidden');
+  try{ var bn2=$('bottomNav'); if(bn2&&bn2.parentNode) bn2.parentNode.removeChild(bn2); }catch{}
   const ov=$('sidebarOverlay'); if(ov) ov.classList.remove('show');
   const sb=$('sidebar'); if(sb) sb.classList.remove('open');
 }
@@ -262,7 +262,6 @@ function goto(page, filter){
   if(page==='pengaturan' && myRole()==='kasir'){ toast('⛔ Pengaturan khusus Admin / Super Admin'); return; }
   if(page==='pengguna' && !isSuperAdmin()){ toast('⛔ Kelola Pengguna khusus Super Admin'); return; }
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.page===page));
-  document.querySelectorAll('#bottomNav button').forEach(b=>b.classList.toggle('active', b.dataset.page===page));
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');
   $('sidebar').classList.remove('open');
@@ -296,10 +295,14 @@ function resetDataView(){
   if($('sortData')) $('sortData').value='baru';
   renderData();
 }
-$('openSidebar').onclick=()=>{ $('sidebar').classList.add('open'); const ov=$('sidebarOverlay'); if(ov) ov.classList.add('show'); };
-$('closeSidebar').onclick=()=>{ $('sidebar').classList.remove('open'); const ov=$('sidebarOverlay'); if(ov) ov.classList.remove('show'); };
-if($('sidebarOverlay')) $('sidebarOverlay').onclick=()=>{ $('sidebar').classList.remove('open'); $('sidebarOverlay').classList.remove('show'); };
-document.querySelectorAll('#bottomNav button').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.page)));
+$('openSidebar').onclick=()=>{ try{ openSidebar(); }catch{ $('sidebar').classList.add('open'); } };
+$('closeSidebar').onclick=()=>{ try{ closeSidebar(); }catch{ $('sidebar').classList.remove('open'); } };
+if($('sidebarOverlay')) $('sidebarOverlay').onclick=()=>{ closeSidebar(); };
+// ===== SIDEBAR HELPERS (dipakai tombol back APK via MainActivity) =====
+function openSidebar(){ try{ $('sidebar').classList.add('open'); }catch{} try{ const ov=$('sidebarOverlay'); if(ov) ov.classList.add('show'); }catch{} }
+function closeSidebar(){ try{ $('sidebar').classList.remove('open'); }catch{} try{ const ov=$('sidebarOverlay'); if(ov) ov.classList.remove('show'); }catch{} }
+function isSidebarOpen(){ try{ return !!($('sidebar')&&$('sidebar').classList.contains('open')); }catch{ return false; } }
+try{ window.openSidebar=openSidebar; window.closeSidebar=closeSidebar; window.isSidebarOpen=isSidebarOpen; }catch{}
 
 // ===== NOMOR SERVICE =====
 function genNoService(){
@@ -728,7 +731,7 @@ window.hapus=async function(id){
   DB=DB.filter(d=>d.id!==id); saveData(); renderAll(); toast('Data dihapus');
 };
 function closeAllModals(){
-  ['modalDetail','modalEdit','modalSpare'].forEach(id=>{ const m=$(id); if(m) m.classList.add('hidden'); });
+  ['modalDetail','modalEdit','modalSpare','modalExpense'].forEach(id=>{ const m=$(id); if(m) m.classList.add('hidden'); });
   if(typeof closeScan==='function'){
     try{
       const ms=$('modalScan');
@@ -737,6 +740,7 @@ function closeAllModals(){
   } else {
     const ms=$('modalScan'); if(ms) ms.classList.add('hidden');
   }
+  try{ window.closeAllModals=closeAllModals; }catch{}
 }
 function bindCloseButtons(){
   // Delegasi global: semua [data-close] pasti menutup modal (tahan terhadap render ulang)
