@@ -1251,11 +1251,26 @@ function loadSpareLocal(){ try{ return JSON.parse(localStorage.getItem(LS_SPARE)
 function saveSpareLocal(){ try{ localStorage.setItem(LS_SPARE, JSON.stringify(SPARE)); }catch{} }
 if(!localStorage.getItem(LS_SPARE)){
   SPARE=[
-    {id:1, nama:'LCD Samsung A12', sku:'LCD-SSA12', merk:'Samsung', hpp:180000, harga_jual:250000, stok:8, stok_min:3},
-    {id:2, nama:'Baterai Redmi 12C', sku:'BAT-R12C', merk:'Xiaomi', hpp:65000, harga_jual:95000, stok:2, stok_min:5},
-    {id:3, nama:'Charger 25W USB-C', sku:'CHR-25WC', merk:'Samsung', hpp:45000, harga_jual:75000, stok:15, stok_min:5},
+    {id:1, nama:'LCD Samsung A12', sku:'LCD-SSA12', merk:'Samsung', kategori:'LCD', hpp:180000, harga_jual:250000, stok:8, stok_min:3},
+    {id:2, nama:'Baterai Redmi 12C', sku:'BAT-R12C', merk:'Xiaomi', kategori:'Baterai', hpp:65000, harga_jual:95000, stok:2, stok_min:5},
+    {id:3, nama:'Charger 25W USB-C', sku:'CHR-25WC', merk:'Samsung', kategori:'Charger', hpp:45000, harga_jual:75000, stok:15, stok_min:5},
   ];
   saveSpareLocal();
+}
+function spKat(x){ return ((x && x.kategori) || 'Lainnya').toString().trim() || 'Lainnya'; }
+function spKategoriList(){
+  const seen={};
+  (SPARE||[]).forEach(x=>{ const k=spKat(x); if(!seen[k]) seen[k]=1; });
+  return Object.keys(seen).sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
+}
+function refreshSpKategoriUI(){
+  const sel=$('spKategori'); if(!sel) return;
+  const cur=sel.value||'';
+  const list=spKategoriList();
+  sel.innerHTML='<option value="">Semua Kategori</option>'+list.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('');
+  if(cur && (cur==='' || list.includes(cur))) sel.value=cur;
+  const dl=$('spKategoriList');
+  if(dl) dl.innerHTML=list.map(k=>`<option value="${esc(k)}"></option>`).join('');
 }
 async function pullSpareparts(){
   if(!useBackend()) return false;
@@ -1273,10 +1288,13 @@ function spMargin(x){
 }
 function renderSpareparts(){
   if(!$('spTable')) return;
+  refreshSpKategoriUI();
   const q=(($('spSearch') && $('spSearch').value)||'').toLowerCase().trim();
+  const fk=(($('spKategori') && $('spKategori').value)||'').trim();
   let r=[...SPARE];
+  if(fk) r=r.filter(x=>spKat(x).toLowerCase()===fk.toLowerCase());
   if(spLowOnly) r=r.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0));
-  if(q) r=r.filter(x=>[(x.nama||''),(x.sku||''),(x.merk||'')].join(' ').toLowerCase().includes(q));
+  if(q) r=r.filter(x=>[(x.nama||''),(x.sku||''),(x.merk||''),spKat(x)].join(' ').toLowerCase().includes(q));
   const s=$('spSort') ? $('spSort').value : 'nama';
   if(s==='sku') r.sort((a,b)=>String(a.sku||'').localeCompare(String(b.sku||'')));
   else if(s==='stok') r.sort((a,b)=>Number(a.stok||0)-Number(b.stok||0));
@@ -1302,6 +1320,7 @@ function renderSpareparts(){
       <td><b>${esc(x.sku)}</b></td>
       <td><b>${esc(x.nama)}</b><br><small class="muted">Margin: ${esc(spMargin(x))}</small></td>
       <td>${esc(x.merk||'-')}</td>
+      <td><span class="badge b-Dikerjakan">${esc(spKat(x))}</span></td>
       <td>${fmtRp(x.hpp)}</td>
       <td><b>${fmtRp(x.harga_jual)}</b></td>
       <td><b>${esc(x.stok)}</b><small class="muted"> / min ${esc(x.stok_min)}</small><br>${isLow?'<span class="badge b-Batal">Menipis</span>':'<span class="badge b-Selesai">Aman</span>'}</td>
@@ -1316,6 +1335,7 @@ function renderSpareparts(){
 function findSpare(id){ return SPARE.find(d=>String(d.id)===String(id)); }
 if($('spSearch')) $('spSearch').addEventListener('input',()=>renderSpareparts());
 if($('spSort')) $('spSort').onchange=renderSpareparts;
+if($('spKategori')) $('spKategori').onchange=renderSpareparts;
 if($('spLowBtn')) $('spLowBtn').onclick=()=>{
   spLowOnly=!spLowOnly;
   $('spLowBtn').classList.toggle('active', spLowOnly);
@@ -1326,6 +1346,7 @@ function openSpareModal(){
   spEditId=null;
   $('spareTitle').textContent='Tambah Sparepart';
   $('sp_nama').value=''; $('sp_sku').value=''; $('sp_merk').value='';
+  if($('sp_kategori')) $('sp_kategori').value='Lainnya';
   $('sp_hpp').value=0; $('sp_jual').value=0; $('sp_stok').value=0; $('sp_min').value=0;
   updSpMargin();
   $('modalSpare').classList.remove('hidden');
@@ -1344,6 +1365,7 @@ window.spEdit=function(id){
   const x=findSpare(id); if(!x){ toast('Data tidak ditemukan'); return; } spEditId=x.id;
   $('spareTitle').textContent='Edit Sparepart';
   $('sp_nama').value=x.nama; $('sp_sku').value=x.sku; $('sp_merk').value=x.merk||'';
+  if($('sp_kategori')) $('sp_kategori').value=spKat(x);
   $('sp_hpp').value=x.hpp||0; $('sp_jual').value=x.harga_jual||0; $('sp_stok').value=x.stok||0; $('sp_min').value=x.stok_min||0;
   updSpMargin();
   $('modalSpare').classList.remove('hidden');
@@ -1351,14 +1373,15 @@ window.spEdit=function(id){
 if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
   if(!needAdmin()) return;
   const nama=$('sp_nama').value.trim(), sku=$('sp_sku').value.trim(), merk=$('sp_merk').value.trim();
+  const kategori=(($('sp_kategori')||{}).value||'Lainnya').trim()||'Lainnya';
   const hpp=Number($('sp_hpp').value||0), jual=Number($('sp_jual').value||0);
   const stok=Number($('sp_stok').value||0), smin=Number($('sp_min').value||0);
   if(!nama||!sku){ toast('Nama + SKU wajib diisi'); return; }
   const isEdit=(spEditId!==null && spEditId!==undefined);
   if(useBackend()){
     try{
-      if(isEdit) await window.API.updateSparepart(spEditId,{nama,sku,merk,hpp,harga_jual:jual,stok,stok_min:smin});
-      else await window.API.createSparepart({nama,sku,merk,hpp,harga_jual:jual,stok,stok_min:smin});
+      if(isEdit) await window.API.updateSparepart(spEditId,{nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
+      else await window.API.createSparepart({nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
       $('modalSpare').classList.add('hidden');
       await pullSpareparts(); renderAll();
       toast('Sparepart tersimpan ✅'); return;
@@ -1367,10 +1390,10 @@ if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
   if(spEditId!==null && spEditId!==undefined){
     const x=findSpare(spEditId); if(!x){ toast('Data tidak ditemukan'); return; }
     if(SPARE.some(d=>String(d.id)!==String(spEditId)&&String(d.sku).toLowerCase()===sku.toLowerCase())){ toast('SKU sudah dipakai'); return; }
-    Object.assign(x,{nama,sku,merk,hpp,harga_jual:jual,stok,stok_min:smin});
+    Object.assign(x,{nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
   } else {
     if(SPARE.some(d=>String(d.sku).toLowerCase()===sku.toLowerCase())){ toast('SKU sudah dipakai'); return; }
-    SPARE.push({id:Date.now(),nama,sku,merk,hpp,harga_jual:jual,stok,stok_min:smin});
+    SPARE.push({id:Date.now(),nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
   }
   saveSpareLocal();
   $('modalSpare').classList.add('hidden');
@@ -1556,8 +1579,8 @@ function bindPenjualan(){
     const box=$('j_hasil'); if(!box) return;
     const q=si.value.toLowerCase().trim();
     if(!q){ box.innerHTML=''; return; }
-    const r=(typeof SPARE!=='undefined'?SPARE:[]).filter(x=>[(x.nama||''),(x.sku||''),(x.merk||'')].join(' ').toLowerCase().includes(q)).slice(0,8);
-    box.innerHTML=r.map(x=>`<button type="button" class="pick" data-sp="${esc(String(x.id))}"><b>${esc(x.nama)}</b> <small>${esc(x.sku)} • ${fmtRp(x.harga_jual)} • stok ${esc(x.stok)}</small></button>`).join('')||'<small class="muted">Tidak ada barang cocok.</small>';
+    const r=(typeof SPARE!=='undefined'?SPARE:[]).filter(x=>[(x.nama||''),(x.sku||''),(x.merk||''),((x&&x.kategori)||'')].join(' ').toLowerCase().includes(q)).slice(0,8);
+    box.innerHTML=r.map(x=>`<button type="button" class="pick" data-sp="${esc(String(x.id))}"><b>${esc(x.nama)}</b> <small>${esc(x.sku)} • ${esc(((x&&x.kategori)||'Lainnya'))} • ${fmtRp(x.harga_jual)} • stok ${esc(x.stok)}</small></button>`).join('')||'<small class="muted">Tidak ada barang cocok.</small>';
     box.querySelectorAll('.pick').forEach(b=>b.onclick=()=>{
       const sp=(typeof findSpare==='function')?findSpare(b.dataset.sp):(SPARE||[]).find(d=>String(d.id)===String(b.dataset.sp));
       if(sp) jualAddBarang(sp);
@@ -1901,7 +1924,7 @@ async function renderLaporan(){
   const sp=[...(typeof SPARE!=='undefined'?SPARE:[])].sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
   if($('lpStokCount')) $('lpStokCount').textContent=sp.length;
   if($('lpStokBody')) $('lpStokBody').innerHTML=sp.map(x=>{ const low=Number(x.stok||0)<=Number(x.stok_min||0); return `<tr>
-    <td><b>${esc(x.sku)}</b></td><td><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.merk||'')}</small></td>
+    <td><b>${esc(x.sku)}</b></td><td><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.merk||'')} • ${esc(((x&&x.kategori)||'Lainnya'))}</small></td>
     <td>${fmtRp(x.hpp)}</td><td><b>${fmtRp(x.harga_jual)}</b></td>
     <td><b>${esc(x.stok)}</b><br>${low?'<span class="badge b-Batal">Menipis</span>':'<span class="badge b-Selesai">Aman</span>'}</td>
     <td style="text-align:right"><b>${fmtRp(Number(x.hpp||0)*Number(x.stok||0))}</b></td></tr>`; }).join('')
@@ -1950,8 +1973,8 @@ function exportLaporanCSV(){
   (r.service_diambil||[]).forEach(x=>L.push([x.noService,x.tanggal,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.telp,x.biaya].join(',')));
   L.push('');
   L.push('STOK');
-  L.push('SKU,Nama,Merk,HPP,Jual,Stok,Nilai HPP');
-  (typeof SPARE!=='undefined'?SPARE:[]).forEach(x=>L.push([x.sku,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.merk,x.hpp,x.harga_jual,x.stok,Number(x.hpp||0)*Number(x.stok||0)].join(',')));
+  L.push('SKU,Nama,Merk,Kategori,HPP,Jual,Stok,Nilai HPP');
+  (typeof SPARE!=='undefined'?SPARE:[]).forEach(x=>L.push([x.sku,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.merk,'"'+String(((x&&x.kategori)||'Lainnya')).replace(/"/g,'""')+'"',x.hpp,x.harga_jual,x.stok,Number(x.hpp||0)*Number(x.stok||0)].join(',')));
   download('laporan-'+(r.dari||'semua')+'-sd-'+(r.sampai||'semua')+'.csv',L.join('\n'),'text/csv');
   toast('CSV laporan diunduh ⬇');
 }

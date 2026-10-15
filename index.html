@@ -359,9 +359,12 @@
       <div class="toolbar">
         <div class="search-wrap" style="max-width:320px">
           <span>🔍</span>
-          <input id="spSearch" type="text" placeholder="Cari nama / SKU / merk..." />
+          <input id="spSearch" type="text" placeholder="Cari nama / SKU / merk / kategori..." />
         </div>
         <div class="toolbar-right">
+          <select id="spKategori" title="Filter kategori">
+            <option value="">Semua Kategori</option>
+          </select>
           <select id="spSort">
             <option value="nama">Nama A-Z</option>
             <option value="sku">SKU A-Z</option>
@@ -374,7 +377,7 @@
       <div class="card table-wrap">
         <table>
           <thead><tr>
-            <th>SKU</th><th>Barang</th><th>Merk</th><th>HPP</th><th>Jual</th><th>Stok</th><th>Aksi</th>
+            <th>SKU</th><th>Barang</th><th>Merk</th><th>Kategori</th><th>HPP</th><th>Jual</th><th>Stok</th><th>Aksi</th>
           </tr></thead>
           <tbody id="spTable"></tbody>
         </table>
@@ -793,6 +796,8 @@
     <div class="modal-body">
       <label>Nama Barang *<input id="sp_nama" placeholder="cth: LCD Samsung A12" /></label>
       <label>Nomor SKU *<span class="sku-row"><input id="sp_sku" placeholder="ketik manual atau scan" /><button type="button" class="btn small primary" id="btnScanSku">📷 Scan</button></span></label>
+      <div class="row2"><label>Merk<input id="sp_merk" placeholder="cth: Samsung" /></label><label>Kategori<input id="sp_kategori" list="spKategoriList" placeholder="cth: LCD, Baterai, Charger" /></label></div>
+      <datalist id="spKategoriList"></datalist>
       <div class="row2"><label>Merk<input id="sp_merk" placeholder="cth: Samsung" /></label><label>Stok Minimum<input id="sp_min" type="number" min="0" value="0" /></label></div>
       <div class="row3"><label>HPP (Rp)<input id="sp_hpp" type="number" min="0" value="0" /></label><label>Harga Jual (Rp)<input id="sp_jual" type="number" min="0" value="0" /></label><label>Jumlah Stok<input id="sp_stok" type="number" min="0" value="0" /></label></div>
       <p class="muted" id="spMargin"></p>

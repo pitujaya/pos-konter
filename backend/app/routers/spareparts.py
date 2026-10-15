@@ -12,23 +12,44 @@ router = APIRouter(prefix="/spareparts", tags=["spareparts"])
 def to_out(s: models.Sparepart) -> dict:
     return {
         "id": s.id, "nama": s.nama, "sku": s.sku, "merk": s.merk or "",
+        "kategori": (getattr(s, "kategori", None) or "Lainnya"),
         "hpp": s.hpp or 0, "harga_jual": s.harga_jual or 0,
         "stok": s.stok or 0, "stok_min": s.stok_min or 0,
     }
 
 
+def _norm_kat(v: str | None) -> str:
+    v = (v or "").strip()
+    return v or "Lainnya"
+
+
+@router.get("/kategoris", response_model=list[str])
+def list_kategoris(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+    rows = db.query(models.Sparepart).all()
+    seen: dict[str, None] = {}
+    for r in rows:
+        k = _norm_kat(getattr(r, "kategori", None))
+        if k not in seen:
+            seen[k] = None
+    return sorted(seen.keys(), key=str.lower) or ["Lainnya"]
+
+
 @router.get("", response_model=list[schemas.SparepartOut])
 def list_spareparts(
-    q: str = Query("", description="cari nama / sku / merk"),
+    q: str = Query("", description="cari nama / sku / merk / kategori"),
+    kategori: str = Query("", description="filter kategori persis, kosong = semua"),
     sort: str = Query("nama", description="nama|sku|stok"),
     low: bool = Query(False, description="hanya stok menipis"),
     skip: int = 0, limit: int = 1000,
     db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
 ):
     rows = db.query(models.Sparepart).all()
+    if kategori and kategori != "Semua":
+        kl = kategori.strip().lower()
+        rows = [r for r in rows if _norm_kat(getattr(r, "kategori", None)).lower() == kl]
     if q:
         ql = q.lower()
-        rows = [r for r in rows if ql in " ".join([r.nama or "", r.sku or "", r.merk or ""]).lower()]
+        rows = [r for r in rows if ql in " ".join([r.nama or "", r.sku or "", r.merk or "", _norm_kat(getattr(r, "kategori", None))]).lower()]
     if low:
         rows = [r for r in rows if (r.stok or 0) <= (r.stok_min or 0)]
     if sort == "sku":
@@ -52,6 +73,7 @@ def create_sparepart(body: schemas.SparepartIn, db: Session = Depends(get_db), _
         raise HTTPException(400, "SKU sudah dipakai")
     s = models.Sparepart(
         nama=nama, sku=sku, merk=(body.merk or "").strip(),
+        kategori=_norm_kat(body.kategori),
         hpp=int(body.hpp or 0), harga_jual=int(body.harga_jual or 0),
         stok=int(body.stok or 0), stok_min=int(body.stok_min or 0),
     )
@@ -94,6 +116,10 @@ def update_sparepart(sp_id: int, body: schemas.SparepartUpdateIn,
         if not data["nama"].strip():
             raise HTTPException(400, "Nama barang wajib diisi")
         data["nama"] = data["nama"].strip()
+    if "kategori" in data:
+        data["kategori"] = _norm_kat(data["kategori"])
+    if "merk" in data and data["merk"] is not None:
+        data["merk"] = data["merk"].strip()
     for k, v in data.items():
         if v is not None:
             setattr(s, k, v)

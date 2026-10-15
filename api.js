@@ -254,12 +254,13 @@
     deleteSlide(id) { return this.req("/slides/" + id, { method: "DELETE" }); },
     listSpareparts(params = {}) {
       const qs = new URLSearchParams({
-        q: params.q || "", sort: params.sort || "nama",
+        q: params.q || "", kategori: params.kategori || "", sort: params.sort || "nama",
         low: params.low ? "true" : "false",
         skip: String(params.skip || 0), limit: String(params.limit || 1000),
       }).toString();
       return this.req("/spareparts?" + qs);
     },
+    listSpareKategoris() { return this.req("/spareparts/kategoris"); },
     createSparepart(payload) { return this.req("/spareparts", { method: "POST", body: payload }); },
     updateSparepart(id, payload) { return this.req("/spareparts/" + id, { method: "PUT", body: payload }); },
     adjustStock(id, delta) { return this.req("/spareparts/" + id + "/stock", { method: "PATCH", body: { delta } }); },

@@ -85,6 +85,15 @@ async def _security_headers(request, call_next):
 
 try:
     Base.metadata.create_all(bind=engine)
+    # Migrasi ringan SQLite: tambah kolom kategori bila DB lama belum punya.
+    try:
+        with engine.begin() as _conn:
+            _cols = [r[1] for r in _conn.exec_driver_sql("PRAGMA table_info(spareparts)").fetchall()]
+            if "kategori" not in _cols:
+                _conn.exec_driver_sql("ALTER TABLE spareparts ADD COLUMN kategori VARCHAR(80) DEFAULT 'Lainnya'")
+                _conn.exec_driver_sql("UPDATE spareparts SET kategori='Lainnya' WHERE kategori IS NULL OR kategori=''")
+    except Exception as _me:
+        print(f"[WARN] migrasi kategori sparepart: {_me}")
     with SessionLocal() as _db:
         seed(_db)
 except Exception as e:  # jangan bikin container crash-loop tanpa pesan
