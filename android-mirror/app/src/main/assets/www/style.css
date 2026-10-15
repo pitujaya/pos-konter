@@ -3,14 +3,16 @@
 body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink)}
 .app{display:flex;min-height:100vh}
 /* SIDEBAR */
-.sidebar{width:260px;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;padding:20px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-.brand{display:flex;gap:12px;align-items:center;padding:6px 8px 18px;border-bottom:1px solid #1e293b;margin-bottom:14px}
+.sidebar{width:260px;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;padding:20px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;scrollbar-width:thin;flex-shrink:0}
+.brand{display:flex;gap:12px;align-items:center;padding:6px 8px 18px;border-bottom:1px solid #1e293b;margin-bottom:14px;flex-shrink:0}
 .brand-logo{width:44px;height:44px;background:linear-gradient(135deg,#2563eb,#7c3aed);border-radius:12px;display:grid;place-items:center;font-size:24px}
 .brand h2{font-size:17px}.brand small{color:#94a3b8}
-.nav{display:flex;flex-direction:column;gap:6px;flex:1;min-height:0}
+.nav{display:flex;flex-direction:column;gap:6px;flex:1 1 auto;min-height:80px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding-bottom:6px}
 .nav-btn{background:transparent;border:0;color:#cbd5e1;padding:12px 14px;border-radius:10px;text-align:left;font-size:14.5px;font-weight:600;cursor:pointer;display:flex;gap:10px;align-items:center;transition:.15s}
 .nav-btn:hover{background:#1e293b}
 .nav-btn.active{background:var(--blue);color:#fff}
+.sidebar::-webkit-scrollbar,.nav::-webkit-scrollbar{width:6px}
+.sidebar::-webkit-scrollbar-thumb,.nav::-webkit-scrollbar-thumb{background:#334155;border-radius:99px}
 /* PROFIL USER DI SIDEBAR */
 .side-profile{display:flex;gap:12px;align-items:center;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:12px;margin-bottom:0}
 .side-avatar{width:44px;height:44px;min-width:44px;border-radius:50%;display:grid;place-items:center;font-size:22px;background:linear-gradient(135deg,#2563eb,#7c3aed);border:2px solid #475569}
@@ -19,8 +21,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--i
 .side-profile-info .role-badge{font-size:11px}
 .side-profile-info small{color:#94a3b8;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block}
 /* TOMBOL SERVICE BARU DI SIDEBAR */
-.side-cta{width:100%;margin-bottom:14px;padding:12px;font-size:14.5px;display:flex;justify-content:center;align-items:center;gap:6px}
-.sidebar-foot{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.side-cta{width:100%;margin-bottom:14px;padding:12px;font-size:14.5px;display:flex;justify-content:center;align-items:center;gap:6px;flex-shrink:0}
+.sidebar-foot{margin-top:12px;display:flex;flex-direction:column;gap:8px;flex-shrink:0}
 .side-logout{width:100%;display:flex;justify-content:center;align-items:center;gap:6px;padding:11px}
 .konter-card{background:#1e293b;border-radius:10px;padding:10px 12px;margin-bottom:8px}
 .konter-card small{color:#94a3b8;display:block}
@@ -266,7 +268,7 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
 @media(max-width:760px){
   html{scroll-padding-top:70px;scroll-padding-bottom:24px}
   body{overflow-x:hidden}
-  .sidebar{position:fixed;left:0;top:0;bottom:0;height:100vh;height:100dvh;z-index:60;width:min(84vw,300px);transform:translateX(-105%);transition:.2s;box-shadow:0 0 40px rgba(0,0,0,.35);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;height:100vh;height:100dvh;z-index:60;width:min(84vw,300px);transform:translateX(-105%);transition:.2s;box-shadow:0 0 40px rgba(0,0,0,.35);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
   .sidebar.open{transform:none}
   .sidebar-overlay.show{display:block;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:55}
   .hamburger{display:block}.hamburger-close{display:block;position:absolute;top:12px;right:12px;border:0;background:#1e293b;color:#fff;border-radius:8px;width:30px;height:30px;cursor:pointer}
