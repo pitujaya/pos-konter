@@ -1345,12 +1345,51 @@ if($('spLowBtn')) $('spLowBtn').onclick=()=>{
   $('spLowBtn').classList.toggle('active', spLowOnly);
   renderSpareparts();
 };
+function spMerk(x){ return ((x && x.merk) || '').toString().trim(); }
+function spMerkList(){
+  const seen={};
+  (SPARE||[]).forEach(x=>{ const m=spMerk(x); if(m && !seen[m.toLowerCase()]) seen[m.toLowerCase()]=m; });
+  return Object.keys(seen).map(k=>seen[k]).sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
+}
+// Isi dropdown modal sparepart dari data yg sudah ada (+ opsi "Baru..." via prompt)
+function fillSpareSelect(sel, list, current, placeholder){
+  if(!sel) return;
+  sel.innerHTML='<option value="">'+esc(placeholder)+'</option>'
+    +list.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')
+    +'<option value="__baru">➕ Baru...</option>';
+  const cur=String(current||'').trim();
+  if(!cur){ sel.value=''; return; }
+  const match=list.find(v=>v.toLowerCase()===cur.toLowerCase());
+  if(match!==undefined){ sel.value=match; return; }
+  const o=document.createElement('option'); o.value=cur; o.textContent=cur;
+  sel.insertBefore(o, sel.querySelector('option[value="__baru"]'));
+  sel.value=cur;
+}
+function refreshSpareModalLists(curMerk, curKat){
+  fillSpareSelect($('sp_merk'), spMerkList(), curMerk||'', '— Tanpa Merk —');
+  fillSpareSelect($('sp_kategori'), spKategoriList(), curKat||'', '— Pilih Kategori —');
+}
+function bindSpareBaru(){
+  [['sp_merk','merk'],['sp_kategori','kategori']].forEach(([id,kind])=>{
+    const sel=$(id); if(!sel||sel.dataset.baruBound) return; sel.dataset.baruBound='1';
+    sel.addEventListener('change',()=>{
+      if(sel.value!=='__baru') return;
+      const v=prompt('Nama '+(kind==='merk'?'merk':'kategori')+' baru:');
+      const t=String(v||'').trim();
+      if(!t){ sel.value=''; return; }
+      const o=document.createElement('option'); o.value=t; o.textContent=t;
+      sel.insertBefore(o, sel.querySelector('option[value="__baru"]'));
+      sel.value=t;
+    });
+  });
+}
+try{ bindSpareBaru(); }catch{}
 function openSpareModal(){
   if(!needAdmin()) return;
   spEditId=null;
   $('spareTitle').textContent='Tambah Sparepart';
-  $('sp_nama').value=''; $('sp_sku').value=''; $('sp_merk').value='';
-  if($('sp_kategori')) $('sp_kategori').value='Lainnya';
+  $('sp_nama').value=''; $('sp_sku').value='';
+  refreshSpareModalLists('', '');
   $('sp_hpp').value=0; $('sp_jual').value=0; $('sp_stok').value=0; $('sp_min').value=0;
   updSpMargin();
   $('modalSpare').classList.remove('hidden');
@@ -1368,19 +1407,21 @@ window.spEdit=function(id){
   if(!needAdmin()) return;
   const x=findSpare(id); if(!x){ toast('Data tidak ditemukan'); return; } spEditId=x.id;
   $('spareTitle').textContent='Edit Sparepart';
-  $('sp_nama').value=x.nama; $('sp_sku').value=x.sku; $('sp_merk').value=x.merk||'';
-  if($('sp_kategori')) $('sp_kategori').value=spKat(x);
+  $('sp_nama').value=x.nama; $('sp_sku').value=x.sku;
+  refreshSpareModalLists(x.merk||'', (x.kategori||'').trim());
   $('sp_hpp').value=x.hpp||0; $('sp_jual').value=x.harga_jual||0; $('sp_stok').value=x.stok||0; $('sp_min').value=x.stok_min||0;
   updSpMargin();
   $('modalSpare').classList.remove('hidden');
 };
 if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
   if(!needAdmin()) return;
-  const nama=$('sp_nama').value.trim(), sku=$('sp_sku').value.trim(), merk=$('sp_merk').value.trim();
-  const kategori=(($('sp_kategori')||{}).value||'Lainnya').trim()||'Lainnya';
+  const nama=$('sp_nama').value.trim(), sku=$('sp_sku').value.trim();
+  let merk=(($('sp_merk')||{}).value||'').trim(); if(merk==='__baru') merk='';
+  const kategori=(($('sp_kategori')||{}).value||'').trim();
   const hpp=Number($('sp_hpp').value||0), jual=Number($('sp_jual').value||0);
   const stok=Number($('sp_stok').value||0), smin=Number($('sp_min').value||0);
   if(!nama||!sku){ toast('Nama + SKU wajib diisi'); return; }
+  if(!kategori || kategori==='__baru'){ toast('Pilih kategori dulu'); return; }
   const isEdit=(spEditId!==null && spEditId!==undefined);
   if(useBackend()){
     try{
