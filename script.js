@@ -1423,8 +1423,12 @@ window.spStock=async function(id, delta){
   x.stok=Number(x.stok||0)+delta; saveSpareLocal(); renderAll();
 };
 // ===== SCAN SKU (kamera, tanpa library) =====
-if($('btnScanSku')) $('btnScanSku').onclick=()=>openScan();
-async function openScan(){
+// target 'sku' = isi field SKU form sparepart, target 'jual' = langsung masuk keranjang kasir
+let scanTarget = 'sku';
+if($('btnScanSku')) $('btnScanSku').onclick=()=>openScan('sku');
+if($('btnScanJual')) $('btnScanJual').onclick=()=>openScan('jual');
+async function openScan(target){
+  scanTarget = (target==='jual') ? 'jual' : 'sku';
   $('modalScan').classList.remove('hidden');
   const st=$('scanStatus'), video=$('scanVideo');
   const stop=()=>closeScan();
@@ -1445,7 +1449,12 @@ async function openScan(){
           const codes=await det.detect(video);
           if(codes && codes.length){
             const v=codes[0].rawValue||'';
-            if(v){ $('sp_sku').value=v; toast('SKU: '+v+' ✅'); stop(); tryLookupSku(v); return; }
+            if(v){
+              stop();
+              if(scanTarget==='jual'){ scanJualAdd(v); }
+              else { $('sp_sku').value=v; toast('SKU: '+v+' ✅'); tryLookupSku(v); }
+              return;
+            }
           }
         }catch{}
       }
@@ -1467,6 +1476,24 @@ async function tryLookupSku(sku){
   if(useBackend()){
     try{ const x=await window.API.getBySku(sku); toast(x.nama+' • stok '+x.stok); await pullSpareparts(); }
     catch{}
+  }
+}
+// Hasil scan di kasir penjualan: SKU cocok -> langsung masuk keranjang
+async function scanJualAdd(sku){
+  const code=String(sku||'').trim();
+  if(!code) return;
+  let found=(typeof SPARE!=='undefined'?SPARE:[]).find(d=>String(d.sku||'').toLowerCase()===code.toLowerCase());
+  if(!found && useBackend()){
+    try{ await window.API.getBySku(code); await pullSpareparts(); }catch{}
+    found=(typeof SPARE!=='undefined'?SPARE:[]).find(d=>String(d.sku||'').toLowerCase()===code.toLowerCase());
+  }
+  if(found){
+    toast('SKU: '+code+' ✅');
+    if(typeof jualAddBarang==='function') jualAddBarang(found);
+  } else {
+    // tidak dikenal -> tampilkan di kolom cari agar kasir bisa lihat / ketik manual
+    if($('j_search')){ $('j_search').value=code; $('j_search').dispatchEvent(new Event('input')); }
+    toast('SKU '+code+' tidak ada di stok ❌');
   }
 }
 document.querySelectorAll('#modalScan [data-close]').forEach(b=>b.addEventListener('click',()=>closeScan()));
