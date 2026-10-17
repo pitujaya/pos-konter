@@ -161,6 +161,39 @@ class Expense(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class CashSession(Base):
+    """Sesi buka/tutup kasir (shift). Satu sesi terbuka per kasir.
+
+    Rekap dihitung saat sesi ditutup: penjualan (tunai/non-tunai), pengeluaran,
+    dan omzet service yang diambil dalam rentang waktu sesi.
+    """
+
+    __tablename__ = "cash_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    kasir: Mapped[str] = mapped_column(String(120), default="", index=True)
+    status: Mapped[str] = mapped_column(String(10), default="open", index=True)  # open|closed
+    modal_awal: Mapped[int] = mapped_column(Integer, default=0)
+    opened_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # rekap transaksi dalam sesi
+    jml_transaksi: Mapped[int] = mapped_column(Integer, default=0)
+    penjualan_count: Mapped[int] = mapped_column(Integer, default=0)
+    penjualan_total: Mapped[int] = mapped_column(Integer, default=0)
+    tunai_masuk: Mapped[int] = mapped_column(Integer, default=0)
+    non_tunai: Mapped[int] = mapped_column(Integer, default=0)
+    pengeluaran_total: Mapped[int] = mapped_column(Integer, default=0)
+    service_count: Mapped[int] = mapped_column(Integer, default=0)
+    service_omzet: Mapped[int] = mapped_column(Integer, default=0)
+    # hasil hitung kas
+    kas_sistem: Mapped[int] = mapped_column(Integer, default=0)  # modal awal + tunai - pengeluaran
+    kas_akhir: Mapped[int] = mapped_column(Integer, default=0)   # hitungan fisik
+    selisih: Mapped[int] = mapped_column(Integer, default=0)
+    catatan: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class AiProvider(Base):
     """Provider LLM untuk AI Router (gemini, ollama, nvidia, kiro, custom)."""
     __tablename__ = "ai_providers"

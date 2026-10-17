@@ -55,6 +55,8 @@ def _in_range(tgl: str, dari: str, sampai: str) -> bool:
 @router.post("/sales", response_model=schemas.SaleOut, status_code=201)
 def create_sale(body: schemas.SaleIn, db: Session = Depends(get_db),
                 user: models.User = Depends(get_current_user)):
+    from .kas_sessions import require_open_session
+    require_open_session(db, user)
     if not body.items:
         raise HTTPException(400, "Keranjang masih kosong, pilih minimal 1 barang")
     tanggal = (body.tanggal or datetime.now().date().isoformat())[:10]

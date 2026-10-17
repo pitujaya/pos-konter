@@ -315,6 +315,41 @@ class ReportOut(BaseModel):
     model_config = {"from_attributes": False}
 
 
+# ---------- Sesi Kasir (buka / tutup shift) ----------
+class CashSessionOpenIn(BaseModel):
+    modal_awal: int = Field(default=0, ge=0)
+    catatan: str | None = ""
+
+
+class CashSessionCloseIn(BaseModel):
+    kas_akhir: int = Field(default=0, ge=0)
+    catatan: str | None = ""
+
+
+class CashSessionOut(BaseModel):
+    id: int
+    user_id: int | None = None
+    kasir: str = ""
+    status: str = "open"
+    modal_awal: int = 0
+    opened_at: datetime | None = None
+    closed_at: datetime | None = None
+    jml_transaksi: int = 0
+    penjualan_count: int = 0
+    penjualan_total: int = 0
+    tunai_masuk: int = 0
+    non_tunai: int = 0
+    pengeluaran_total: int = 0
+    service_count: int = 0
+    service_omzet: int = 0
+    kas_sistem: int = 0
+    kas_akhir: int = 0
+    selisih: int = 0
+    catatan: str = ""
+
+    model_config = {"from_attributes": False}
+
+
 # ---------- AI Router / Monitor ----------
 class AiProviderIn(BaseModel):
     name: str = Field(min_length=1)

@@ -69,7 +69,10 @@ def list_services(
 
 
 @router.post("/services", response_model=schemas.ServiceOut, status_code=201)
-def create_service(body: schemas.ServiceIn, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+def create_service(body: schemas.ServiceIn, db: Session = Depends(get_db),
+                   user: models.User = Depends(get_current_user)):
+    from .kas_sessions import require_open_session
+    require_open_session(db, user)
     for f in ("nama", "telp", "merk", "tipe", "keluhan"):
         if not (getattr(body, f) or "").strip():
             raise HTTPException(400, f"{f} wajib diisi")

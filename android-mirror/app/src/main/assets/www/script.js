@@ -141,6 +141,7 @@ function showApp(user){
   $('accNama').textContent=user.nama; $('accRole').textContent=roleLabel(role); $('accEmail').textContent=user.email||'-'; $('accHp').textContent=user.hp||'-';
   try{ var bn=$('bottomNav'); if(bn&&bn.parentNode) bn.parentNode.removeChild(bn); }catch{}
   applyRoleUI(); renderUsers();
+  try{ syncSesi(); }catch(e){ console.warn('syncSesi:', e); }
 }
 function showAuth(){
   $('authScreen').classList.remove('hidden');
@@ -149,7 +150,7 @@ function showAuth(){
   const ov=$('sidebarOverlay'); if(ov) ov.classList.remove('show');
   const sb=$('sidebar'); if(sb) sb.classList.remove('open');
 }
-function doLogout(){ clearSession(); showAuth(); toast('Berhasil keluar 👋'); }
+function doLogout(){ clearSession(); KAS=null; try{ renderKasUI(); }catch{} showAuth(); toast('Berhasil keluar 👋'); }
 
 const $ = (id) => document.getElementById(id);
 // helper aman: ambil value walau elemen sudah dihapus (DP/IMEI/Warna)
@@ -254,6 +255,285 @@ document.addEventListener('focusin', function(e){
 function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; $('toastWrap').appendChild(t); setTimeout(()=>t.remove(),2500); }
 function esc(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function badge(st){ st = normStatus(st || 'Dikerjakan'); return `<span class="badge b-${String(st).replace(/ /g,'-')}">${esc(st)}</span>`; }
+
+// ===== SESI KASIR (buka / tutup shift) =====
+// Satu sesi terbuka per kasir. Input service/penjualan/pengeluaran DITOLAK
+// selama belum buka sesi (guard frontend + backend 409).
+const LS_KAS = 'servishp_kas_v1';
+let KAS = null;          // sesi terbuka milik user aktif (null = kas tutup)
+let KAS_RIWAYAT = [];    // riwayat sesi untuk modal
+
+function loadKasLocal(){ try{ return JSON.parse(localStorage.getItem(LS_KAS)) || []; }catch{ return []; } }
+function saveKasLocal(list){ try{ localStorage.setItem(LS_KAS, JSON.stringify(list || KAS_RIWAYAT)); }catch{} }
+function parseTs(s){
+  if(!s) return 0;
+  let str = String(s).trim().replace(' ', 'T');
+  // timestamp backend (datetime naive, disimpan UTC) -> paksa UTC agar tidak geser zona
+  if(!/(Z|[+-]\d{2}:?\d{2})$/.test(str)) str += 'Z';
+  const t = Date.parse(str);
+  return isNaN(t) ? 0 : t;
+}
+function tsRecord(x){
+  if(!x) return 0;
+  if(x.created_at){ const t = parseTs(x.created_at); if(t) return t; }
+  const id = Number(x.id) || 0;
+  if(id > 1e12) return id;                       // id lokal = Date.now()
+  if(x.tanggal){ const t = Date.parse(String(x.tanggal).slice(0,10) + 'T00:00:00Z'); if(!isNaN(t)) return t; }
+  return 0;
+}
+function fmtJam(iso){
+  const t = parseTs(iso); if(!t) return '-';
+  return new Date(t).toLocaleString('id-ID', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+}
+function tunaiMetode(m){ m = String(m||'').trim().toLowerCase(); return m==='' || m==='tunai' || m==='cash'; }
+function kasCache(sess){
+  if(!sess) return null;
+  try{
+    const list = loadKasLocal().filter(x => String(x.id) !== String(sess.id));
+    list.unshift(sess);
+    saveKasLocal(list.slice(0, 60));
+  }catch{}
+  return sess;
+}
+function kasOpenLocal(){
+  const me = currentUser(); if(!me) return null;
+  return loadKasLocal().find(x => x.status === 'open' && (String(x.user_id) === String(me.id) || x.kasir === me.nama)) || null;
+}
+function kasSesiAktif(){ return !!(KAS && KAS.status === 'open'); }
+
+async function syncSesi(){
+  try{
+    if(useBackend()){
+      const s = await window.API.kasCurrent();
+      KAS = s || null;
+      if(KAS) kasCache(KAS);
+    } else {
+      KAS = kasOpenLocal();
+    }
+  }catch(e){
+    console.warn('syncSesi gagal:', e.message);
+    KAS = kasOpenLocal();
+  }
+  renderKasUI();
+  return KAS;
+}
+
+// Rekap kas mode offline (isinya sama dengan backend: rentang waktu sesi)
+function kasSummaryLocal(sess){
+  const t0 = parseTs(sess.opened_at);
+  const t1 = sess.closed_at ? parseTs(sess.closed_at) : Date.now();
+  const inWin = (t) => t >= t0 && t <= t1;
+  const kasir = String(sess.kasir || '');
+  const sales = (typeof SALES !== 'undefined' ? SALES : []).filter(s =>
+    inWin(tsRecord(s)) && (!kasir || String(s.kasir || '') === kasir));
+  const expenses = (typeof EXPENSES !== 'undefined' ? EXPENSES : []).filter(e =>
+    inWin(tsRecord(e)) && (!kasir || String(e.dicatat_oleh || '') === kasir));
+  // service: tanpa kolom kasir -> pakai waktu status Diambil (riwayat)
+  const services = (typeof DB !== 'undefined' ? DB : []).filter(sv =>
+    Array.isArray(sv.riwayat) && sv.riwayat.some(h => h.s === 'Diambil' && inWin(parseTs(h.t))));
+  const penjualanTotal = sales.reduce((a, s) => a + Number(s.total || 0), 0);
+  const tunai = sales.filter(s => tunaiMetode(s.metode)).reduce((a, s) => a + Number(s.total || 0), 0);
+  const pengeluaran = expenses.reduce((a, e) => a + Number(e.jumlah || 0), 0);
+  const serviceOmzet = services.reduce((a, s) => a + Number(s.biaya || 0), 0);
+  return {
+    jml_transaksi: sales.length + expenses.length + services.length,
+    penjualan_count: sales.length,
+    penjualan_total: penjualanTotal,
+    tunai_masuk: tunai,
+    non_tunai: penjualanTotal - tunai,
+    pengeluaran_total: pengeluaran,
+    service_count: services.length,
+    service_omzet: serviceOmzet,
+    kas_sistem: Number(sess.modal_awal || 0) + tunai - pengeluaran,
+  };
+}
+
+function renderKasUI(){
+  try{
+    const p = $('kasPill'); if(!p) return;
+    if(!currentUser()){ p.classList.add('hidden-when-auth'); return; }
+    p.classList.remove('hidden-when-auth');
+    if(!useBackend() && kasSesiAktif()) Object.assign(KAS, kasSummaryLocal(KAS));
+    const open = kasSesiAktif();
+    p.classList.toggle('open', open);
+    p.classList.toggle('closed', !open);
+    p.textContent = open ? ('🔓 Kas Terbuka • ' + fmtRp(KAS.kas_sistem || KAS.modal_awal || 0)) : '🔒 Kas Tutup';
+    p.title = open
+      ? ('Sesi #' + (KAS.id || '-') + ' • ' + (KAS.kasir || '-') + ' • buka ' + fmtJam(KAS.opened_at) + '\nKlik untuk tutup sesi')
+      : 'Belum buka sesi kasir — klik untuk buka';
+  }catch(e){ console.warn('renderKasUI:', e); }
+}
+
+// Guard transaksi: true = boleh lanjut, false = sudah buka modal sesi
+function requireSesi(){
+  if(kasSesiAktif()) return true;
+  toast('🔒 Buka sesi kasir dulu sebelum input transaksi');
+  showKasBuka();
+  return false;
+}
+function isSesiError(msg){ return /sesi kasir/i.test(String(msg || '')); }
+// true bila error itu "belum buka sesi" (409 dari backend) -> tampilkan modal, jangan simpan lokal
+function handleSesiError(msg){
+  if(!isSesiError(msg)) return false;
+  toast('🔒 ' + msg);
+  syncSesi().then(() => showKasBuka());
+  return true;
+}
+
+async function showKasBuka(){
+  try{
+    if(kasSesiAktif()){ showKasTutup(); return; }
+    if(useBackend() && !KAS) await syncSesi();
+    if(kasSesiAktif()){ showKasTutup(); return; }
+    const me = currentUser();
+    if($('kasBukaInfo')) $('kasBukaInfo').innerHTML =
+      '<b>Sedang login</b><span>' + esc(me ? me.nama : '-') + ' • ' + esc(roleLabel(me ? me.role : 'kasir')) + '</span>' +
+      '<b>Waktu</b><span>' + new Date().toLocaleString('id-ID', {day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'}) + '</span>';
+    if($('kas_modal') && !$('kas_modal').value) $('kas_modal').value = 0;
+    await loadKasRiwayat();
+    $('modalKasBuka').classList.remove('hidden');
+  }catch(e){ console.warn('showKasBuka:', e); }
+}
+
+async function showKasTutup(){
+  try{
+    if(!kasSesiAktif()){ showKasBuka(); return; }
+    if(!useBackend()) Object.assign(KAS, kasSummaryLocal(KAS));
+    if($('kasHead')) $('kasHead').innerHTML =
+      '<div class="kv"><b>Sesi</b><span>#' + esc(KAS.id || '-') + ' • ' + esc(KAS.kasir || '-') + '</span></div>' +
+      '<div class="kv"><b>Buka pukul</b><span>' + fmtJam(KAS.opened_at) + '</span></div>' +
+      '<div class="kv"><b>Modal awal</b><span>' + fmtRp(KAS.modal_awal) + '</span></div>';
+    renderKasRekap();
+    if($('kas_fisik')) $('kas_fisik').value = Number(KAS.kas_sistem || 0);
+    if($('kas_catatan2')) $('kas_catatan2').value = '';
+    updKasSelisih();
+    await loadKasRiwayat();
+    $('modalKasTutup').classList.remove('hidden');
+  }catch(e){ console.warn('showKasTutup:', e); }
+}
+
+function renderKasRekap(){
+  const s = KAS || {};
+  if(!$('kasRekap')) return;
+  $('kasRekap').innerHTML =
+    '<span>Modal awal</span><span>' + fmtRp(s.modal_awal) + '</span>' +
+    '<span>Penjualan tunai</span><span>+ ' + fmtRp(s.tunai_masuk) + '</span>' +
+    '<span>Penjualan non-tunai</span><span>' + fmtRp(s.non_tunai) + '</span>' +
+    '<span>Pengeluaran</span><span>− ' + fmtRp(s.pengeluaran_total) + '</span>' +
+    '<span>Omzet service (Diambil)</span><span>' + fmtRp(s.service_omzet) + ' • ' + Number(s.service_count || 0) + ' unit</span>' +
+    '<span>Nota penjualan</span><span>' + Number(s.penjualan_count || 0) + ' nota • ' + fmtRp(s.penjualan_total) + '</span>' +
+    '<span class="kas-total">Kas seharusnya di laci</span><span class="kas-total">' + fmtRp(s.kas_sistem) + '</span>';
+}
+
+function updKasSelisih(){
+  const el = $('kasSelisih'); if(!el) return;
+  const fisik = Number(($('kas_fisik') || {}).value || 0);
+  const sistem = Number((KAS && KAS.kas_sistem) || 0);
+  const sel = fisik - sistem;
+  el.className = 'kas-selisih ' + (sel === 0 ? 'ok' : 'bad');
+  el.innerHTML = 'Selisih: <b>' + fmtRp(sel) + '</b> ' + (sel === 0 ? '(cocok ✅)' : (sel > 0 ? '(lebih)' : '(kurang)'));
+}
+
+function kasRiwayatHTML(list){
+  if(!list || !list.length) return '<small class="muted">Belum ada riwayat sesi.</small>';
+  return list.map(s => {
+    const open = s.status === 'open';
+    const kiri = '<b>#' + esc(s.id) + '</b> • ' + esc(s.kasir || '-') + '<br><small>' +
+      fmtJam(s.opened_at) + (open ? ' → <b style="color:#166534">masih berjalan</b>' : ' → ' + fmtJam(s.closed_at)) + '</small>';
+    const kanan = open
+      ? '<span class="kas-hval">🔓 berjalan<br><small>' + fmtRp(s.kas_sistem || 0) + '</small></span>'
+      : '<span class="kas-hval">' + fmtRp(s.kas_akhir || 0) + '<br><small>sistem ' + fmtRp(s.kas_sistem || 0) + ' • selisih ' + fmtRp(s.selisih || 0) + '</small></span>';
+    return '<div class="kas-hrow"><div>' + kiri + '</div>' + kanan + '</div>';
+  }).join('');
+}
+
+async function loadKasRiwayat(){
+  let list = [];
+  if(useBackend()){
+    try{ list = await window.API.kasList({scope:'auto', limit:10}); }
+    catch(e){ list = loadKasLocal().slice(0, 10); }
+  } else {
+    list = loadKasLocal().slice(0, 10);
+  }
+  KAS_RIWAYAT = Array.isArray(list) ? list : [];
+  const html = kasRiwayatHTML(KAS_RIWAYAT);
+  if($('kasRiwayatBuka')) $('kasRiwayatBuka').innerHTML = html;
+  if($('kasRiwayatTutup')) $('kasRiwayatTutup').innerHTML = html;
+}
+
+async function kasBuka(){
+  const me = currentUser();
+  if(!me){ toast('Belum login'); return; }
+  const modalAwal = Math.max(0, Number(($('kas_modal') || {}).value || 0));
+  const catatan = (($('kas_catatan') || {}).value || '').trim();
+  if(useBackend()){
+    try{
+      const s = await window.API.kasOpen({modal_awal: modalAwal, catatan});
+      KAS = s; kasCache(s);
+    }catch(err){
+      if(handleSesiError(err.message)) return;
+      toast(err.message); return;
+    }
+  } else {
+    const open = kasOpenLocal();
+    if(open){ KAS = open; toast('Sesi kasir masih terbuka'); showKasTutup(); return; }
+    KAS = {
+      id: Date.now(), user_id: me.id, kasir: me.nama || '', status: 'open',
+      modal_awal: modalAwal, opened_at: new Date().toISOString(), closed_at: null,
+      catatan, kas_akhir: 0, kas_sistem: modalAwal, selisih: 0,
+      jml_transaksi: 0, penjualan_count: 0, penjualan_total: 0, tunai_masuk: 0,
+      non_tunai: 0, pengeluaran_total: 0, service_count: 0, service_omzet: 0,
+    };
+    const list = loadKasLocal(); list.unshift(KAS); saveKasLocal(list.slice(0, 60));
+  }
+  if($('kas_catatan')) $('kas_catatan').value = '';
+  $('modalKasBuka').classList.add('hidden');
+  renderKasUI();
+  toast('🔓 Sesi kasir dibuka • kas awal ' + fmtRp(modalAwal));
+}
+
+async function kasTutup(){
+  if(!kasSesiAktif()){ toast('Belum ada sesi kasir terbuka'); return; }
+  const sistem = Number(KAS.kas_sistem || 0);
+  const fisik = Number(($('kas_fisik') || {}).value || 0);
+  const sel = fisik - sistem;
+  if(sel !== 0){
+    if(!confirm('Hitungan kas fisik ' + fmtRp(fisik) + ' tidak sama dengan seharusnya ' + fmtRp(sistem) + ' (selisih ' + fmtRp(sel) + ').\nTetap tutup sesi?')) return;
+  }
+  const catatan = (($('kas_catatan2') || {}).value || '').trim();
+  let hasil = null;
+  if(useBackend()){
+    try{
+      const s = await window.API.kasClose(KAS.id, {kas_akhir: fisik, catatan});
+      hasil = s; kasCache(s);
+    }catch(err){
+      if(handleSesiError(err.message)) return;
+      toast(err.message); return;
+    }
+  } else {
+    const sekarang = new Date().toISOString();
+    const ringkas = kasSummaryLocal(Object.assign({}, KAS, {closed_at: sekarang}));
+    hasil = Object.assign({}, KAS, ringkas, {
+      status: 'closed', closed_at: sekarang, kas_akhir: fisik,
+      kas_sistem: ringkas.kas_sistem, selisih: fisik - ringkas.kas_sistem,
+      catatan: catatan ? ((KAS.catatan ? KAS.catatan + ' | ' : '') + catatan) : (KAS.catatan || ''),
+    });
+    saveKasLocal(loadKasLocal().map(x => String(x.id) === String(hasil.id) ? hasil : x));
+  }
+  KAS = null;
+  $('modalKasTutup').classList.add('hidden');
+  renderKasUI();
+  const sel2 = Number((hasil && hasil.selisih) || 0);
+  toast('🔒 Sesi ditutup • selisih ' + fmtRp(sel2) + (sel2 === 0 ? ' cocok ✅' : ' ⚠️ perhatian'));
+}
+
+function bindKas(){
+  if($('kasPill')) $('kasPill').onclick = () => { kasSesiAktif() ? showKasTutup() : showKasBuka(); };
+  if($('btnBukaKas')) $('btnBukaKas').onclick = kasBuka;
+  if($('btnTutupKas')) $('btnTutupKas').onclick = kasTutup;
+  if($('kas_fisik')) $('kas_fisik').addEventListener('input', updKasSelisih);
+}
+try{ bindKas(); }catch(e){ console.warn('bindKas:', e); }
 
 // ===== NAVIGASI =====
 document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.page)));
@@ -533,6 +813,7 @@ setInterval(tickClock, 30000);
 // ===== FORM SIMPAN (backend-first, fallback lokal) =====
 $('serviceForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
+  if(!requireSesi()) return;
   const nama=$('f_nama').value.trim(), telp=$('f_telp').value.trim(),
         merk=$('f_merk').value.trim(), tipe=$('f_tipe').value.trim(),
         keluhan=$('f_keluhan').value.trim();
@@ -552,7 +833,7 @@ $('serviceForm').addEventListener('submit', async (e)=>{
       const created = await window.API.createService(payload);
       savedNo = created.noService;
       await pullServices();
-    }catch(err){ toast('Backend gagal, simpan lokal: '+err.message); }
+    }catch(err){ if(handleSesiError(err.message)) return; toast('Backend gagal, simpan lokal: '+err.message); }
   }
   if(!savedNo){
     const item={ id: Date.now(), noService: genNoService(), ...payload, riwayat:[{t:new Date().toISOString(), s:payload.status}] };
@@ -588,7 +869,7 @@ function filtered(){
   return r;
 }
 
-function renderAll(){ renderStats(); renderOmzetChart(); renderRecent(); renderData(); renderQueue(); renderSettingUI(); refreshPreview(); renderUsers(); renderHeadbar(); renderSlideManager(); renderSpareparts(); try{ renderSales(); }catch{} try{ renderExpenses(); }catch{} try{ renderLaporan(); }catch{} }
+function renderAll(){ renderStats(); renderOmzetChart(); renderRecent(); renderData(); renderQueue(); renderSettingUI(); refreshPreview(); renderUsers(); renderHeadbar(); renderSlideManager(); renderSpareparts(); try{ renderSales(); }catch{} try{ renderExpenses(); }catch{} try{ renderLaporan(); }catch{} try{ renderKasUI(); }catch{} }
 
 function renderStats(){
   const c=(s)=>DB.filter(x=>normStatus(x.status)===s).length;
@@ -801,7 +1082,7 @@ window.hapus=async function(id){
   DB=DB.filter(d=>d.id!==id); saveData(); renderAll(); toast('Data dihapus');
 };
 function closeAllModals(){
-  ['modalDetail','modalEdit','modalSpare','modalExpense'].forEach(id=>{ const m=$(id); if(m) m.classList.add('hidden'); });
+  ['modalDetail','modalEdit','modalSpare','modalExpense','modalKasBuka','modalKasTutup'].forEach(id=>{ const m=$(id); if(m) m.classList.add('hidden'); });
   if(typeof closeScan==='function'){
     try{
       const ms=$('modalScan');
@@ -1735,6 +2016,7 @@ function bindPenjualan(){
 }
 async function simpanJual(){
   if(!CART.length){ toast('Keranjang masih kosong'); return; }
+  if(!requireSesi()) return;
   const payload={
     tanggal: val('j_tanggal') || new Date().toISOString().slice(0,10),
     pelanggan: val('j_nama').trim() || 'Umum',
@@ -1753,7 +2035,7 @@ async function simpanJual(){
       renderSales(); toast('Penjualan '+s.no_nota+' tersimpan ✅');
       cetakJual(s.id);
       return;
-    }catch(err){ toast(err.message); return; }
+    }catch(err){ if(handleSesiError(err.message)) return; toast(err.message); return; }
   }
   // offline: validasi + potong stok lokal
   for(const c of CART){
@@ -1881,6 +2163,7 @@ function renderExpenses(){
     <td><div class="act-btns">${admin?`<button class="icon-btn" onclick="exEdit(${x.id})" title="Edit">✏️</button><button class="icon-btn" onclick="exHapus(${x.id})" title="Hapus">🗑</button>`:'<small class="muted">—</small>'}</div></td></tr>`).join('');
 }
 async function simpanExpense(){
+  if(!requireSesi()) return;
   const tanggal=(val('ex_tanggal')||new Date().toISOString().slice(0,10)).slice(0,10);
   const kategori=val('ex_kategori','Lainnya')||'Lainnya';
   const keterangan=val('ex_ket').trim();
@@ -1894,7 +2177,7 @@ async function simpanExpense(){
       if($('ex_ket'))$('ex_ket').value=''; if($('ex_jumlah'))$('ex_jumlah').value=0;
       renderExpenses(); toast('Pengeluaran tersimpan, laba berkurang 💸');
       return;
-    }catch(err){ toast(err.message); return; }
+    }catch(err){ if(handleSesiError(err.message)) return; toast(err.message); return; }
   }
   const me=currentUser();
   EXPENSES.unshift({id:Date.now(), tanggal, kategori, keterangan, jumlah, dicatat_oleh:me?me.nama:''});

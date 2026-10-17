@@ -33,6 +33,8 @@ def _in_range(tgl: str, dari: str, sampai: str) -> bool:
 @router.post("/expenses", response_model=schemas.ExpenseOut, status_code=201)
 def create_expense(body: schemas.ExpenseIn, db: Session = Depends(get_db),
                    user: models.User = Depends(get_current_user)):
+    from .kas_sessions import require_open_session
+    require_open_session(db, user)
     jumlah = int(body.jumlah or 0)
     if jumlah <= 0:
         raise HTTPException(400, "Jumlah pengeluaran harus lebih dari 0")

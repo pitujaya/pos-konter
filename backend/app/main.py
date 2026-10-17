@@ -46,6 +46,7 @@ from .routers import slides as slides_router
 from .routers import spareparts as spareparts_router
 from .routers import sales as sales_router
 from .routers import expenses as expenses_router
+from .routers import kas_sessions as kas_router
 from .routers import ai_monitor as ai_monitor_router
 from .seed import seed
 
@@ -107,6 +108,7 @@ app.include_router(slides_router.router, prefix="/api")
 app.include_router(spareparts_router.router, prefix="/api")
 app.include_router(sales_router.router, prefix="/api")
 app.include_router(expenses_router.router, prefix="/api")
+app.include_router(kas_router.router, prefix="/api")
 app.include_router(ai_monitor_router.router, prefix="/api")
 
 # Folder upload gambar headbar -> serve di /static/uploads (hanya folder uploads)

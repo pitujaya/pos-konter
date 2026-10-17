@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="icon.png" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <title>ServisHP Pro - Management Service HP</title>
-<link rel="stylesheet" href="style.css?v=1.8.5" />
+<link rel="stylesheet" href="style.css?v=1.8.6" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -130,6 +130,8 @@
         <input id="globalSearch" type="text" placeholder="Cari semua: service, no HP, produk / SKU..." autocomplete="off" />
         <div id="globalResults" class="global-results hidden"></div>
       </div>
+      <!-- STATUS SESI KASIR: klik = buka sesi (kalau tutup) / tutup sesi (kalau terbuka) -->
+      <button type="button" class="kas-pill closed" id="kasPill" title="Sesi kasir — klik untuk buka/tutup">🔒 Kas Tutup</button>
     </header>
 
     <!-- DASHBOARD -->
@@ -829,6 +831,41 @@
   </div>
 </div>
 
+<!-- MODAL SESI KASIR: BUKA -->
+<div class="modal-bg hidden" id="modalKasBuka">
+  <div class="modal">
+    <div class="modal-head"><h3>🔓 Buka Sesi Kasir</h3><button class="x" data-close>✕</button></div>
+    <div class="modal-body">
+      <p class="muted">Sesi wajib dibuka sebelum input <b>service, penjualan, atau pengeluaran</b>. Rekap dihitung otomatis saat sesi ditutup.</p>
+      <label>Modal Awal / Kas Pembuka (Rp)<input id="kas_modal" type="number" min="0" step="100" value="0" inputmode="numeric" /></label>
+      <label>Catatan (opsional)<textarea id="kas_catatan" rows="2" placeholder="cth: kas awal shift pagi"></textarea></label>
+      <div class="kv" id="kasBukaInfo"><b>Sedang login</b><span>-</span></div>
+      <hr class="sep"/>
+      <h4>Riwayat Sesi Terakhir</h4>
+      <div class="kas-history" id="kasRiwayatBuka"><small class="muted">Belum ada riwayat sesi.</small></div>
+    </div>
+    <div class="modal-foot"><button class="btn ghost" data-close>Batal</button><button class="btn primary" id="btnBukaKas">🔓 Buka Sesi</button></div>
+  </div>
+</div>
+
+<!-- MODAL SESI KASIR: TUTUP -->
+<div class="modal-bg hidden" id="modalKasTutup">
+  <div class="modal">
+    <div class="modal-head"><h3>🔒 Tutup Sesi Kasir</h3><button class="x" data-close>✕</button></div>
+    <div class="modal-body">
+      <div id="kasHead"></div>
+      <div class="kas-rekap" id="kasRekap"></div>
+      <label>Hitungan Kas Fisik (Rp)<input id="kas_fisik" type="number" min="0" step="100" value="0" inputmode="numeric" /></label>
+      <div class="kas-selisih" id="kasSelisih">Selisih: <b>-</b></div>
+      <label>Catatan Penutup (opsional)<textarea id="kas_catatan2" rows="2" placeholder="cth: serahkan kas ke pemilik"></textarea></label>
+      <hr class="sep"/>
+      <h4>Riwayat Sesi Terakhir</h4>
+      <div class="kas-history" id="kasRiwayatTutup"><small class="muted">Belum ada riwayat sesi.</small></div>
+    </div>
+    <div class="modal-foot"><button class="btn ghost" data-close>Batal</button><button class="btn danger-btn" id="btnTutupKas">🔒 Tutup Sesi &amp; Hitung</button></div>
+  </div>
+</div>
+
 <!-- PRINT AREA -->
 <div id="printArea" class="print-only"></div>
 
@@ -838,7 +875,7 @@
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script src="config.js?v=1.2.0"></script>
-<script src="api.js?v=1.3.0"></script>
-<script src="script.js?v=1.9.4"></script>
+<script src="api.js?v=1.3.1"></script>
+<script src="script.js?v=1.9.5"></script>
 </body>
 </html>

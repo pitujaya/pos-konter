@@ -276,6 +276,18 @@
     createSale(payload) { return this.req("/sales", { method: "POST", body: payload }); },
     getSale(id) { return this.req("/sales/" + id); },
     deleteSale(id) { return this.req("/sales/" + id, { method: "DELETE" }); },
+
+    // Sesi kasir (buka / tutup shift)
+    kasCurrent() { return this.req("/kas/current"); },
+    kasOpen(payload) { return this.req("/kas/open", { method: "POST", body: payload }); },
+    kasClose(id, payload) { return this.req("/kas/" + id + "/close", { method: "POST", body: payload }); },
+    kasList(params = {}) {
+      const qs = new URLSearchParams({
+        scope: params.scope || "auto", limit: String(params.limit || 20),
+      }).toString();
+      return this.req("/kas?" + qs);
+    },
+
     listExpenses(params = {}) {
       const qs = new URLSearchParams({
         q: params.q || "", dari: params.dari || "", sampai: params.sampai || "",

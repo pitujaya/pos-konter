@@ -41,6 +41,12 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--i
 .gr-more{display:block;width:100%;text-align:center;border:0;background:#f1f5f9;border-radius:10px;padding:9px;margin:2px 0 6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;color:var(--blue)}
 .gr-empty{padding:14px;text-align:center;color:var(--muted);font-size:13.5px}
 .hamburger{display:none;border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 12px;cursor:pointer}
+/* PILL STATUS SESI KASIR (topbar) */
+.kas-pill{border:2px solid #cbd5e1;background:#f1f5f9;color:#475569;border-radius:99px;padding:9px 14px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;white-space:nowrap;transition:.15s}
+.kas-pill:hover{filter:brightness(.97)}
+.kas-pill.open{background:#dcfce7;border-color:#22c55e;color:#166534}
+.kas-pill.closed{background:#fee2e2;border-color:#f87171;color:#991b1b}
+.kas-pill.hidden-when-auth{display:none}
 .page{display:none}.page.active{display:block;animation:fade .2s}
 @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
 .page-title{font-size:26px;font-weight:800}.page-sub{color:var(--muted);margin:4px 0 18px}
@@ -205,6 +211,20 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
 .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 12px;font-size:13.5px;margin-bottom:6px}
 .kv b{color:var(--muted);font-weight:600}
 .status-select{border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;font-weight:700}
+/* ISI MODAL SESI KASIR */
+.kas-rekap{display:grid;grid-template-columns:1fr auto;gap:8px 14px;background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:14px;margin:6px 0 14px;font-size:13.5px}
+.kas-rekap span:nth-child(odd){color:var(--muted);font-weight:600}
+.kas-rekap span:nth-child(even){text-align:right;font-weight:800}
+.kas-rekap .kas-total{border-top:1px dashed var(--line);padding-top:8px;margin-top:2px;font-size:15px}
+.kas-selisih{font-size:14.5px;text-align:right;margin:2px 0 12px}
+.kas-selisih.ok{color:var(--green)}
+.kas-selisih.bad{color:var(--red)}
+.kas-history{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto}
+.kas-hrow{border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.kas-hrow b{font-size:13px}
+.kas-hrow small{color:var(--muted)}
+.kas-hrow .kas-hval{text-align:right;font-weight:800;white-space:nowrap}
+@media(max-width:760px){.kas-pill{padding:8px 11px;font-size:12px}.kv{grid-template-columns:120px 1fr}}
 /* AUTH */
 .auth-screen{min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(1000px 500px at 20% -10%,#3b82f6 0%,transparent 60%),radial-gradient(800px 500px at 100% 100%,#8b5cf6 0%,transparent 55%),#0f172a}
 .auth-card{background:#fff;border-radius:20px;max-width:480px;width:100%;padding:26px;box-shadow:0 24px 70px rgba(0,0,0,.35)}

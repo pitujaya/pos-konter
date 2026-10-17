@@ -58,6 +58,7 @@ backend/
     routers/
       auth.py      -> register/login/me/password/forgot
       services.py  -> CRUD service + stats
+      kas_sessions.py -> buka/tutup sesi kasir (shift) + rekap kas
       users.py     -> kelola user (superadmin)
       settings.py  -> profil konter + teknisi + merk
 ```
@@ -77,6 +78,16 @@ Auth: kirim header `Authorization: Bearer <token>` setelah login.
 - `PATCH /api/services/{id}/status` (semua role login)
 - `DELETE /api/services/{id}` (admin+)
 - `GET /api/stats/dashboard`
+
+Sesi kasir (shift) — transaksi service/penjualan/pengeluaran ditolak (409) bila
+sesi belum dibuka:
+
+- `POST /api/kas/open` {modal_awal,catatan} -> sesi terbuka (1 per kasir)
+- `POST /api/kas/{id}/close` {kas_akhir,catatan} -> rekap + selisih kas
+- `GET /api/kas/current` -> sesi terbuka + rekap live (null bila kas tutup)
+- `GET /api/kas?scope=auto|mine|all&limit=50` -> riwayat sesi
+
+`kas_sistem = modal_awal + penjualan tunai - pengeluaran`; `selisih = kas_akhir - kas_sistem`.
 - `GET/PUT /api/settings` (PUT admin+)
 - `POST/DELETE /api/settings/teknisi[/{index}]`, `/merk[/{index}]` (admin+)
 - `GET/POST /api/users`, `PATCH /api/users/{id}/role`, `POST /api/users/{id}/reset-password`, `DELETE /api/users/{id}` (superadmin)
