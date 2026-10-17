@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="icon.png" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <title>ServisHP Pro - Management Service HP</title>
-<link rel="stylesheet" href="style.css?v=1.8.6" />
+<link rel="stylesheet" href="style.css?v=1.8.7" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -131,7 +131,7 @@
         <div id="globalResults" class="global-results hidden"></div>
       </div>
       <!-- STATUS SESI KASIR: klik = buka sesi (kalau tutup) / tutup sesi (kalau terbuka) -->
-      <button type="button" class="kas-pill closed" id="kasPill" title="Sesi kasir — klik untuk buka/tutup">🔒 Kas Tutup</button>
+      <button type="button" class="kas-pill closed" id="kasPill" title="Sesi kasir — klik untuk buka/tutup">🔒 <span class="kas-txt">Kas Tutup</span></button>
     </header>
 
     <!-- DASHBOARD -->
@@ -836,8 +836,22 @@
   <div class="modal">
     <div class="modal-head"><h3>🔓 Buka Sesi Kasir</h3><button class="x" data-close>✕</button></div>
     <div class="modal-body">
-      <p class="muted">Sesi wajib dibuka sebelum input <b>service, penjualan, atau pengeluaran</b>. Rekap dihitung otomatis saat sesi ditutup.</p>
-      <label>Modal Awal / Kas Pembuka (Rp)<input id="kas_modal" type="number" min="0" step="100" value="0" inputmode="numeric" /></label>
+      <div class="kas-hero">
+        <span class="kas-hero-ico">🧾</span>
+        <div>
+          <small>Wajib sebelum transaksi</small>
+          <b>Buka sesi kasir dulu</b>
+          <em>Service, penjualan, dan pengeluaran tidak bisa disimpan selama sesi belum dibuka.</em>
+        </div>
+      </div>
+      <label>Modal Awal / Kas Pembuka (Rp)<input id="kas_modal" type="number" min="0" step="1000" value="0" inputmode="numeric" /></label>
+      <div class="kas-quick" id="kasQuick">
+        <button type="button" data-nom="0">0</button>
+        <button type="button" data-nom="50000">50 rb</button>
+        <button type="button" data-nom="100000">100 rb</button>
+        <button type="button" data-nom="200000">200 rb</button>
+        <button type="button" data-nom="500000">500 rb</button>
+      </div>
       <label>Catatan (opsional)<textarea id="kas_catatan" rows="2" placeholder="cth: kas awal shift pagi"></textarea></label>
       <div class="kv" id="kasBukaInfo"><b>Sedang login</b><span>-</span></div>
       <hr class="sep"/>
@@ -855,7 +869,8 @@
     <div class="modal-body">
       <div id="kasHead"></div>
       <div class="kas-rekap" id="kasRekap"></div>
-      <label>Hitungan Kas Fisik (Rp)<input id="kas_fisik" type="number" min="0" step="100" value="0" inputmode="numeric" /></label>
+      <label>Hitungan Kas Fisik (Rp)<input id="kas_fisik" type="number" min="0" step="1000" value="0" inputmode="numeric" /></label>
+      <div class="kas-quick"><button type="button" id="btnKasFisikSistem">= Isi sesuai kas sistem</button></div>
       <div class="kas-selisih" id="kasSelisih">Selisih: <b>-</b></div>
       <label>Catatan Penutup (opsional)<textarea id="kas_catatan2" rows="2" placeholder="cth: serahkan kas ke pemilik"></textarea></label>
       <hr class="sep"/>
@@ -876,6 +891,6 @@
 
 <script src="config.js?v=1.2.0"></script>
 <script src="api.js?v=1.3.1"></script>
-<script src="script.js?v=1.9.5"></script>
+<script src="script.js?v=1.9.6"></script>
 </body>
 </html>

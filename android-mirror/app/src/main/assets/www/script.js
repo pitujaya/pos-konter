@@ -260,6 +260,7 @@ function badge(st){ st = normStatus(st || 'Dikerjakan'); return `<span class="ba
 // Satu sesi terbuka per kasir. Input service/penjualan/pengeluaran DITOLAK
 // selama belum buka sesi (guard frontend + backend 409).
 const LS_KAS = 'servishp_kas_v1';
+const PAGES_TRANSAKSI = ['tambah', 'penjualan', 'pengeluaran']; // menu yang butuh sesi kasir
 let KAS = null;          // sesi terbuka milik user aktif (null = kas tutup)
 let KAS_RIWAYAT = [];    // riwayat sesi untuk modal
 
@@ -357,7 +358,9 @@ function renderKasUI(){
     const open = kasSesiAktif();
     p.classList.toggle('open', open);
     p.classList.toggle('closed', !open);
-    p.textContent = open ? ('🔓 Kas Terbuka • ' + fmtRp(KAS.kas_sistem || KAS.modal_awal || 0)) : '🔒 Kas Tutup';
+    p.innerHTML = open
+      ? '🔓 <span class="kas-txt">Kas Terbuka</span><span class="kas-amt"> • ' + fmtRp(KAS.kas_sistem || KAS.modal_awal || 0) + '</span>'
+      : '🔒 <span class="kas-txt">Kas Tutup</span>';
     p.title = open
       ? ('Sesi #' + (KAS.id || '-') + ' • ' + (KAS.kasir || '-') + ' • buka ' + fmtJam(KAS.opened_at) + '\nKlik untuk tutup sesi')
       : 'Belum buka sesi kasir — klik untuk buka';
@@ -532,6 +535,14 @@ function bindKas(){
   if($('btnBukaKas')) $('btnBukaKas').onclick = kasBuka;
   if($('btnTutupKas')) $('btnTutupKas').onclick = kasTutup;
   if($('kas_fisik')) $('kas_fisik').addEventListener('input', updKasSelisih);
+  // nominal cepat modal awal
+  document.querySelectorAll('#kasQuick button').forEach(b => {
+    b.onclick = () => { if($('kas_modal')) $('kas_modal').value = Number(b.dataset.nom || 0); };
+  });
+  // isi kas fisik = kas sistem
+  if($('btnKasFisikSistem')) $('btnKasFisikSistem').onclick = () => {
+    if($('kas_fisik')){ $('kas_fisik').value = Number((KAS && KAS.kas_sistem) || 0); updKasSelisih(); }
+  };
 }
 try{ bindKas(); }catch(e){ console.warn('bindKas:', e); }
 
@@ -566,6 +577,8 @@ function goto(page, filter){
   if(page==='penjualan'){ try{ renderSales(); }catch{} if(useBackend()){ pullSales().then(()=>{ try{renderSales();}catch{} }).catch(()=>{}); } }
   if(page==='pengeluaran'){ try{ renderExpenses(); }catch{} if(useBackend()){ pullExpenses().then(()=>{ try{renderExpenses();}catch{} try{renderLaporan();}catch{} }).catch(()=>{}); } }
   if(page==='laporan'){ try{ renderLaporan(); }catch{} }
+  // Kas belum dibuka + kasir klik menu transaksi -> langsung munculkan menu Buka Sesi
+  if(PAGES_TRANSAKSI.includes(page) && !kasSesiAktif()){ showKasBuka(); }
   window.scrollTo({top:0});
 }
 // Reset filter + search + sort supaya semua data HP masuk terlihat
