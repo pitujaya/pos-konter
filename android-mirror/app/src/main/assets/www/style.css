@@ -313,7 +313,7 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
   .hamburger{display:block}.hamburger-close{display:block;position:absolute;top:12px;right:12px;border:0;background:#1e293b;color:#fff;border-radius:8px;width:30px;height:30px;cursor:pointer}
   .main{padding:0 14px 24px}
   .topbar{flex-wrap:nowrap;gap:8px;padding:12px 0}
-  .search-wrap{order:0;flex:1;flex-basis:auto}
+  .search-wrap{order:0;flex:1;flex-basis:auto;min-width:0}
   .page-title{font-size:21px}
   .page-sub{font-size:13px}
   .row2,.row3{grid-template-columns:1fr}
@@ -328,8 +328,14 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
   .form-actions{flex-direction:column-reverse;align-items:stretch}
   .form-actions .btn{width:100%}
   .kv{grid-template-columns:1fr;gap:2px}
-  .modal-bg{padding:10px}
-  .modal{max-height:94vh;border-radius:14px}
+  /* FIT TO SCREEN: modal jadi layar penuh di HP (header & tombol selalu kelihatan) */
+  .modal-bg{padding:0;place-items:stretch}
+  .modal{max-width:none;width:100%;max-height:none;height:100%;border-radius:0;display:flex;flex-direction:column}
+  .modal-head{position:static;flex-shrink:0}
+  .modal-body{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:16px}
+  .modal-foot{flex-shrink:0;padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+  .modal-foot .btn{flex:1 1 auto}
+  .kas-pill{max-width:46vw;overflow:hidden;text-overflow:ellipsis}
   .table-wrap{overflow-x:visible}
   table{min-width:0;width:100%;font-size:13px}
   .lacak-input{flex-direction:column}
