@@ -979,11 +979,9 @@ function renderStats(){
   // Omzet hanya dari service yang SUDAH DIAMBIL
   $('stOmzet').textContent=fmtRp(DB.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
   // Link status di dashboard -> ketuk untuk buka Data Service terfilter
-  if($('statusLinks')){
-    $('statusLinks').innerHTML=STATUS.map(s=>`<button type="button" class="status-link" onclick="goto('data','${s}')" title="Lihat data ${s}">${badge(s)}<b>${c(s)}</b></button>`).join('');
-  }
-  if($('statusChart')){ try { $('statusChart').innerHTML=''; } catch(e){} }
-  if($('cardStatusService')){ try { $('cardStatusService').style.display='none'; } catch(e){} }
+  if($('statusLinks')){ try { $('statusLinks').innerHTML=''; } catch(e){} }
+  if($('statusChart')){ try { $('statusChart').innerHTML=''; $('statusChart').style.display='none'; } catch(e){} }
+  if($('cardStatusService')){ try { $('cardStatusService').remove(); } catch(e){} }
   if($('attentionList')){
     const lama=DB.filter(x=>!['Selesai','Diambil','Cancel'].includes(normStatus(x.status))).slice(0,5);
     const lowSp=(typeof SPARE!=='undefined'?SPARE:[]).filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).slice(0,3);
@@ -2685,7 +2683,7 @@ function renderOmzetChart(){
     const v=max*g/4, gy=Y(v);
     grid+=`<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#e2e8f0"/><text x="${padL-6}" y="${gy+4}" text-anchor="end" font-size="${fs}" fill="#64748b">${narrow?fmtRingkas(v):Math.round(v).toLocaleString('id-ID')}</text>`;
   }
-  grid+=`<line x1="${padL}" y1="${baseY}" x2="${W-padR}" y2="${baseY}" stroke="#cbd5e1"/>`;
+  grid+='<line x1="'+padL+'" y1="'+baseY+'" x2="'+(W-padR)+'" y2="'+baseY+'" stroke="#cbd5e1"/>';
   const pts=data.map((d,i)=>({x:X(i), y:Y(d.total)}));
   const line=smoothPath(pts);
   const area=line+` L ${X(n-1)},${baseY} L ${X(0)},${baseY} Z`;
@@ -2696,7 +2694,7 @@ function renderOmzetChart(){
   box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img"><defs><linearGradient id="omzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6366f1" stop-opacity=".45"/><stop offset="1" stop-color="#6366f1" stop-opacity=".05"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#omzGrad)"/><path d="${line}" fill="none" stroke="#4f46e5" stroke-width="${narrow?2:2.5}" stroke-linejoin="round" stroke-linecap="round"/>${dots}${xl}</svg>`;
   const tot=data.reduce((a,b)=>a+b.total,0);
   const peak=data.reduce((a,b)=>b.total>a.total?b:a, data[0]||{d:'-',total:0});
-  if($('omzetInfo')) $('omzetInfo').textContent=`Total ${bulanLabel(y,m)}: ${fmtRp(tot)} • Rata-rata/hari: ${fmtRp(Math.round(tot/Math.max(n,1)))}`+(peak&&peak.total?` • Tertinggi tgl ${peak.d} (${fmtRp(peak.total)})`:'');
+  if($('omzetInfo')) $('omzetInfo').textContent='Total '+bulanLabel(y,m)+': '+fmtRp(tot)+' • Rata-rata/hari: '+fmtRp(Math.round(tot/Math.max(n,1)))+(peak&&peak.total?' • Tertinggi tgl '+peak.d+' ('+fmtRp(peak.total)+')':'');
   const now=new Date();
   const isCur=(y===now.getFullYear()&&m===now.getMonth());
   if($('btnOmNext')) $('btnOmNext').disabled=isCur;
