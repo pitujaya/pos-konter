@@ -893,11 +893,9 @@ function renderStats(){
   // Omzet hanya dari service yang SUDAH DIAMBIL
   $('stOmzet').textContent=fmtRp(DB.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
   // Link status di dashboard -> ketuk untuk buka Data Service terfilter
-  if($('statusLinks')){
-    $('statusLinks').innerHTML=STATUS.map(s=>`<button type="button" class="status-link" onclick="goto('data','${s}')" title="Lihat data ${s}">${badge(s)}<b>${c(s)}</b></button>`).join('');
-  }
-  if($('statusChart')){ try { $('statusChart').innerHTML=''; } catch(e){} }
-  if($('cardStatusService')){ try { $('cardStatusService').style.display='none'; } catch(e){} }
+  if($('statusLinks')){ try { $('statusLinks').innerHTML=''; } catch(e){} }
+  if($('statusChart')){ try { $('statusChart').innerHTML=''; $('statusChart').style.display='none'; } catch(e){} }
+  if($('cardStatusService')){ try { $('cardStatusService').remove(); } catch(e){} }
   if($('attentionList')){
     const lama=DB.filter(x=>!['Selesai','Diambil','Cancel'].includes(normStatus(x.status))).slice(0,5);
     const lowSp=(typeof SPARE!=='undefined'?SPARE:[]).filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).slice(0,3);
@@ -2491,40 +2489,31 @@ function renderOmzetChart(){
   const max=niceMax(Math.max(...data.map(d=>d.total), 0));
   const n=data.length;
   const wrap = box.parentElement;
-  const cw = (wrap && wrap.clientWidth) ? wrap.clientWidth : (box.clientWidth || window.innerWidth || 360);
-  let step=32, padL=66, padR=10, padT=16, padB=28;
-  if(cw <= 360){
-    step = Math.max(16, Math.floor((cw - 58)/Math.max(n,1)));
-    padL = 42; padR = 6;
-  }else if(cw <= 420){
-    step = Math.max(18, Math.floor((cw - 64)/Math.max(n,1)));
-    padL = 48; padR = 6;
-  }else if(cw <= 520){
-    step = Math.max(22, Math.floor((cw - 72)/Math.max(n,1)));
-    padL = 54; padR = 8;
-  }else if(cw <= 640){
-    step = Math.max(26, Math.floor((cw - 80)/Math.max(n,1)));
-    padL = 60; padR = 8;
-  }
-  const W = Math.max(cw, padL+padR+n*step);
-  const H=260, ch=H-padT-padB, baseY=padT+ch;
+  const cw = Math.max(240, Math.min((wrap && wrap.clientWidth) ? wrap.clientWidth : window.innerWidth, window.innerWidth - 12));
+  let step=16, padL=26, padR=2, padT=10, padB=18;
+  if(cw>=360&&cw<420){ step=Math.max(12,Math.floor((cw-36)/Math.max(n,1))); padL=24; padR=2; }
+  else if(cw>=420&&cw<520){ step=Math.max(14,Math.floor((cw-42)/Math.max(n,1))); padL=28; padR=3; }
+  else if(cw>=520){ step=Math.max(16,Math.floor((cw-48)/Math.max(n,1))); padL=34; padR=4; }
+  else { step=Math.max(10,Math.floor((cw-30)/Math.max(n,1))); padL=22; padR=2; }
+  const W = padL+padR+n*step;
+  const H=170, ch=H-padT-padB, baseY=padT+ch;
   const X=(i)=>padL+i*step+step/2;
   const Y=(v)=>padT+ch*(1-Math.min(v,max)/max);
   let grid='';
   for(let g=0;g<=4;g++){
     const v=max*g/4, gy=Y(v);
-    grid+=`<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#e2e8f0"/><text x="${padL-6}" y="${gy+4}" text-anchor="end" font-size="10" fill="#64748b">${Math.round(v).toLocaleString('id-ID')}</text>`;
+    grid+='<line x1="'+padL+'" y1="'+gy+'" x2="'+(W-padR)+'" y2="'+gy+'" stroke="#e2e8f0"/><text x="'+(padL-2)+'" y="'+(gy+3)+'" text-anchor="end" font-size="7" fill="#64748b">'+Math.round(v).toLocaleString('id-ID')+'</text>';
   }
-  grid+=`<line x1="${padL}" y1="${baseY}" x2="${W-padR}" y2="${baseY}" stroke="#cbd5e1"/>`;
+  grid+='<line x1="'+padL+'" y1="'+baseY+'" x2="'+(W-padR)+'" y2="'+baseY+'" stroke="#cbd5e1"/>';
   const pts=data.map((d,i)=>({x:X(i), y:Y(d.total)}));
   const line=smoothPath(pts);
-  const area=line+` L ${X(n-1)},${baseY} L ${X(0)},${baseY} Z`;
-  const dots=data.map((d,i)=>d.total?`<circle cx="${X(i)}" cy="${Y(d.total)}" r="9" fill="transparent"><title>Tgl ${d.d} ${bulanLabel(y,m)} — Total ${fmtRp(d.total)} (service ${fmtRp(d.svc)} + barang ${fmtRp(d.jual)})</title></circle>`:'').join('');
-  const xl=data.map((d,i)=>`<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="9" fill="#64748b">${String(d.d).padStart(2,'0')}</text>`).join('');
-  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto;display:block;max-width:100%" role="img"><defs><linearGradient id="omzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6366f1" stop-opacity=".45"/><stop offset="1" stop-color="#6366f1" stop-opacity=".05"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#omzGrad)"/><path d="${line}" fill="none" stroke="#4f46e5" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>${dots}${xl}</svg>`;
+  const area=line+' L '+X(n-1)+','+baseY+' L '+X(0)+','+baseY+' Z';
+  const dots=data.map((d,i)=>d.total?'<circle cx="'+X(i)+'" cy="'+Y(d.total)+'" r="4" fill="transparent"><title>Tgl '+d.d+' '+bulanLabel(y,m)+' — Total '+fmtRp(d.total)+' (service '+fmtRp(d.svc)+' + barang '+fmtRp(d.jual)+')</title></circle>':'').join('');
+  const xl=data.map((d,i)=>'<text x="'+X(i)+'" y="'+(H-3)+'" text-anchor="middle" font-size="6" fill="#64748b">'+String(d.d).padStart(2,'0')+'</text>').join('');
+  box.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMinYMin meet" style="width:100%;max-width:100%;height:auto;display:block" role="img"><defs><linearGradient id="omzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6366f1" stop-opacity=".45"/><stop offset="1" stop-color="#6366f1" stop-opacity=".05"/></linearGradient></defs>'+grid+'<path d="'+area+'" fill="url(#omzGrad)"/><path d="'+line+'" fill="none" stroke="#4f46e5" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>'+dots+xl+'</svg>';
   const tot=data.reduce((a,b)=>a+b.total,0);
   const peak=data.reduce((a,b)=>b.total>a.total?b:a, data[0]||{d:'-',total:0});
-  if($('omzetInfo')) $('omzetInfo').textContent=`Total ${bulanLabel(y,m)}: ${fmtRp(tot)} • Rata-rata/hari: ${fmtRp(Math.round(tot/Math.max(n,1)))}`+(peak&&peak.total?` • Tertinggi tgl ${peak.d} (${fmtRp(peak.total)})`:'');
+  if($('omzetInfo')) $('omzetInfo').textContent='Total '+bulanLabel(y,m)+': '+fmtRp(tot)+' • Rata-rata/hari: '+fmtRp(Math.round(tot/Math.max(n,1)))+(peak&&peak.total?' • Tertinggi tgl '+peak.d+' ('+fmtRp(peak.total)+')':'');
   const now=new Date();
   const isCur=(y===now.getFullYear()&&m===now.getMonth());
   if($('btnOmNext')) $('btnOmNext').disabled=isCur;
