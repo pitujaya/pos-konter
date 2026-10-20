@@ -897,11 +897,7 @@ function renderStats(){
     $('statusLinks').innerHTML=STATUS.map(s=>`<button type="button" class="status-link" onclick="goto('data','${s}')" title="Lihat data ${s}">${badge(s)}<b>${c(s)}</b></button>`).join('');
   }
   if($('statusChart')){
-    const total=Math.max(DB.length,1);
-    $('statusChart').innerHTML=STATUS.map(s=>{
-      const n=c(s), p=Math.round(n/total*100);
-      return `<div><div class="status-row"><span>${s}</span><span>${n}</span></div><div class="bar"><i style="width:${p}%"></i></div></div>`;
-    }).join('');
+    try { $('statusChart').innerHTML=''; } catch(e){}
   }
   if($('attentionList')){
     const lama=DB.filter(x=>!['Selesai','Diambil','Cancel'].includes(normStatus(x.status))).slice(0,5);

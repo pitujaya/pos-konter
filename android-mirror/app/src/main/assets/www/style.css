@@ -201,8 +201,8 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
 .ltab.active{background:#0f172a;color:#fff;border-color:#0f172a}
 .ltab-pane{display:none}
 .ltab-pane.active{display:block;animation:fade .2s}
-.omzet-wrap{overflow-x:hidden;width:100%}
-.omzet-chart{min-width:100%;width:100%}
+.omzet-wrap{overflow-x:hidden;overflow-y:hidden;width:100%;max-width:100%}
+.omzet-chart{min-width:0;width:100%;max-width:100%}
 .omzet-chart svg{width:100% !important;max-width:100% !important;height:auto !important;display:block}
 .fbtn:disabled{opacity:.4;cursor:default}
 .omzet-legend{display:flex;gap:16px;margin-top:10px;font-size:13px;font-weight:600;color:var(--muted)}
