@@ -896,9 +896,8 @@ function renderStats(){
   if($('statusLinks')){
     $('statusLinks').innerHTML=STATUS.map(s=>`<button type="button" class="status-link" onclick="goto('data','${s}')" title="Lihat data ${s}">${badge(s)}<b>${c(s)}</b></button>`).join('');
   }
-  if($('statusChart')){
-    try { $('statusChart').innerHTML=''; } catch(e){}
-  }
+  if($('statusChart')){ try { $('statusChart').innerHTML=''; } catch(e){} }
+  if($('cardStatusService')){ try { $('cardStatusService').style.display='none'; } catch(e){} }
   if($('attentionList')){
     const lama=DB.filter(x=>!['Selesai','Diambil','Cancel'].includes(normStatus(x.status))).slice(0,5);
     const lowSp=(typeof SPARE!=='undefined'?SPARE:[]).filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).slice(0,3);
