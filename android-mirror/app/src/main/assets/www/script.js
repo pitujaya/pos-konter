@@ -980,11 +980,7 @@ function renderStats(){
   // Omzet hanya dari service yang SUDAH DIAMBIL
   $('stOmzet').textContent=fmtRp(DB.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
   if($('statusChart')){
-    const total=Math.max(DB.length,1);
-    $('statusChart').innerHTML=STATUS.map(s=>{
-      const n=c(s), p=Math.round(n/total*100);
-      return `<div><div class="status-row"><span>${s}</span><span>${n}</span></div><div class="bar"><i style="width:${p}%"></i></div></div>`;
-    }).join('');
+    try { $('statusChart').innerHTML=''; } catch(e){}
   }
   if($('attentionList')){
     const lama=DB.filter(x=>!['Selesai','Diambil','Cancel'].includes(normStatus(x.status))).slice(0,5);
