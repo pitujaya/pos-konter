@@ -978,9 +978,12 @@ function renderStats(){
   $('stSelesai').textContent=c('Diambil');
   // Omzet hanya dari service yang SUDAH DIAMBIL
   $('stOmzet').textContent=fmtRp(DB.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
-  if($('statusChart')){
-    try { $('statusChart').innerHTML=''; } catch(e){}
+  // Link status di dashboard -> ketuk untuk buka Data Service terfilter
+  if($('statusLinks')){
+    $('statusLinks').innerHTML=STATUS.map(s=>`<button type="button" class="status-link" onclick="goto('data','${s}')" title="Lihat data ${s}">${badge(s)}<b>${c(s)}</b></button>`).join('');
   }
+  if($('statusChart')){ try { $('statusChart').innerHTML=''; } catch(e){} }
+  if($('cardStatusService')){ try { $('cardStatusService').style.display='none'; } catch(e){} }
   if($('attentionList')){
     const lama=DB.filter(x=>!['Selesai','Diambil','Cancel'].includes(normStatus(x.status))).slice(0,5);
     const lowSp=(typeof SPARE!=='undefined'?SPARE:[]).filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).slice(0,3);
