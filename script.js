@@ -2883,6 +2883,15 @@ function btTest(){
   if(!st.connected){ toast('Sambungkan printer dulu'); return; }
   if(btPrintText(buildStrukTest())) toast('Tes tercetak 🖨✅');
 }
+// Tes langsung dari sisi native (Android) - buat cek printer tanpa teks dari web
+function btTestNative(){
+  if(!hasNativeBT()){ toast('Buka via APK untuk tes cetak'); return; }
+  const st=btStatusInfo();
+  if(!st.connected){ toast('Sambungkan printer dulu'); return; }
+  const r=btParse(btRaw('testPrint'), null);
+  if(r&&r.ok) toast('Tes native tercetak 🖨✅');
+  else toast('BT: '+((r&&r.message)||'gagal'));
+}
 function btInit(){
   renderBtStatus();
   const bP=$('btnBtPerm'); if(bP&&!bP.dataset.b){ bP.dataset.b='1'; bP.onclick=()=>{ btRaw('requestPerms'); toast('Izin bluetooth diminta — izinkan di popup HP'); setTimeout(renderBtStatus,800); }; }
@@ -2890,6 +2899,7 @@ function btInit(){
   const bC=$('btnBtConnect'); if(bC&&!bC.dataset.b){ bC.dataset.b='1'; bC.onclick=btConnect; }
   const bD=$('btnBtDisconnect'); if(bD&&!bD.dataset.b){ bD.dataset.b='1'; bD.onclick=btDisconnect; }
   const bT=$('btnBtTest'); if(bT&&!bT.dataset.b){ bT.dataset.b='1'; bT.onclick=btTest; }
+  const bTN=$('btnBtTestNative'); if(bTN&&!bTN.dataset.b){ bTN.dataset.b='1'; bTN.onclick=btTestNative; }
   const sel=$('btDevice'); if(sel&&!sel.dataset.b){ sel.dataset.b='1'; sel.onchange=()=>{ const o=sel.options[sel.selectedIndex]; if(o&&sel.value) btSaveCfg({mac:sel.value, name:o.text.split(' • ')[0]}); }; }
   // auto-connect sekali saat aplikasi dibuka (APK) bila ada MAC tersimpan
   try{
@@ -2904,4 +2914,4 @@ function btInit(){
   }catch{}
   setTimeout(renderBtStatus, 800);
 }
-window.btScan=btScan; window.btConnect=btConnect; window.btDisconnect=btDisconnect; window.btTest=btTest;
+window.btScan=btScan; window.btConnect=btConnect; window.btDisconnect=btDisconnect; window.btTest=btTest; window.btTestNative=btTestNative;

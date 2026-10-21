@@ -389,19 +389,81 @@ class MainActivity : AppCompatActivity() {
                 val s = btSocket
                 if (!isConnected() || s == null) return err("Printer belum tersambung. Sambungkan dulu.")
                 val out = s.outputStream
-                // ESC @ = reset, ESC a 1 default center diatur dari JS via ESC bytes bila perlu
+                val clean = asciiForPrinter(text ?: "")
+                val bytes = clean.toByteArray(Charsets.ISO_8859_1)
+                if (bytes.isEmpty()) return err("Isi cetak kosong.")
+                // Beri jeda: printer sering butuh waktu bangun setelah connect
+                Thread.sleep(300)
+                // ESC @ = reset printer
                 out.write(byteArrayOf(0x1B, 0x40))
-                // Pakai codepage yang umum; teks dikirim UTF-8, printer murah umumnya render ASCII dengan benar.
-                out.write((text + "\n\n\n").toByteArray(Charset.forName("UTF-8")))
-                // Partial cut: GS V 0
+                // ESC t 0 = pilih codepage PC437, ESC a 0 = rata kiri, ESC 2 = spasi baris default
+                out.write(byteArrayOf(0x1B, 0x74, 0x00))
+                out.write(byteArrayOf(0x1B, 0x61, 0x00))
+                out.write(byteArrayOf(0x1B, 0x32))
+                out.flush()
+                Thread.sleep(150)
+                // Kirim per potongan + jeda: printer murah dropping data kalau dikirim dadakan
+                writeSlow(out, bytes)
+                // ESC d 4 = feed 4 baris
+                out.write(byteArrayOf(0x1B, 0x64, 0x04))
+                out.flush()
+                Thread.sleep(250)
+                // GS V 0 = partial cut
                 out.write(byteArrayOf(0x1D, 0x56, 0x00))
                 out.flush()
-                ok(true, "tercetak")
+                ok(true, "tercetak (" + bytes.size + " byte)")
             } catch (e: IOException) {
                 disconnectInternal()
                 err("Gagal cetak / koneksi putus: " + e.message)
             } catch (e: Exception) {
                 err(e.message ?: "gagal cetak")
+            }
+        }
+
+        /** Cetak sample langsung dari native (untuk cek printer tanpa lewat teks JS). */
+        @JavascriptInterface
+        fun testPrint(): String {
+            val sample = buildString {
+                append("POS KONTER - TES PRINTER\n")
+                append("--------------------------------\n")
+                append("12345678901234567890123456789012\n")
+                append("Kiri              |   Kanan\n")
+                append("--------------------------------\n")
+                append("OK - printer siap dipakai\n")
+            }
+            return printText(sample)
+        }
+
+        /** Teks -> ASCII aman printer thermal (emoji/huruf non-ASCII dibuang). */
+        private fun asciiForPrinter(text: String): String {
+            val sb = StringBuilder(text.length)
+            for (ch in text) {
+                when {
+                    ch == '\n' -> sb.append("\r\n")
+                    ch == '\r' -> Unit
+                    ch == '\t' -> sb.append("  ")
+                    ch.code in 32..126 -> sb.append(ch)
+                    ch == '—' || ch == '–' -> sb.append('-')
+                    ch == '‘' || ch == '’' -> sb.append('\'')
+                    ch == '“' || ch == '”' -> sb.append('"')
+                    ch == '•' -> sb.append('-')
+                    ch == '…' -> sb.append("...")
+                    ch.code < 32 -> Unit
+                    else -> sb.append('?')
+                }
+            }
+            return sb.toString()
+        }
+
+        /** Tulis bytes per potongan dengan jeda kecil (anti data hilang di printer murah). */
+        private fun writeSlow(out: java.io.OutputStream, bytes: ByteArray, chunk: Int = 80, delayMs: Long = 25) {
+            var i = 0
+            while (i < bytes.size) {
+                val n = minOf(chunk, bytes.size - i)
+                out.write(bytes, i, n)
+                out.flush()
+                i += n
+                if (i < bytes.size) Thread.sleep(delayMs)
             }
         }
 
