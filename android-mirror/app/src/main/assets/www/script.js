@@ -601,6 +601,23 @@ function focusSection(pageId, cardId){
   try{ target.scrollIntoView({behavior:'smooth', block:'start'}); }catch{}
 }
 window.settingAll=function(){ clearFocus(); };
+// ===== FOKUS LAPORAN: hanya laporan yg diklik yang tampil =====
+function clearFokusLaporan(){
+  const tabs=document.getElementById('lpTabs'); if(tabs) tabs.classList.remove('hidden');
+  document.querySelectorAll('#page-laporan .ltab-pane').forEach(p=>{
+    if(p.hasAttribute('data-lap-hidden')){ p.classList.remove('hidden'); p.removeAttribute('data-lap-hidden'); }
+  });
+  const b=document.getElementById('btnLaporanAll'); if(b) b.classList.add('hidden');
+}
+function fokusLaporanTab(ltab){
+  clearFokusLaporan();
+  const tabs=document.getElementById('lpTabs'); if(tabs) tabs.classList.add('hidden');
+  document.querySelectorAll('#page-laporan .ltab-pane').forEach(p=>{
+    if(p.id!=='ltab-'+ltab){ p.setAttribute('data-lap-hidden','1'); p.classList.add('hidden'); }
+  });
+  const b=document.getElementById('btnLaporanAll'); if(b) b.classList.remove('hidden');
+}
+window.laporanSemua=function(){ clearFokusLaporan(); };
 // Klik sub-menu -> baru pindah halaman / tab
 document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',(e)=>{
   e.preventDefault();
@@ -608,6 +625,7 @@ document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',
   const ltab=b.dataset.ltab||'';
   if(ltab && typeof gotoLtab==='function'){ try{ gotoLtab(ltab); }catch{} }
   goto(page);
+  if(ltab){ try{ fokusLaporanTab(ltab); }catch{} }
   if(b.dataset.show){ try{ focusSection('page-'+page, b.dataset.show); }catch{} }
   else if(b.dataset.anchor){
     const el=document.getElementById(b.dataset.anchor);
@@ -620,6 +638,7 @@ function goto(page, filter){
   if(page==='pengaturan' && myRole()==='kasir'){ toast('⛔ Pengaturan khusus Admin / Super Admin'); return; }
   if(page==='pengguna' && !isSuperAdmin()){ toast('⛔ Kelola Pengguna khusus Super Admin'); return; }
   try{ clearFocus(); }catch{}
+  try{ clearFokusLaporan(); }catch{}
   navSyncActive(page);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');
