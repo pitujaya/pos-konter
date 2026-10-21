@@ -40,8 +40,11 @@ import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 import java.nio.charset.Charset
 import java.util.UUID
+import java.util.concurrent.Executors
 
 /**
  * POS Konter Mirror — MODE ONLINE-ONLY + PRINTER BLUETOOTH THERMAL.
@@ -55,6 +58,9 @@ class MainActivity : AppCompatActivity() {
         // Produksi (Cloudflare Tunnel -> VPS): frontend + API satu pintu.
         // api.js otomatis pakai https://pos.pitujaya.my.id/api via same-origin.
         const val BACKEND_URL = "https://pos.pitujaya.my.id/"
+        const val API_BASE = "https://pos.pitujaya.my.id/api"
+        const val TOKEN_KEY = "servishp_token_v1"
+        const val PREFS_AUTH = "pos_auth"
         // UUID SPP standar printer thermal bluetooth
         val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     }
@@ -62,11 +68,159 @@ class MainActivity : AppCompatActivity() {
     private lateinit var web: WebView
     private lateinit var root: FrameLayout
     private lateinit var offlineView: LinearLayout
+    private lateinit var loadingView: LinearLayout
     private var fileCb: ValueCallback<Array<Uri>>? = null
     private var pendingPermReq: PermissionRequest? = null
     private var connMgr: ConnectivityManager? = null
     private var netCallback: ConnectivityManager.NetworkCallback? = null
     private var isOfflineShown = false
+    private var firstScreenResolved = false
+    private var autoLoginChecked = false
+    private var autoLoginInFlight = false
+
+    private val bg = Executors.newSingleThreadExecutor()
+
+    // ================= AUTO LOGIN (native, sebelum WebView pakai token) =================
+
+    private fun autoLoginPrefs() = getSharedPreferences(PREFS_AUTH, MODE_PRIVATE)
+
+    private fun autoLoginEnabled(): Boolean =
+        BuildConfig.AUTO_LOGIN &&
+            BuildConfig.AUTO_LOGIN_ID.isNotBlank() &&
+            BuildConfig.AUTO_LOGIN_PW.isNotBlank()
+
+    private fun postToApi(path: String, json: JSONObject?): Pair<Int, String> {
+        var conn: HttpURLConnection? = null
+        return try {
+            conn = (URL(API_BASE + path).openConnection() as HttpURLConnection).apply {
+                requestMethod = if (json == null) "GET" else "POST"
+                connectTimeout = 12000
+                readTimeout = 12000
+                setRequestProperty("Accept", "application/json")
+                if (json != null) {
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                }
+            }
+            if (json != null) conn.outputStream.use { it.write(json.toString().toByteArray(Charset.forName("UTF-8"))) }
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val body = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            code to body
+        } catch (e: Exception) {
+            -1 to (e.message ?: "error")
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    /** Dipanggil sekali setelah halaman backend selesai load. */
+    private fun tryAutoLogin() {
+        if (firstScreenResolved) return
+        if (autoLoginChecked || autoLoginInFlight) {
+            // Sudah dicoba (mis. setelah reload) -> vaginalkan overlay.
+            if (autoLoginChecked && !autoLoginInFlight) resolveFirstScreen()
+            return
+        }
+        autoLoginChecked = true
+        if (!autoLoginEnabled() || !isOnline()) {
+            resolveFirstScreen()
+            return
+        }
+
+        val prefs = autoLoginPrefs()
+        if (prefs.getBoolean("auto_login_off", false)) {
+            resolveFirstScreen()
+            return
+        }
+
+        val cached = prefs.getString("token", null)
+        autoLoginInFlight = true
+        bg.execute {
+            var token: String? = null
+            if (!cached.isNullOrBlank()) {
+                // Validasi token lama; masih hidup -> pakai lagi (tanpa request login baru).
+                var ok = false
+                try {
+                    var conn: HttpURLConnection? = null
+                    conn = (URL(API_BASE + "/auth/me").openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"
+                        connectTimeout = 10000
+                        readTimeout = 10000
+                        setRequestProperty("Authorization", "Bearer $cached")
+                    }
+                    ok = conn.responseCode in 200..299
+                    conn.disconnect()
+                } catch (_: Exception) {}
+                if (ok) token = cached
+            }
+            if (token == null) {
+                val body = JSONObject()
+                    .put("identifier", BuildConfig.AUTO_LOGIN_ID.trim())
+                    .put("password", BuildConfig.AUTO_LOGIN_PW)
+                    .put("remember", true)
+                val (code, resp) = postToApi("/auth/login", body)
+                if (code in 200..299) {
+                    try {
+                        token = JSONObject(resp).optString("access_token").takeIf { it.isNotBlank() }
+                    } catch (_: Exception) { token = null }
+                }
+            }
+            val finalToken = token
+            runOnUiThread {
+                autoLoginInFlight = false
+                if (finalToken.isNullOrBlank()) {
+                    resolveFirstScreen()
+                    return@runOnUiThread
+                }
+                prefs.edit()
+                    .putString("token", finalToken)
+                    .putString("id", BuildConfig.AUTO_LOGIN_ID.trim())
+                    .putLong("at", System.currentTimeMillis())
+                    .apply()
+                // Inject token ke localStorage, lalu reload agar script.js init() memakainya.
+                web.evaluateJavascript(
+                    "(function(){try{localStorage.setItem('${TOKEN_KEY}'," +
+                        JSONObject.quote(finalToken) +
+                        ");return 1;}catch(e){return 0;}})()"
+                ) {
+                    web.reload()
+                }
+            }
+        }
+    }
+
+    /** Bridge auth: dipanggil JS saat user logout manual. */
+    inner class AuthBridge {
+        @JavascriptInterface
+        fun onLogout() {
+            runOnUiThread {
+                autoLoginPrefs().edit().remove("token").putBoolean("auto_login_off", true).apply()
+            }
+        }
+        @JavascriptInterface
+        fun isAutoLogin(): Boolean = autoLoginEnabled()
+    }
+
+    private fun buildLoadingView(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER
+        setBackgroundColor(Color.parseColor("#0f172a"))
+        isClickable = true
+        val icon = TextView(this@MainActivity).apply {
+            text = "\uD83D\uDD11"
+            textSize = 48f
+            gravity = Gravity.CENTER
+        }
+        val txt = TextView(this@MainActivity).apply {
+            text = "Sedang masuk…"
+            textSize = 16f
+            setTextColor(Color.parseColor("#cbd5e1"))
+            gravity = Gravity.CENTER
+        }
+        addView(icon)
+        addView(txt)
+    }
 
     // ---------- Bluetooth printer state ----------
     @Volatile private var btSocket: BluetoothSocket? = null
@@ -350,6 +504,7 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             isOfflineShown = true
             offlineView.visibility = View.VISIBLE
+            loadingView.visibility = View.GONE
             web.visibility = View.GONE
         }
     }
@@ -359,6 +514,7 @@ class MainActivity : AppCompatActivity() {
             isOfflineShown = false
             offlineView.visibility = View.GONE
             web.visibility = View.VISIBLE
+            if (firstScreenResolved) loadingView.visibility = View.GONE
         }
     }
 
@@ -367,6 +523,9 @@ class MainActivity : AppCompatActivity() {
         if (isOnline()) {
             val wasOffline = isOfflineShown
             showOnline()
+            // Saat pertama kali buka: tampilkan overlay "Sedang masuk…"
+            // sampai auto login selesai (atau gagal) lalu WebView ditampilkan.
+            if (!firstScreenResolved) loadingView.visibility = View.VISIBLE
             // Jangan reload berulang saat onResume — hanya load kalau belum ada URL,
             // atau reload kalau sebelumnya sedang offline / URL bukan backend.
             val cur = try { web.url ?: "" } catch (_: Exception) { "" }
@@ -378,6 +537,15 @@ class MainActivity : AppCompatActivity() {
         } else {
             try { web.stopLoading() } catch (_: Exception) {}
             showOffline()
+        }
+    }
+
+    private fun resolveFirstScreen() {
+        if (firstScreenResolved) return
+        firstScreenResolved = true
+        runOnUiThread {
+            loadingView.visibility = View.GONE
+            if (!isOfflineShown) web.visibility = View.VISIBLE
         }
     }
 
@@ -528,6 +696,15 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
+        loadingView = buildLoadingView()
+        root.addView(
+            loadingView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
         setContentView(root)
         hideSystemBars()
 
@@ -553,6 +730,8 @@ class MainActivity : AppCompatActivity() {
         try { web.addJavascriptInterface(BtBridge(), "AndroidBT") } catch (_: Exception) {
             Toast.makeText(this, "Gagal pasang bridge printer", Toast.LENGTH_SHORT).show()
         }
+        // Bridge auth: window.AndroidAuth.onLogout() saat user logout manual
+        try { web.addJavascriptInterface(AuthBridge(), "AndroidAuth") } catch (_: Exception) {}
 
         web.webViewClient = object : WebViewClient() {
             // Link eksternal (WA / tel: / whatsapp:// / browser luar) -> buka via Intent, JANGAN di WebView.
@@ -602,6 +781,8 @@ class MainActivity : AppCompatActivity() {
                 // Kalau halaman backend berhasil dibuka & masih online, sembunyikan blokir
                 if (url.startsWith(BACKEND_URL) && isOnline()) {
                     showOnline()
+                    // Auto login: coba inject token sebelum script.js init() membaca localStorage.
+                    if (!firstScreenResolved) tryAutoLogin() else resolveFirstScreen()
                 }
             }
         }
@@ -702,6 +883,7 @@ class MainActivity : AppCompatActivity() {
             netCallback?.let { connMgr?.unregisterNetworkCallback(it) }
         } catch (_: Exception) {}
         try { btSocket?.close() } catch (_: Exception) {}
+        try { bg.shutdownNow() } catch (_: Exception) {}
         super.onDestroy()
     }
 

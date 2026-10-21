@@ -84,6 +84,7 @@ class ServiceIn(BaseModel):
     estimasi: str | None = ""
     catatan: str | None = ""
     status: str = "Dikerjakan"
+    kasir: str | None = ""
 
 
 class ServiceUpdateIn(BaseModel):
@@ -104,6 +105,7 @@ class ServiceUpdateIn(BaseModel):
     estimasi: str | None = None
     catatan: str | None = None
     status: str | None = None
+    kasir: str | None = None
 
 
 class StatusUpdateIn(BaseModel):
@@ -131,6 +133,7 @@ class ServiceOut(BaseModel):
     estimasi: str = ""
     catatan: str = ""
     status: str
+    kasir: str = ""
     riwayat: list[dict] = []
 
     model_config = {"from_attributes": False}
@@ -294,6 +297,7 @@ class ExpenseOut(BaseModel):
 class ReportOut(BaseModel):
     dari: str = ""
     sampai: str = ""
+    kasir: str = ""
     service_masuk: int = 0
     service_selesai: int = 0
     service_omzet: int = 0

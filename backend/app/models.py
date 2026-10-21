@@ -41,6 +41,7 @@ class Service(Base):
     estimasi: Mapped[str] = mapped_column(String(20), default="")
     catatan: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(30), default="Dikerjakan", index=True)
+    kasir: Mapped[str] = mapped_column(String(120), default="", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

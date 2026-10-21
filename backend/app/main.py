@@ -95,6 +95,18 @@ try:
                 _conn.exec_driver_sql("UPDATE spareparts SET kategori='Lainnya' WHERE kategori IS NULL OR kategori=''")
     except Exception as _me:
         print(f"[WARN] migrasi kategori sparepart: {_me}")
+    # Migrasi ringan SQLite: tambah kolom kasir pada services (filter laporan per kasir).
+    try:
+        with engine.begin() as _conn:
+            _cols = [r[1] for r in _conn.exec_driver_sql("PRAGMA table_info(services)").fetchall()]
+            if _cols and "kasir" not in _cols:
+                _conn.exec_driver_sql("ALTER TABLE services ADD COLUMN kasir VARCHAR(120) DEFAULT ''")
+                try:
+                    _conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_services_kasir ON services (kasir)")
+                except Exception:
+                    pass
+    except Exception as _me:
+        print(f"[WARN] migrasi kolom kasir service: {_me}")
     with SessionLocal() as _db:
         seed(_db)
 except Exception as e:  # jangan bikin container crash-loop tanpa pesan

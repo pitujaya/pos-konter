@@ -29,6 +29,7 @@ def to_out(s: models.Service) -> dict:
         "keluhan": s.keluhan, "kondisi": s.kondisi or "", "teknisi": s.teknisi or "",
         "biaya": s.biaya or 0, "dp": s.dp or 0, "estimasi": s.estimasi or "",
         "catatan": s.catatan or "", "status": s.status,
+        "kasir": getattr(s, "kasir", "") or "",
         "riwayat": [{"t": (x.created_at.isoformat() if x.created_at else ""), "s": x.status} for x in h],
     }
 
@@ -89,6 +90,7 @@ def create_service(body: schemas.ServiceIn, db: Session = Depends(get_db),
         kondisi=(body.kondisi or ""), teknisi=(body.teknisi or ""),
         biaya=int(body.biaya or 0), dp=int(body.dp or 0),
         estimasi=(body.estimasi or ""), catatan=(body.catatan or ""), status=body.status,
+        kasir=(body.kasir or user.nama or "").strip(),
     )
     db.add(s)
     db.flush()

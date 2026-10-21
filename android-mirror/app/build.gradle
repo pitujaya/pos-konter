@@ -11,8 +11,19 @@ android {
         applicationId 'id.konter.posmirror'
         minSdk 24
         targetSdk 34
-        versionCode 6
-        versionName '1.5-mobile-scroll'
+        versionCode 7
+        versionName '1.6-autologin'
+
+        // ---- AUTO LOGIN ----
+        // Ganti kredensial di sini lalu build ulang APK.
+        // Kosongkan id atau pw untuk mematikan auto login.
+        buildConfigField "boolean", "AUTO_LOGIN", "true"
+        buildConfigField "String", "AUTO_LOGIN_ID", "\"kasir.toko@konter.id\""
+        buildConfigField "String", "AUTO_LOGIN_PW", "\"shincan1\""
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     buildTypes {

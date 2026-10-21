@@ -572,11 +572,11 @@ function goto(page, filter){
     }
     if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); }
   }
-  if(page==='dashboard' && useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); }
+  if(page==='dashboard'){ try{ renderOmzetChart(); }catch{} if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); } }
   if(page==='sparepart'){ try{ renderSpareparts(); }catch{} if(useBackend()){ pullSpareparts().then(()=>{ renderAll(); }).catch(()=>{}); } }
   if(page==='penjualan'){ try{ renderSales(); }catch{} if(useBackend()){ pullSales().then(()=>{ try{renderSales();}catch{} }).catch(()=>{}); } }
   if(page==='pengeluaran'){ try{ renderExpenses(); }catch{} if(useBackend()){ pullExpenses().then(()=>{ try{renderExpenses();}catch{} try{renderLaporan();}catch{} }).catch(()=>{}); } }
-  if(page==='laporan'){ try{ renderLaporan(); }catch{} }
+  if(page==='laporan'){ try{ syncLpKasirOptions(); }catch{} try{ renderLaporan(); }catch{} }
   // Kas belum dibuka + kasir klik menu transaksi -> langsung munculkan menu Buka Sesi
   if(PAGES_TRANSAKSI.includes(page) && !kasSesiAktif()){ showKasBuka(); }
   window.scrollTo({top:0});
@@ -838,7 +838,8 @@ $('serviceForm').addEventListener('submit', async (e)=>{
     kelengkapan:getKelengkapan(), keluhan, kondisi:val('f_kondisi').trim(),
     teknisi:val('f_teknisi'), biaya:Number(val('f_biaya',0)||0), dp:0,
     estimasi:val('f_estimasi'), catatan:val('f_catatan').trim(),
-    status:normStatus(val('f_status','Dikerjakan'))
+    status:normStatus(val('f_status','Dikerjakan')),
+    kasir:(currentUser()&&currentUser().nama)||''
   };
   let savedNo = '';
   if(useBackend()){
@@ -892,10 +893,6 @@ function renderStats(){
   $('stSelesai').textContent=c('Diambil');
   // Omzet hanya dari service yang SUDAH DIAMBIL
   $('stOmzet').textContent=fmtRp(DB.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
-  // Link status di dashboard -> ketuk untuk buka Data Service terfilter
-  if($('statusLinks')){
-    $('statusLinks').innerHTML=STATUS.map(s=>`<button type="button" class="status-link" onclick="goto('data','${s}')" title="Lihat data ${s}">${badge(s)}<b>${c(s)}</b></button>`).join('');
-  }
   if($('statusChart')){
     const total=Math.max(DB.length,1);
     $('statusChart').innerHTML=STATUS.map(s=>{
@@ -2249,7 +2246,23 @@ try{ bindExpenses(); }catch{}
 // ===== LAPORAN (stok + service masuk + penjualan + laba rugi) =====
 function lpRange(){
   let dari=val('lp_dari'), sampai=val('lp_sampai');
-  return {dari:(dari||'').slice(0,10), sampai:(sampai||'').slice(0,10)};
+  return {dari:(dari||'').slice(0,10), sampai:(sampai||'').slice(0,10), kasir:($('lp_kasir')?($('lp_kasir').value||''):'').trim()};
+}
+// ===== FILTER PER KASIR =====
+const normKasir = (s)=>' '.join(String(s||'').split()).toLowerCase();
+function matchKasir(nama, kasir){
+  if(!kasir) return true;
+  return normKasir(nama)===normKasir(kasir);
+}
+// daftar kasir unik yang punya transaksi (service / penjualan / pengeluaran)
+function kasirList(){
+  const set=new Map();
+  const add=(n)=>{ const k=normKasir(n); if(k) set.set(k, String(n).trim()); };
+  (typeof DB!=='undefined'?DB:[]).forEach(x=>add(x.kasir));
+  (typeof SALES!=='undefined'?SALES:[]).forEach(x=>add(x.kasir));
+  (typeof EXPENSES!=='undefined'?EXPENSES:[]).forEach(x=>add(x.dicatat_oleh));
+  loadUsers().forEach(u=>{ if(u && (u.role||'kasir')!=='superadmin') add(u.nama); });
+  return [...set.values()].sort((a,b)=>a.localeCompare(b));
 }
 function inPeriode(tgl, dari, sampai){
   const t=String(tgl||'').slice(0,10);
@@ -2257,9 +2270,10 @@ function inPeriode(tgl, dari, sampai){
   if(sampai && t>sampai) return false;
   return true;
 }
-function computeReportLocal(dari, sampai){
-  const svc=(typeof DB!=='undefined'?DB:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai));
-  const jual=SALES.filter(x=>inPeriode(x.tanggal||'',dari,sampai));
+function computeReportLocal(dari, sampai, kasir){
+  kasir=String(kasir||'').trim();
+  const svc=(typeof DB!=='undefined'?DB:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.kasir,kasir));
+  const jual=SALES.filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.kasir,kasir));
   const sp=(typeof SPARE!=='undefined'?SPARE:[]);
   // Omzet service HANYA dari status Diambil
   const diambil=svc.filter(x=>normStatus(x.status)==='Diambil');
@@ -2268,14 +2282,14 @@ function computeReportLocal(dari, sampai){
   const jOm=jual.reduce((a,b)=>a+Number(b.total||0),0);
   const jHpp=jual.reduce((a,b)=>a+Number(b.hpp_total||0),0);
   const jLb=jOm-jHpp;
-  const exList=(typeof EXPENSES!=='undefined'?EXPENSES:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai));
+  const exList=(typeof EXPENSES!=='undefined'?EXPENSES:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.dicatat_oleh,kasir));
   const exTot=exList.reduce((a,b)=>a+Number(b.jumlah||0),0);
   return {
-    dari: dari||'', sampai: sampai||'',
+    dari: dari||'', sampai: sampai||'', kasir: kasir,
     service_masuk: svc.length,
     service_selesai: diambil.length,
     service_omzet: sOm, service_per_status: per,
-    service_diambil: [...diambil].sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,50).map(x=>({noService:x.noService,tanggal:x.tanggal,nama:x.nama,telp:x.telp,merk:x.merk,tipe:x.tipe,biaya:x.biaya,teknisi:x.teknisi})),
+    service_diambil: [...diambil].sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,50).map(x=>({noService:x.noService,tanggal:x.tanggal,nama:x.nama,telp:x.telp,merk:x.merk,tipe:x.tipe,biaya:x.biaya,teknisi:x.teknisi,kasir:x.kasir})),
     penjualan_count: jual.length, penjualan_omzet: jOm, penjualan_hpp: jHpp, penjualan_laba: jLb,
     expense_count: exList.length, expense_total: exTot,
     total_pendapatan: sOm+jOm, total_laba: sOm+jLb-exTot,
@@ -2289,23 +2303,23 @@ function computeReportLocal(dari, sampai){
 let LAPORAN_CACHE=null;
 async function renderLaporan(){
   if(!$('lpLabaBody')) return;
-  const {dari, sampai}=lpRange();
+  const {dari, sampai, kasir}=lpRange();
   let r=null;
   if(useBackend()){
-    try{ r=await window.API.report(dari, sampai); }catch{ r=null; }
+    try{ r=await window.API.report(dari, sampai, kasir); }catch{ r=null; }
   }
   if(!r){
-    r=computeReportLocal(dari, sampai);
+    r=computeReportLocal(dari, sampai, kasir);
   }
   if(!(r._jualList||[]).length){
     try{
-      if(useBackend()){ const ls=await window.API.listSales({dari, sampai, limit:50}); if(ls&&ls.length) r._jualList=ls; }
+      if(useBackend()){ const ls=await window.API.listSales({dari, sampai, kasir, limit:50}); if(ls&&ls.length) r._jualList=ls; }
     }catch{}
   }
   // Backend mungkin belum punya kolom expense (server lama) -> hitung dari lokal agar tetap konsisten
   try{
     if((r.expense_total===undefined||r.expense_count===undefined) && (typeof EXPENSES!=='undefined')){
-      const exL=EXPENSES.filter(x=>inPeriode(x.tanggal||'',dari,sampai));
+      const exL=EXPENSES.filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.dicatat_oleh,kasir));
       r.expense_count=exL.length;
       r.expense_total=exL.reduce((a,b)=>a+Number(b.jumlah||0),0);
       r.total_laba=Number(r.service_omzet||0)+Number(r.penjualan_laba||0)-Number(r.expense_total||0);
@@ -2313,8 +2327,9 @@ async function renderLaporan(){
   }catch{}
   LAPORAN_CACHE=r;
   const periode=(r.dari||r.sampai)?`Periode: ${r.dari||'…'} s/d ${r.sampai||'…'}`:'Semua periode';
-  if($('lpInfo')) $('lpInfo').textContent=periode+` • ${r.service_masuk} service • ${r.penjualan_count} nota • ${r.expense_count||0} biaya`;
-  if($('lpPeriode')) $('lpPeriode').textContent=periode;
+  const kasirTag=(r.kasir||kasir)?` • Kasir: ${r.kasir||kasir}`:'';
+  if($('lpInfo')) $('lpInfo').textContent=periode+kasirTag+` • ${r.service_masuk} service • ${r.penjualan_count} nota • ${r.expense_count||0} biaya`;
+  if($('lpPeriode')) $('lpPeriode').textContent=periode+(r.kasir||kasir?(' • '+r.kasir):'');
   if($('lpPendapatan')) $('lpPendapatan').textContent=fmtRp(r.total_pendapatan);
   if($('lpLaba')) $('lpLaba').textContent=fmtRp(r.total_laba);
   if($('lpService')) $('lpService').textContent=fmtRp(r.service_omzet);
@@ -2348,17 +2363,17 @@ async function renderLaporan(){
   let diambilList=r.service_diambil||[];
   if(!diambilList.length){
     try{
-      const {dari:dd, sampai:ss}=lpRange();
-      diambilList=(typeof DB!=='undefined'?DB:[]).filter(x=>normStatus(x.status)==='Diambil'&&inPeriode(x.tanggal||'',dd,ss))
+      const {dari:dd, sampai:ss, kasir:kk}=lpRange();
+      diambilList=(typeof DB!=='undefined'?DB:[]).filter(x=>normStatus(x.status)==='Diambil'&&inPeriode(x.tanggal||'',dd,ss)&&matchKasir(x.kasir,kk))
         .sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,50)
-        .map(x=>({noService:x.noService,tanggal:x.tanggal,nama:x.nama,telp:x.telp,merk:x.merk,tipe:x.tipe,biaya:x.biaya,teknisi:x.teknisi}));
+        .map(x=>({noService:x.noService,tanggal:x.tanggal,nama:x.nama,telp:x.telp,merk:x.merk,tipe:x.tipe,biaya:x.biaya,teknisi:x.teknisi,kasir:x.kasir}));
     }catch{}
   }
   if($('lpDiambilCount')) $('lpDiambilCount').textContent=diambilList.length;
-  if($('lpDiambilBody')) $('lpDiambilBody').innerHTML=diambilList.map(x=>`<tr><td><b>${esc(x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.nama||'-')}<br><small class="muted">${esc(x.merk||'')} ${esc(x.tipe||'')}</small></td><td style="text-align:right"><b>${fmtRp(x.biaya)}</b></td></tr>`).join('')||'<tr><td colspan="3">Belum ada service Diambil pada periode ini.</td></tr>';
+  if($('lpDiambilBody')) $('lpDiambilBody').innerHTML=diambilList.map(x=>`<tr><td><b>${esc(x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.nama||'-')}<br><small class="muted">${esc(x.merk||'')} ${esc(x.tipe||'')}</small></td><td>${esc(x.kasir||'-')}</td><td style="text-align:right"><b>${fmtRp(x.biaya)}</b></td></tr>`).join('')||'<tr><td colspan="4">Belum ada service Diambil pada periode ini.</td></tr>';
   const jl=r._jualList||[];
   if($('lpJualCount')) $('lpJualCount').textContent=r.penjualan_count;
-  if($('lpJualBody')) $('lpJualBody').innerHTML=jl.map(x=>`<tr><td><b>${esc(x.no_nota||x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.pelanggan||x.nama||'Umum')}</td><td style="text-align:right"><b>${fmtRp(x.total||x.biaya||0)}</b></td></tr>`).join('')||'<tr><td colspan="3">Belum ada penjualan pada periode ini.</td></tr>';
+  if($('lpJualBody')) $('lpJualBody').innerHTML=jl.map(x=>`<tr><td><b>${esc(x.no_nota||x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.pelanggan||x.nama||'Umum')}</td><td>${esc(x.kasir||'-')}</td><td style="text-align:right"><b>${fmtRp(x.total||x.biaya||0)}</b></td></tr>`).join('')||'<tr><td colspan="4">Belum ada penjualan pada periode ini.</td></tr>';
   const sp=[...(typeof SPARE!=='undefined'?SPARE:[])].sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
   if($('lpStokCount')) $('lpStokCount').textContent=sp.length;
   if($('lpStokBody')) $('lpStokBody').innerHTML=sp.map(x=>{ const low=Number(x.stok||0)<=Number(x.stok_min||0); return `<tr>
@@ -2367,6 +2382,55 @@ async function renderLaporan(){
     <td><b>${esc(x.stok)}</b><br>${low?'<span class="badge b-Batal">Menipis</span>':'<span class="badge b-Selesai">Aman</span>'}</td>
     <td style="text-align:right"><b>${fmtRp(Number(x.hpp||0)*Number(x.stok||0))}</b></td></tr>`; }).join('')
     + `<tr><td colspan="5"><b>Total nilai stok (HPP)</b> • ${esc(r.stok_menipis)} menipis</td><td style="text-align:right"><b>${fmtRp(r.stok_nilai_hpp)}</b></td></tr>`;
+  renderRekapKasir(dari, sampai);
+}
+// Rekap gabungan per kasir (dihitung dari data lokal yg sudah sync dari backend)
+function renderRekapKasir(dari, sampai){
+  if(!$('lpKasirBody')) return;
+  const rows=new Map();
+  const get=(n)=>{
+    const k=normKasir(n); if(!k) return null;
+    if(!rows.has(k)) rows.set(k,{nama:String(n).trim(),svc:0,svcOm:0,nota:0,jual:0,labaJual:0,exp:0,expN:0});
+    return rows.get(k);
+  };
+  (typeof DB!=='undefined'?DB:[]).forEach(x=>{
+    if(!inPeriode(x.tanggal||'',dari,sampai)) return;
+    const r=get(x.kasir); if(!r) return;
+    if(normStatus(x.status)==='Diambil'){ r.svc++; r.svcOm+=Number(x.biaya||0); }
+  });
+  (typeof SALES!=='undefined'?SALES:[]).forEach(x=>{
+    if(!inPeriode(x.tanggal||'',dari,sampai)) return;
+    const r=get(x.kasir); if(!r) return;
+    r.nota++; r.jual+=Number(x.total||0); r.labaJual+=Number(x.laba!=null?x.laba:(Number(x.total||0)-Number(x.hpp_total||0)));
+  });
+  (typeof EXPENSES!=='undefined'?EXPENSES:[]).forEach(x=>{
+    if(!inPeriode(x.tanggal||'',dari,sampai)) return;
+    const r=get(x.dicatat_oleh); if(!r) return;
+    r.exp+=Number(x.jumlah||0); r.expN++;
+  });
+  const list=[...rows.values()].sort((a,b)=>(b.svcOm+b.jual)-(a.svcOm+a.jual));
+  const t=list.reduce((o,r)=>({svc:o.svc+r.svc, svcOm:o.svcOm+r.svcOm, nota:o.nota+r.nota, jual:o.jual+r.jual, labaJual:o.labaJual+r.labaJual, exp:o.exp+r.exp}),{svc:0,svcOm:0,nota:0,jual:0,labaJual:0,exp:0});
+  const laba=(r)=>r.svcOm+r.labaJual-r.exp;
+  if($('lpKasirCount')) $('lpKasirCount').textContent=list.length;
+  if($('lpKasirPeriode')) $('lpKasirPeriode').textContent=(dari||sampai)?`${dari||'…'} s/d ${sampai||'…'}`:'Semua periode';
+  if($('lpKasirBody')) $('lpKasirBody').innerHTML=list.map(r=>`<tr>
+    <td><b>${esc(r.nama)}</b>${r.expN?`<br><small class="muted">${esc(r.expN)} pengeluaran</small>`:''}</td>
+    <td style="text-align:right">${esc(r.svc)}</td>
+    <td style="text-align:right"><b>${fmtRp(r.svcOm)}</b></td>
+    <td style="text-align:right">${esc(r.nota)}</td>
+    <td style="text-align:right"><b>${fmtRp(r.jual)}</b></td>
+    <td style="text-align:right">${fmtRp(r.labaJual)}</td>
+    <td style="text-align:right">(${fmtRp(r.exp)})</td>
+    <td style="text-align:right"><b>${fmtRp(laba(r))}</b></td></tr>`).join('')
+    + `<tr><td><b>TOTAL</b></td><td style="text-align:right"><b>${esc(t.svc)}</b></td><td style="text-align:right"><b>${fmtRp(t.svcOm)}</b></td><td style="text-align:right"><b>${esc(t.nota)}</b></td><td style="text-align:right"><b>${fmtRp(t.jual)}</b></td><td style="text-align:right"><b>${fmtRp(t.labaJual)}</b></td><td style="text-align:right"><b>(${fmtRp(t.exp)})</b></td><td style="text-align:right"><b>${fmtRp(t.svcOm+t.labaJual-t.exp)}</b></td></tr>`
+    || '<tr><td colspan="8">Belum ada transaksi pada periode ini.</td></tr>';
+}
+function syncLpKasirOptions(){
+  const el=$('lp_kasir'); if(!el) return;
+  const cur=el.value||'';
+  const list=kasirList();
+  el.innerHTML='<option value="">Semua kasir</option>'+list.map(n=>`<option value="${esc(n)}" ${normKasir(n)===normKasir(cur)?'selected':''}>${esc(n)}</option>`).join('');
+  if(cur && !list.some(n=>normKasir(n)===normKasir(cur))) el.value='';
 }
 function bindLaporan(){
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.onclick=()=>gotoLtab(b.dataset.ltab));
@@ -2376,11 +2440,14 @@ function bindLaporan(){
   if($('lp7')) $('lp7').onclick=()=>setD(new Date(Date.now()-6*864e5).toISOString().slice(0,10),today);
   if($('lp30')) $('lp30').onclick=()=>setD(new Date(Date.now()-29*864e5).toISOString().slice(0,10),today);
   if($('lpAll')) $('lpAll').onclick=()=>setD('','');
-  if($('btnLpTampil')) $('btnLpTampil').onclick=()=>{ renderLaporan(); toast('Laporan diperbarui 📊'); };
+  if($('btnLpTampil')) $('btnLpTampil').onclick=()=>{ syncLpKasirOptions(); renderLaporan(); toast('Laporan diperbarui 📊'); };
   if($('lp_dari')) $('lp_dari').onchange=renderLaporan;
   if($('lp_sampai')) $('lp_sampai').onchange=renderLaporan;
+  if($('lp_kasir')) $('lp_kasir').onchange=()=>renderLaporan();
+  if($('lpResetKasir')) $('lpResetKasir').onclick=()=>{ if($('lp_kasir'))$('lp_kasir').value=''; renderLaporan(); toast('Filter kasir direset ↺'); };
   if($('btnLpCSV')) $('btnLpCSV').onclick=exportLaporanCSV;
   if($('btnLpPrint')) $('btnLpPrint').onclick=printLaporan;
+  syncLpKasirOptions();
 }
 window.gotoLtab=function(name){
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.ltab===name));
@@ -2391,6 +2458,7 @@ function exportLaporanCSV(){
   const L=[];
   L.push('LAPORAN POS KONTER');
   L.push('Periode,'+(r.dari||'…')+' s/d '+(r.sampai||'…'));
+  L.push('Kasir,'+(r.kasir||'Semua kasir'));
   L.push('');
   L.push('LABA RUGI');
   L.push('Keterangan,Nilai');
@@ -2410,6 +2478,16 @@ function exportLaporanCSV(){
   L.push('NoService,Tanggal,Nama,HP,Biaya');
   (r.service_diambil||[]).forEach(x=>L.push([x.noService,x.tanggal,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.telp,x.biaya].join(',')));
   L.push('');
+  L.push('REKAP PER KASIR');
+  L.push('Kasir,Service Diambil,Omzet Service,Nota,Omzet Jual,Laba Jual,Pengeluaran,Laba Bersih');
+  try{
+    const f=$('lpKasirBody');
+    if(f) [...f.querySelectorAll('tr')].forEach(tr=>{
+      const c=[...tr.children].map(td=>(td.textContent||'').replace(/\s+/g,' ').trim());
+      L.push(c.map((v,i)=>i===0?('"'+v.replace(/"/g,'""')+'"'):v).join(','));
+    });
+  }catch{}
+  L.push('');
   L.push('STOK');
   L.push('SKU,Nama,Merk,Kategori,HPP,Jual,Stok,Nilai HPP');
   (typeof SPARE!=='undefined'?SPARE:[]).forEach(x=>L.push([x.sku,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.merk,'"'+String(((x&&x.kategori)||'Lainnya')).replace(/"/g,'""')+'"',x.hpp,x.harga_jual,x.stok,Number(x.hpp||0)*Number(x.stok||0)].join(',')));
@@ -2423,7 +2501,7 @@ function printLaporan(){
     <h2>${esc(SET.nama)}</h2>
     <p style="text-align:center">${esc(SET.alamat)}<br>Telp: ${esc(SET.telp)}</p>
     <hr>
-    <p><b>LAPORAN</b><br>Periode: ${esc(r.dari||'…')} s/d ${esc(r.sampai||'…')}</p>
+    <p><b>LAPORAN</b><br>Periode: ${esc(r.dari||'…')} s/d ${esc(r.sampai||'…')}${r.kasir?('<br>Kasir: '+esc(r.kasir)):''}</p>
     <hr>
     <p><b>Laba Rugi</b><br>
     Pendapatan service (hanya Diambil): ${fmtRp(r.service_omzet)} (${esc(r.service_selesai)} unit)<br>
@@ -2446,6 +2524,8 @@ try{
   if($('btnOmPrev')) $('btnOmPrev').onclick=()=>omzetGeser(-1);
   if($('btnOmNext')) $('btnOmNext').onclick=()=>omzetGeser(1);
   if($('btnOmNow')) $('btnOmNow').onclick=()=>{ omzetY=null; omzetM=null; renderOmzetChart(); };
+  let omzetRsz;
+  window.addEventListener('resize', ()=>{ clearTimeout(omzetRsz); omzetRsz=setTimeout(renderOmzetChart,150); });
 }catch{}
 
 // ===== GRAFIK PERFORMA PENJUALAN BULANAN (area halus, SVG murni) =====
@@ -2488,6 +2568,15 @@ function smoothPath(pts){
   }
   return d;
 }
+function fmtRingkas(v){
+  v=Math.round(Number(v)||0);
+  const a=Math.abs(v);
+  const f=(n,s)=>String(n).replace('.',',')+s;
+  if(a>=1e9) return f(Number((v/1e9).toFixed(a%1e9?1:0)),'M');
+  if(a>=1e6) return f(Number((v/1e6).toFixed(a%1e6?1:0)),'jt');
+  if(a>=1e3) return f(Math.round(v/1e3),'rb');
+  return String(v);
+}
 function renderOmzetChart(){
   const box=$('omzetChart'); if(!box) return;
   const {y, m}=omzetCursor();
@@ -2495,22 +2584,30 @@ function renderOmzetChart(){
   if($('omzetTitle')) $('omzetTitle').textContent='Performa Penjualan Bulan '+bulanLabel(y, m);
   const max=niceMax(Math.max(...data.map(d=>d.total), 0));
   const n=data.length;
-  const step=32, padL=66, padR=12, padT=16, padB=28;
-  const W=padL+padR+n*step, H=260, ch=H-padT-padB, baseY=padT+ch;
+  // Lebar grafik mengikuti layar: di HP muat penuh tanpa geser
+  const avail=Math.round(box.getBoundingClientRect().width||box.clientWidth||340);
+  const narrow=avail<520;
+  const padL=narrow?46:66, padR=narrow?8:12, padT=16, padB=28;
+  const step=Math.max(6, (avail-padL-padR)/Math.max(n,1));
+  const W=Math.round(padL+padR+n*step), H=narrow?210:260, ch=H-padT-padB, baseY=padT+ch;
+  const fs=Math.max(10, Math.min(13, Math.round(step*0.45)));
+  const fx=Math.max(8, Math.min(11, Math.round(step*0.35)));
   const X=(i)=>padL+i*step+step/2;
   const Y=(v)=>padT+ch*(1-Math.min(v,max)/max);
   let grid='';
   for(let g=0;g<=4;g++){
     const v=max*g/4, gy=Y(v);
-    grid+=`<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#e2e8f0"/><text x="${padL-8}" y="${gy+4}" text-anchor="end" font-size="11" fill="#64748b">${Math.round(v).toLocaleString('id-ID')}</text>`;
+    grid+=`<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#e2e8f0"/><text x="${padL-6}" y="${gy+4}" text-anchor="end" font-size="${fs}" fill="#64748b">${narrow?fmtRingkas(v):Math.round(v).toLocaleString('id-ID')}</text>`;
   }
   grid+=`<line x1="${padL}" y1="${baseY}" x2="${W-padR}" y2="${baseY}" stroke="#cbd5e1"/>`;
   const pts=data.map((d,i)=>({x:X(i), y:Y(d.total)}));
   const line=smoothPath(pts);
   const area=line+` L ${X(n-1)},${baseY} L ${X(0)},${baseY} Z`;
-  const dots=data.map((d,i)=>d.total?`<circle cx="${X(i)}" cy="${Y(d.total)}" r="10" fill="transparent"><title>Tgl ${d.d} ${bulanLabel(y,m)} — Total ${fmtRp(d.total)} (service ${fmtRp(d.svc)} + barang ${fmtRp(d.jual)})</title></circle>`:'').join('');
-  const xl=data.map((d,i)=>`<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="9" fill="#64748b">${String(d.d).padStart(2,'0')}</text>`).join('');
-  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:${W}px;height:auto;display:block" role="img"><defs><linearGradient id="omzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6366f1" stop-opacity=".45"/><stop offset="1" stop-color="#6366f1" stop-opacity=".05"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#omzGrad)"/><path d="${line}" fill="none" stroke="#4f46e5" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${dots}${xl}</svg>`;
+  const dotR=narrow?7:10;
+  const dots=data.map((d,i)=>d.total?`<circle cx="${X(i)}" cy="${Y(d.total)}" r="${dotR}" fill="transparent"><title>Tgl ${d.d} ${bulanLabel(y,m)} — Total ${fmtRp(d.total)} (service ${fmtRp(d.svc)} + barang ${fmtRp(d.jual)})</title></circle>`:'').join('');
+  const every=Math.max(1, Math.ceil((fx*1.9)/Math.max(step,1)));
+  const xl=data.map((d,i)=>i%every?'' : `<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="${fx}" fill="#64748b">${narrow?d.d:String(d.d).padStart(2,'0')}</text>`).join('');
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img"><defs><linearGradient id="omzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6366f1" stop-opacity=".45"/><stop offset="1" stop-color="#6366f1" stop-opacity=".05"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#omzGrad)"/><path d="${line}" fill="none" stroke="#4f46e5" stroke-width="${narrow?2:2.5}" stroke-linejoin="round" stroke-linecap="round"/>${dots}${xl}</svg>`;
   const tot=data.reduce((a,b)=>a+b.total,0);
   const peak=data.reduce((a,b)=>b.total>a.total?b:a, data[0]||{d:'-',total:0});
   if($('omzetInfo')) $('omzetInfo').textContent=`Total ${bulanLabel(y,m)}: ${fmtRp(tot)} • Rata-rata/hari: ${fmtRp(Math.round(tot/Math.max(n,1)))}`+(peak&&peak.total?` • Tertinggi tgl ${peak.d} (${fmtRp(peak.total)})`:'');

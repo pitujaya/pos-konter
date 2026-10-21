@@ -269,6 +269,7 @@
     listSales(params = {}) {
       const qs = new URLSearchParams({
         q: params.q || "", dari: params.dari || "", sampai: params.sampai || "",
+        kasir: params.kasir || "",
         skip: String(params.skip || 0), limit: String(params.limit || 1000),
       }).toString();
       return this.req("/sales?" + qs);
@@ -298,8 +299,10 @@
     createExpense(payload) { return this.req("/expenses", { method: "POST", body: payload }); },
     updateExpense(id, payload) { return this.req("/expenses/" + id, { method: "PUT", body: payload }); },
     deleteExpense(id) { return this.req("/expenses/" + id, { method: "DELETE" }); },
-    report(dari = "", sampai = "") {
-      const qs = new URLSearchParams({ dari: dari || "", sampai: sampai || "" }).toString();
+    report(dari = "", sampai = "", kasir = "") {
+      const qs = new URLSearchParams({
+        dari: dari || "", sampai: sampai || "", kasir: kasir || "",
+      }).toString();
       return this.req("/stats/report?" + qs);
     },
     async uploadSlide(file) {

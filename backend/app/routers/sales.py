@@ -52,6 +52,15 @@ def _in_range(tgl: str, dari: str, sampai: str) -> bool:
     return True
 
 
+def _match_kasir(nama: str | None, kasir: str) -> bool:
+    """Cocokkan nama kasir (tanpa sensitivitas huruf & spasi ganda)."""
+    kasir = (kasir or "").strip()
+    if not kasir:
+        return True
+    n = " ".join((nama or "").split()).casefold()
+    return n == " ".join(kasir.split()).casefold()
+
+
 @router.post("/sales", response_model=schemas.SaleOut, status_code=201)
 def create_sale(body: schemas.SaleIn, db: Session = Depends(get_db),
                 user: models.User = Depends(get_current_user)):
@@ -105,6 +114,7 @@ def list_sales(
     q: str = Query("", description="cari no nota / pelanggan / telp"),
     dari: str = Query("", description="YYYY-MM-DD"),
     sampai: str = Query("", description="YYYY-MM-DD"),
+    kasir: str = Query("", description="filter per kasir (nama)"),
     skip: int = 0, limit: int = 500,
     db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
 ):
@@ -112,6 +122,8 @@ def list_sales(
     rows.sort(key=lambda r: r.id or 0, reverse=True)
     if dari or sampai:
         rows = [r for r in rows if _in_range(r.tanggal or "", dari, sampai)]
+    if kasir:
+        rows = [r for r in rows if _match_kasir(r.kasir, kasir)]
     if q:
         ql = q.lower()
         rows = [r for r in rows if ql in " ".join([
@@ -150,6 +162,7 @@ def delete_sale(sale_id: int, db: Session = Depends(get_db),
 def report(
     dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),
+    kasir: str = Query("", description="filter laporan per kasir (nama), kosong = semua"),
     db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
 ):
     services = db.query(models.Service).all()
@@ -163,6 +176,11 @@ def report(
         services = [r for r in services if _in_range(r.tanggal or "", dari, sampai)]
         sales = [r for r in sales if _in_range(r.tanggal or "", dari, sampai)]
         expenses = [r for r in expenses if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
+    kasir = (kasir or "").strip()
+    if kasir:
+        services = [r for r in services if _match_kasir(getattr(r, "kasir", ""), kasir)]
+        sales = [r for r in sales if _match_kasir(r.kasir, kasir)]
+        expenses = [r for r in expenses if _match_kasir(getattr(r, "dicatat_oleh", ""), kasir)]
     # Omzet service HANYA dari status Diambil
     diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
     service_omzet = sum(int(r.biaya or 0) for r in diambil)
@@ -175,7 +193,7 @@ def report(
     total_laba = service_omzet + penjualan_laba - expense_total
     diambil_sorted = sorted(diambil, key=lambda r: r.id or 0, reverse=True)[:50]
     return {
-        "dari": dari or "", "sampai": sampai or "",
+        "dari": dari or "", "sampai": sampai or "", "kasir": kasir,
         "service_masuk": len(services),
         "service_selesai": len(diambil),
         "service_omzet": service_omzet,
@@ -183,7 +201,8 @@ def report(
         "service_diambil": [
             {"noService": r.no_service or "", "tanggal": r.tanggal or "", "nama": r.nama or "",
              "telp": r.telp or "", "merk": r.merk or "", "tipe": r.tipe or "",
-             "biaya": r.biaya or 0, "teknisi": r.teknisi or ""}
+             "biaya": r.biaya or 0, "teknisi": r.teknisi or "",
+             "kasir": getattr(r, "kasir", "") or ""}
             for r in diambil_sorted
         ],
         "penjualan_count": len(sales),

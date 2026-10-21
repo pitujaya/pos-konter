@@ -156,11 +156,6 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>🔗 Status Service</h3><small class="muted">ketuk untuk filter Data Service</small></div>
-        <div class="status-links" id="statusLinks"></div>
-      </div>
-
-      <div class="card">
         <div class="card-head"><h3 id="omzetTitle">📈 Performa Penjualan</h3><div class="btn-row">
           <button class="fbtn" id="btnOmPrev">‹</button>
           <button class="fbtn" id="btnOmNow">Bulan Ini</button>
@@ -501,6 +496,10 @@
           <label>Dari<input id="lp_dari" type="date" /></label>
           <label>Sampai<input id="lp_sampai" type="date" /></label>
         </div>
+        <div class="row2">
+          <label>Kasir<select id="lp_kasir"></select></label>
+          <label>&nbsp;<button class="btn ghost" id="lpResetKasir" style="width:100%;justify-content:center">↺ Reset filter kasir</button></label>
+        </div>
         <div class="btn-row">
           <button class="btn small ghost" id="lpToday">Hari ini</button>
           <button class="btn small ghost" id="lp7">7 hari</button>
@@ -516,6 +515,7 @@
         <button class="ltab" data-ltab="service">📲 <span>Service</span></button>
         <button class="ltab" data-ltab="jual">🛒 <span>Penjualan</span></button>
         <button class="ltab" data-ltab="stok">📦 <span>Stok Sparepart</span></button>
+        <button class="ltab" data-ltab="kasir">👥 <span>Rekap Kasir</span></button>
       </div>
 
       <!-- SUB: LAPORAN LABA RUGI -->
@@ -557,7 +557,7 @@
       <div class="card">
         <div class="card-head"><h3>✅ Service Sudah Diambil (<span id="lpDiambilCount">0</span>) — masuk omzet</h3></div>
         <div class="table-wrap"><table style="min-width:0">
-          <thead><tr><th>No. Service</th><th>Pelanggan</th><th style="text-align:right">Biaya</th></tr></thead>
+          <thead><tr><th>No. Service</th><th>Pelanggan</th><th>Kasir</th><th style="text-align:right">Biaya</th></tr></thead>
           <tbody id="lpDiambilBody"></tbody>
         </table></div>
       </div>
@@ -573,7 +573,7 @@
       <div class="card">
         <div class="card-head"><h3>🛒 Laporan Penjualan (<span id="lpJualCount">0</span> nota)</h3></div>
         <div class="table-wrap"><table style="min-width:0">
-          <thead><tr><th>Nota</th><th>Pembeli</th><th style="text-align:right">Total</th></tr></thead>
+          <thead><tr><th>Nota</th><th>Pembeli</th><th>Kasir</th><th style="text-align:right">Total</th></tr></thead>
           <tbody id="lpJualBody"></tbody>
         </table></div>
       </div>
@@ -593,6 +593,19 @@
           <thead><tr><th>SKU</th><th>Barang</th><th>HPP</th><th>Jual</th><th>Stok</th><th style="text-align:right">Nilai (HPP)</th></tr></thead>
           <tbody id="lpStokBody"></tbody>
         </table></div>
+      </div>
+      </div>
+
+      <!-- SUB: REKAP PER KASIR -->
+      <div class="ltab-pane" id="ltab-kasir">
+      <div class="card">
+        <div class="card-head"><h3>👥 Rekap Laporan per Kasir (<span id="lpKasirCount">0</span> kasir)</h3><small class="muted" id="lpKasirPeriode">-</small></div>
+        <p class="muted" style="margin:0 0 10px">Omzet service (status Diambil) + penjualan + laba penjualan − pengeluaran yang dicatat kasir tersebut.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Kasir</th><th style="text-align:right">Service</th><th style="text-align:right">Omzet Service</th><th style="text-align:right">Nota</th><th style="text-align:right">Omzet Jual</th><th style="text-align:right">Laba Jual</th><th style="text-align:right">Pengeluaran</th><th style="text-align:right">Laba Bersih</th></tr></thead>
+          <tbody id="lpKasirBody"></tbody>
+        </table></div>
+        <p class="muted" style="margin-top:8px">* Service & penjualan lama (sebelum ada kolom kasir) tidak terhitung ke kasir mana pun.</p>
       </div>
       </div>
     </section>
