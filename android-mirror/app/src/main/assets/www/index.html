@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="icon.png" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <title>ServisHP Pro - Management Service HP</title>
-<link rel="stylesheet" href="style.css?v=1.8.9" />
+<link rel="stylesheet" href="style.css?v=1.9.0" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -412,7 +412,7 @@
     <section class="page" id="page-sparepart">
       <h1 class="page-title">Data Sparepart</h1>
       <p class="page-sub">Stok barang service • <b id="spCount">0 item</b> <span id="spInfo" class="muted"></span></p>
-      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stats lp-stats lp-stats-3">
         <div class="stat"><div class="stat-icon blue">📦</div><div><small>Total Item</small><h3 id="spTotal">0</h3></div></div>
         <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Nilai Stok (HPP)</small><h3 id="spNilai">Rp 0</h3></div></div>
         <div class="stat"><div class="stat-icon yellow">⚠️</div><div><small>Stok Menipis</small><h3 id="spLow">0</h3></div></div>
@@ -503,7 +503,7 @@
     <section class="page" id="page-pengeluaran">
       <h1 class="page-title">Pengeluaran / Biaya</h1>
       <p class="page-sub">Catat biaya operasional (sewa, listrik, gaji, dll) • otomatis <b>mengurangi laba bersih</b> di Laporan • <b id="exCount">0 transaksi</b></p>
-      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stats lp-stats lp-stats-3 lp-stats-plain">
         <div class="stat"><div class="stat-icon yellow">💸</div><div><small>Total Pengeluaran</small><h3 id="exTotal">Rp 0</h3></div></div>
         <div class="stat"><div class="stat-icon blue">📅</div><div><small>Bulan Ini</small><h3 id="exBulan">Rp 0</h3></div></div>
         <div class="stat"><div class="stat-icon green">🧾</div><div><small>Hari Ini</small><h3 id="exHari">Rp 0</h3></div></div>
@@ -583,13 +583,13 @@
 
       <!-- SUB: LAPORAN LABA RUGI -->
       <div class="ltab-pane active" id="ltab-laba">
-      <div class="stats" style="grid-template-columns:repeat(4,1fr)" id="lpStats">
+      <div class="stats lp-stats lp-stats-4" id="lpStats">
         <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Total Pendapatan</small><h3 id="lpPendapatan">Rp 0</h3></div></div>
         <div class="stat"><div class="stat-icon green">📈</div><div><small>Laba Bersih</small><h3 id="lpLaba">Rp 0</h3></div></div>
         <div class="stat"><div class="stat-icon blue">🔧</div><div><small>Omzet Service</small><h3 id="lpService">Rp 0</h3></div></div>
         <div class="stat"><div class="stat-icon purple">🛒</div><div><small>Omzet Penjualan</small><h3 id="lpJual">Rp 0</h3></div></div>
       </div>
-      <div class="stats" style="grid-template-columns:repeat(2,1fr)">
+      <div class="stats lp-stats lp-stats-2">
         <div class="stat"><div class="stat-icon yellow">💸</div><div><small>Total Pengeluaran</small><h3 id="lpExpense">Rp 0</h3></div></div>
         <div class="stat"><div class="stat-icon blue">🧾</div><div><small>Transaksi Biaya</small><h3 id="lpExpenseCount">0</h3></div></div>
       </div>
@@ -605,7 +605,7 @@
 
       <!-- SUB: LAPORAN SERVICE -->
       <div class="ltab-pane" id="ltab-service">
-      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stats lp-stats lp-stats-3">
         <div class="stat"><div class="stat-icon blue">📥</div><div><small>Service Masuk</small><h3 id="lpSvcMasuk">0</h3></div></div>
         <div class="stat"><div class="stat-icon green">✅</div><div><small>Diambil</small><h3 id="lpSvcSelesai">0</h3></div></div>
         <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Omzet Service (Diambil)</small><h3 id="lpSvcOmzet">Rp 0</h3></div></div>
@@ -628,7 +628,7 @@
 
       <!-- SUB: LAPORAN PENJUALAN -->
       <div class="ltab-pane" id="ltab-jual">
-      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stats lp-stats lp-stats-3">
         <div class="stat"><div class="stat-icon blue">🧾</div><div><small>Jumlah Nota</small><h3 id="lpJlNota">0</h3></div></div>
         <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Omzet Penjualan</small><h3 id="lpJlOmzet">Rp 0</h3></div></div>
         <div class="stat"><div class="stat-icon green">📈</div><div><small>Laba Penjualan</small><h3 id="lpJlLaba">Rp 0</h3></div></div>
@@ -644,7 +644,7 @@
 
       <!-- SUB: LAPORAN STOK SPAREPART -->
       <div class="ltab-pane" id="ltab-stok">
-      <div class="stats" style="grid-template-columns:repeat(4,1fr)" id="lpStokStats">
+      <div class="stats lp-stats lp-stats-4" id="lpStokStats">
         <div class="stat"><div class="stat-icon blue">📦</div><div><small>Total Item</small><h3 id="lpStItem">0</h3></div></div>
         <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Nilai Stok (HPP)</small><h3 id="lpStHpp">Rp 0</h3></div></div>
         <div class="stat"><div class="stat-icon purple">🏷️</div><div><small>Nilai Stok (Jual)</small><h3 id="lpStJual">Rp 0</h3></div></div>
