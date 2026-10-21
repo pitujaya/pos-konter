@@ -91,15 +91,75 @@
     </div>
 
     <nav class="nav">
-      <button class="nav-btn active" data-page="dashboard">📊 <span>Dashboard</span></button>
-      <button class="nav-btn" data-page="tambah">📝 <span>Form Service</span></button>
-      <button class="nav-btn" data-page="penjualan">🛒 <span>Penjualan</span></button>
-      <button class="nav-btn" data-page="pengeluaran">💸 <span>Pengeluaran</span></button>
-      <button class="nav-btn" data-page="data">📲 <span>Data Service</span></button>
-      <button class="nav-btn" data-page="sparepart">🔧 <span>Data Sparepart</span></button>
-      <button class="nav-btn" data-page="laporan">📑 <span>Laporan</span></button>
-      <button class="nav-btn" data-page="pengaturan" id="navPengaturan">⚙️ <span>Pengaturan</span></button>
-      <button class="nav-btn" data-page="pengguna" id="navPengguna">👥 <span>Pengguna</span></button>
+      <div class="nav-group" data-group="dashboard">
+        <button type="button" class="nav-btn nav-head active" data-page="dashboard" aria-expanded="false">📊 <span>Dashboard</span><i class="nav-chev">▸</i></button>
+        <div class="nav-sub">
+          <button type="button" class="nav-sub-btn active" data-page="dashboard">Ringkasan</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="tambah">
+        <button type="button" class="nav-btn nav-head" data-page="tambah" aria-expanded="false">📝 <span>Form Service</span><i class="nav-chev">▸</i></button>
+        <div class="nav-sub">
+          <button type="button" class="nav-sub-btn" data-page="tambah">Form Pelanggan</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="penjualan">
+        <button type="button" class="nav-btn nav-head" data-page="penjualan" aria-expanded="false">🛒 <span>Penjualan</span><i class="nav-chev">▸</i></button>
+        <div class="nav-sub">
+          <button type="button" class="nav-sub-btn" data-page="penjualan">Penjualan Barang</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="pengeluaran">
+        <button type="button" class="nav-btn nav-head" data-page="pengeluaran" aria-expanded="false">💸 <span>Pengeluaran</span><i class="nav-chev">▸</i></button>
+        <div class="nav-sub">
+          <button type="button" class="nav-sub-btn" data-page="pengeluaran">Catat Biaya</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="data">
+        <button type="button" class="nav-btn nav-head" data-page="data" aria-expanded="false">📲 <span>Data Service</span><i class="nav-chev">▸</i></button>
+        <div class="nav-sub">
+          <button type="button" class="nav-sub-btn" data-page="data">Semua Service</button>
+          <button type="button" class="nav-sub-btn" data-page="lacak">Lacak Service</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="sparepart">
+        <button type="button" class="nav-btn nav-head" data-page="sparepart" aria-expanded="false">🔧 <span>Data Sparepart</span><i class="nav-chev">▸</i></button>
+        <div class="nav-sub">
+          <button type="button" class="nav-sub-btn" data-page="sparepart">Stok Sparepart</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="laporan">
+        <button type="button" class="nav-btn nav-head" data-page="laporan" aria-expanded="false">📑 <span>Laporan</span><i class="nav-chev">▸</i></button>
+        <div class="nav-sub">
+          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="laba">💰 Laba Rugi</button>
+          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="service">📲 Service</button>
+          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="jual">🛒 Penjualan</button>
+          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="stok">📦 Stok Sparepart</button>
+          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="kasir">👥 Rekap Kasir</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="pengaturan">
+        <button type="button" class="nav-btn nav-head" data-page="pengaturan" id="navPengaturan" aria-expanded="false">⚙️ <span>Pengaturan</span><i class="nav-chev">▸</i></button>
+        <div class="nav-sub">
+          <button type="button" class="nav-sub-btn" data-page="pengaturan">🏪 Konter &amp; Teknisi</button>
+          <button type="button" class="nav-sub-btn" data-page="pengaturan" data-anchor="setPrinter">🖨️ Printer Bluetooth</button>
+          <button type="button" class="nav-sub-btn" data-page="pengaturan" data-anchor="setSlide">🖼️ Headbar Slide</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="pengguna">
+        <button type="button" class="nav-btn nav-head" data-page="pengguna" id="navPengguna" aria-expanded="false">👥 <span>Pengguna</span><i class="nav-chev">▸</i></button>
+        <div class="nav-sub">
+          <button type="button" class="nav-sub-btn" data-page="pengguna">👤 Kelola Pengguna</button>
+        </div>
+      </div>
     </nav>
     <div class="sidebar-foot">
       <div class="konter-card">
@@ -671,6 +731,7 @@
           <div class="nota-preview" id="notaPreview"></div>
         </div>
         <div class="card">
+        <div class="card" id="setSlide">
           <h3>🖼️ Headbar Slide</h3>
           <p class="muted">Gambar banner berjalan di Dashboard. Bisa isi URL gambar atau upload dari HP/laptop (maks 3MB).</p>
           <label>Judul<input id="sl_judul" placeholder="cth: Promo Ganti LCD" /></label>
@@ -685,6 +746,7 @@
           <div id="slideList" class="pill-list"></div>
         </div>
         <div class="card">
+        <div class="card" id="setPrinter">
           <h3>🖨️ Printer Bluetooth Thermal</h3>
           <p class="muted">Cetak struk 58mm langsung ke printer (XPrinter / RPP02 / sejenis) via <b>APK Android</b>. Pairing dulu di <b>Settings HP → Bluetooth</b>, lalu Scan di sini.</p>
           <div class="kv"><b>Status</b><span id="btStatus">⏳ mengecek...</span></div>

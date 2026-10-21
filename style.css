@@ -11,6 +11,16 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--i
 .nav-btn{background:transparent;border:0;color:#cbd5e1;padding:12px 14px;border-radius:10px;text-align:left;font-size:14.5px;font-weight:600;cursor:pointer;display:flex;gap:10px;align-items:center;transition:.15s}
 .nav-btn:hover{background:#1e293b}
 .nav-btn.active{background:var(--blue);color:#fff}
+/* NAV SUBMENU (accordion: klik menu -> muncul sub-menu di sidebar) */
+.nav-group{display:flex;flex-direction:column;gap:2px}
+.nav-chev{margin-left:auto;font-style:normal;font-size:11px;opacity:.65;transition:transform .18s}
+.nav-group.open .nav-chev{transform:rotate(90deg)}
+.nav-sub{display:none;flex-direction:column;gap:2px;margin:2px 0 4px 12px;padding-left:12px;border-left:1px solid #1e293b}
+.nav-group.open .nav-sub{display:flex}
+.nav-sub-btn{background:transparent;border:0;color:#94a3b8;padding:8px 12px;border-radius:8px;text-align:left;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;display:block;width:100%;line-height:1.35}
+.nav-sub-btn:hover{background:#1e293b;color:#e2e8f0}
+.nav-sub-btn.active{background:rgba(37,99,235,.22);color:#bfdbfe}
+.nav-group.open>.nav-btn{color:#e2e8f0}
 .sidebar::-webkit-scrollbar,.nav::-webkit-scrollbar{width:6px}
 .sidebar::-webkit-scrollbar-thumb,.nav::-webkit-scrollbar-thumb{background:#334155;border-radius:99px}
 /* PROFIL USER DI SIDEBAR */
@@ -363,3 +373,13 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
   .stats{grid-template-columns:1fr 1fr;gap:8px}
   .page-title{font-size:19px}
 }
+
+.nav-group{display:flex;flex-direction:column;gap:2px}
+.nav-chev{margin-left:auto;font-style:normal;font-size:11px;opacity:.65;transition:transform .18s}
+.nav-group.open .nav-chev{transform:rotate(90deg)}
+.nav-sub{display:none;flex-direction:column;gap:2px;margin:2px 0 4px 12px;padding-left:12px;border-left:1px solid #1e293b}
+.nav-group.open .nav-sub{display:flex}
+.nav-sub-btn{background:transparent;border:0;color:#94a3b8;padding:8px 12px;border-radius:8px;text-align:left;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;display:block;width:100%;line-height:1.35}
+.nav-sub-btn:hover{background:#1e293b;color:#e2e8f0}
+.nav-sub-btn.active{background:rgba(37,99,235,.22);color:#bfdbfe}
+.nav-group.open>.nav-btn{color:#e2e8f0}

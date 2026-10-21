@@ -121,8 +121,9 @@ function needSuperAdmin(){ if(!isSuperAdmin()){ toast('⛔ Khusus Super Admin');
 function applyRoleUI(){
   const r=myRole();
   const navP=$('navPengaturan'), navU=$('navPengguna');
-  if(navP) navP.style.display = (r==='kasir') ? 'none' : '';
-  if(navU) navU.style.display = isSuperAdmin() ? '' : 'none';
+  const gp=navP?navP.closest('.nav-group'):null, gu=navU?navU.closest('.nav-group'):null;
+  if(gp) gp.style.display = (r==='kasir') ? 'none' : '';
+  if(gu) gu.style.display = isSuperAdmin() ? '' : 'none';
   const lock=$('penggunaLock'), wrap=$('penggunaWrap');
   if(lock&&wrap){ lock.classList.toggle('hidden', isSuperAdmin()); wrap.classList.toggle('hidden', !isSuperAdmin()); }
 }
@@ -547,12 +548,53 @@ function bindKas(){
 try{ bindKas(); }catch(e){ console.warn('bindKas:', e); }
 
 // ===== NAVIGASI =====
-document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.page)));
+let curLtab='laba';
+function navSetGroup(grp, open){
+  if(!grp) return;
+  grp.classList.toggle('open', !!open);
+  const h=grp.querySelector('.nav-head');
+  if(h) h.setAttribute('aria-expanded', open?'true':'false');
+}
+function navSyncActive(page, ltab){
+  curLtab = ltab || curLtab || 'laba';
+  document.querySelectorAll('.nav-group').forEach(grp=>{
+    const kids=[].slice.call(grp.querySelectorAll('.nav-sub-btn'));
+    const head=grp.querySelector('.nav-head');
+    const onPage=kids.some(k=>k.dataset.page===page);
+    if(head) head.classList.toggle('active', onPage);
+    kids.forEach(k=>{
+      const samePage=k.dataset.page===page;
+      const sameTab=!k.dataset.ltab || k.dataset.ltab===curLtab;
+      k.classList.toggle('active', samePage && sameTab);
+    });
+  });
+}
+// Klik menu utama -> hanya buka sub-menu (tidak langsung pindah halaman)
+document.querySelectorAll('.nav-head').forEach(h=>h.addEventListener('click',(e)=>{
+  e.preventDefault();
+  const grp=h.closest('.nav-group'); if(!grp) return;
+  const open=!grp.classList.contains('open');
+  document.querySelectorAll('.nav-group.open').forEach(g=>{ if(g!==grp) navSetGroup(g,false); });
+  navSetGroup(grp, open);
+}));
+// Klik sub-menu -> baru pindah halaman / tab
+document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',(e)=>{
+  e.preventDefault();
+  const page=b.dataset.page||'';
+  const ltab=b.dataset.ltab||'';
+  if(ltab && typeof gotoLtab==='function'){ try{ gotoLtab(ltab); }catch{} }
+  goto(page);
+  if(b.dataset.anchor){
+    const el=$(b.dataset.anchor);
+    if(el) setTimeout(()=>{ try{ el.scrollIntoView({behavior:'smooth', block:'start'}); }catch{} },160);
+  }
+  navSyncActive(page, ltab||undefined);
+}));
 document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.goto)));
 function goto(page, filter){
   if(page==='pengaturan' && myRole()==='kasir'){ toast('⛔ Pengaturan khusus Admin / Super Admin'); return; }
   if(page==='pengguna' && !isSuperAdmin()){ toast('⛔ Kelola Pengguna khusus Super Admin'); return; }
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.page===page));
+  navSyncActive(page);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');
   try{ hideGlobalResults(); }catch{}
@@ -986,7 +1028,7 @@ window.gGoSpare=function(id){
 };
 window.gAllService=function(){
   hideGlobalResults(); closeSidebar();
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.page==='data'));
+  navSyncActive('data');
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-data').classList.add('active');
   activeFilter='Semua';
@@ -2452,6 +2494,8 @@ function bindLaporan(){
 window.gotoLtab=function(name){
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.ltab===name));
   document.querySelectorAll('.ltab-pane').forEach(p=>p.classList.toggle('active', p.id==='ltab-'+name));
+  curLtab=name;
+  try{ navSyncActive('laporan', name); }catch{}
 };
 function exportLaporanCSV(){
   const r=LAPORAN_CACHE||computeReportLocal(...Object.values(lpRange()));

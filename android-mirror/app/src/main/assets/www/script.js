@@ -554,7 +554,7 @@ document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',(
 function goto(page, filter){
   if(page==='pengaturan' && myRole()==='kasir'){ toast('⛔ Pengaturan khusus Admin / Super Admin'); return; }
   if(page==='pengguna' && !isSuperAdmin()){ toast('⛔ Kelola Pengguna khusus Super Admin'); return; }
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.page===page));
+  navSyncActive(page);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');
   try{ hideGlobalResults(); }catch{}
@@ -987,7 +987,7 @@ window.gGoSpare=function(id){
 };
 window.gAllService=function(){
   hideGlobalResults(); closeSidebar();
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.page==='data'));
+  navSyncActive('data');
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-data').classList.add('active');
   activeFilter='Semua';
