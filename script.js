@@ -577,6 +577,28 @@ document.querySelectorAll('.nav-head').forEach(h=>h.addEventListener('click',(e)
   document.querySelectorAll('.nav-group.open').forEach(g=>{ if(g!==grp) navSetGroup(g,false); });
   navSetGroup(grp, open);
 }));
+// ===== FOKUS BAGIAN HALAMAN (klik sub-menu -> hanya bagian itu yang tampil) =====
+let focusCard=null;
+function clearFocus(){
+  document.querySelectorAll('[data-focus-hidden]').forEach(c=>{ c.classList.remove('hidden'); c.removeAttribute('data-focus-hidden'); });
+  focusCard=null;
+  const btn=$('btnSettingAll'); if(btn) btn.classList.add('hidden');
+}
+function focusSection(pageId, cardId){
+  clearFocus();
+  const pg=$(pageId); const target=$(cardId);
+  if(!pg || !target) return;
+  pg.querySelectorAll('.card').forEach(c=>{
+    if(c===target) return;
+    if(c.classList.contains('hidden') && !c.hasAttribute('data-focus-hidden')) return; // yg memang hidden (khusus role) dibiarkan
+    c.setAttribute('data-focus-hidden','1');
+    c.classList.add('hidden');
+  });
+  focusCard=cardId;
+  const btn=$('btnSettingAll'); if(btn) btn.classList.remove('hidden');
+  try{ target.scrollIntoView({behavior:'smooth', block:'start'}); }catch{}
+}
+window.settingAll=function(){ clearFocus(); };
 // Klik sub-menu -> baru pindah halaman / tab
 document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',(e)=>{
   e.preventDefault();
@@ -584,7 +606,8 @@ document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',
   const ltab=b.dataset.ltab||'';
   if(ltab && typeof gotoLtab==='function'){ try{ gotoLtab(ltab); }catch{} }
   goto(page);
-  if(b.dataset.anchor){
+  if(b.dataset.show){ try{ focusSection('page-'+page, b.dataset.show); }catch{} }
+  else if(b.dataset.anchor){
     const el=$(b.dataset.anchor);
     if(el) setTimeout(()=>{ try{ el.scrollIntoView({behavior:'smooth', block:'start'}); }catch{} },160);
   }
@@ -594,6 +617,7 @@ document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',(
 function goto(page, filter){
   if(page==='pengaturan' && myRole()==='kasir'){ toast('⛔ Pengaturan khusus Admin / Super Admin'); return; }
   if(page==='pengguna' && !isSuperAdmin()){ toast('⛔ Kelola Pengguna khusus Super Admin'); return; }
+  try{ clearFocus(); }catch{}
   navSyncActive(page);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');

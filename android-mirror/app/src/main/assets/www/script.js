@@ -123,8 +123,9 @@ function needSuperAdmin(){ if(!isSuperAdmin()){ toast('⛔ Khusus Super Admin');
 function applyRoleUI(){
   const r=myRole();
   const navP=$('navPengaturan'), navU=$('navPengguna');
-  if(navP) navP.style.display = (r==='kasir') ? 'none' : '';
-  if(navU) navU.style.display = isSuperAdmin() ? '' : 'none';
+  const gp=navP?navP.closest('.nav-group'):null, gu=navU?navU.closest('.nav-group'):null;
+  if(gp) gp.style.display = (r==='kasir') ? 'none' : '';
+  if(gu) gu.style.display = isSuperAdmin() ? '' : 'none';
   const lock=$('penggunaLock'), wrap=$('penggunaWrap');
   if(lock&&wrap){ lock.classList.toggle('hidden', isSuperAdmin()); wrap.classList.toggle('hidden', !isSuperAdmin()); }
 }
@@ -549,11 +550,76 @@ function bindKas(){
 try{ bindKas(); }catch(e){ console.warn('bindKas:', e); }
 
 // ===== NAVIGASI =====
-document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.page)));
+let curLtab='laba';
+function navSetGroup(grp, open){
+  if(!grp) return;
+  grp.classList.toggle('open', !!open);
+  const h=grp.querySelector('.nav-head');
+  if(h) h.setAttribute('aria-expanded', open?'true':'false');
+}
+function navSyncActive(page, ltab){
+  curLtab = ltab || curLtab || 'laba';
+  document.querySelectorAll('.nav-group').forEach(grp=>{
+    const kids=[].slice.call(grp.querySelectorAll('.nav-sub-btn'));
+    const head=grp.querySelector('.nav-head');
+    const onPage=kids.some(k=>k.dataset.page===page);
+    if(head) head.classList.toggle('active', onPage);
+    kids.forEach(k=>{
+      const samePage=k.dataset.page===page;
+      const sameTab=!k.dataset.ltab || k.dataset.ltab===curLtab;
+      k.classList.toggle('active', samePage && sameTab);
+    });
+  });
+}
+// Klik menu utama -> hanya buka sub-menu (tidak langsung pindah halaman)
+document.querySelectorAll('.nav-head').forEach(h=>h.addEventListener('click',(e)=>{
+  e.preventDefault();
+  const grp=h.closest('.nav-group'); if(!grp) return;
+  const open=!grp.classList.contains('open');
+  document.querySelectorAll('.nav-group.open').forEach(g=>{ if(g!==grp) navSetGroup(g,false); });
+  navSetGroup(grp, open);
+}));
+// ===== FOKUS BAGIAN HALAMAN (klik sub-menu -> hanya bagian itu yang tampil) =====
+let focusCard=null;
+function clearFocus(){
+  document.querySelectorAll('[data-focus-hidden]').forEach(c=>{ c.classList.remove('hidden'); c.removeAttribute('data-focus-hidden'); });
+  focusCard=null;
+  const btn=document.getElementById('btnSettingAll'); if(btn) btn.classList.add('hidden');
+}
+function focusSection(pageId, cardId){
+  clearFocus();
+  const pg=document.getElementById(pageId); const target=document.getElementById(cardId);
+  if(!pg || !target) return;
+  pg.querySelectorAll('.card').forEach(c=>{
+    if(c===target) return;
+    if(c.classList.contains('hidden') && !c.hasAttribute('data-focus-hidden')) return;
+    c.setAttribute('data-focus-hidden','1');
+    c.classList.add('hidden');
+  });
+  focusCard=cardId;
+  const btn=document.getElementById('btnSettingAll'); if(btn) btn.classList.remove('hidden');
+  try{ target.scrollIntoView({behavior:'smooth', block:'start'}); }catch{}
+}
+window.settingAll=function(){ clearFocus(); };
+// Klik sub-menu -> baru pindah halaman / tab
+document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',(e)=>{
+  e.preventDefault();
+  const page=b.dataset.page||'';
+  const ltab=b.dataset.ltab||'';
+  if(ltab && typeof gotoLtab==='function'){ try{ gotoLtab(ltab); }catch{} }
+  goto(page);
+  if(b.dataset.show){ try{ focusSection('page-'+page, b.dataset.show); }catch{} }
+  else if(b.dataset.anchor){
+    const el=document.getElementById(b.dataset.anchor);
+    if(el) setTimeout(()=>{ try{ el.scrollIntoView({behavior:'smooth', block:'start'}); }catch{} },160);
+  }
+  navSyncActive(page, ltab||undefined);
+}));
 document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.goto)));
 function goto(page, filter){
   if(page==='pengaturan' && myRole()==='kasir'){ toast('⛔ Pengaturan khusus Admin / Super Admin'); return; }
   if(page==='pengguna' && !isSuperAdmin()){ toast('⛔ Kelola Pengguna khusus Super Admin'); return; }
+  try{ clearFocus(); }catch{}
   navSyncActive(page);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');
