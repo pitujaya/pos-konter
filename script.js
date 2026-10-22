@@ -560,7 +560,7 @@ function navSyncActive(page, ltab){
   document.querySelectorAll('.nav-group').forEach(grp=>{
     const kids=[].slice.call(grp.querySelectorAll('.nav-sub-btn'));
     const head=grp.querySelector('.nav-head');
-    const onPage=kids.some(k=>k.dataset.page===page);
+    const onPage=kids.some(k=>k.dataset.page===page) || !!(head && head.dataset.page && head.dataset.page===page);
     if(head) head.classList.toggle('active', onPage);
     kids.forEach(k=>{
       const samePage=k.dataset.page===page;
@@ -569,10 +569,16 @@ function navSyncActive(page, ltab){
     });
   });
 }
-// Klik menu utama -> hanya buka sub-menu (tidak langsung pindah halaman)
+// Klik menu utama: kalau grupnya punya sub-menu -> hanya buka sub-menu,
+// kalau tidak (mis. Dashboard) -> langsung buka halamannya
 document.querySelectorAll('.nav-head').forEach(h=>h.addEventListener('click',(e)=>{
   e.preventDefault();
   const grp=h.closest('.nav-group'); if(!grp) return;
+  if(!grp.querySelector('.nav-sub')){
+    const page=h.dataset.page||'';
+    if(page){ goto(page); navSyncActive(page); }
+    return;
+  }
   const open=!grp.classList.contains('open');
   document.querySelectorAll('.nav-group.open').forEach(g=>{ if(g!==grp) navSetGroup(g,false); });
   navSetGroup(grp, open);

@@ -14,6 +14,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--i
 /* ===== NAV SIDEBAR: MENU UTAMA + SUB-MENU (accordion) ===== */
 .nav-group{display:flex;flex-direction:column;gap:2px}
 .nav-btn.nav-head{width:100%;justify-content:flex-start;padding-right:10px}
+/* grup tanpa sub-menu (Dashboard): tombol biasa, langsung buka halaman */
+.nav-group-single>.nav-head{padding-right:14px}
 .nav-chev{margin-left:auto;font-style:normal;font-size:11px;line-height:1;opacity:.6;transition:transform .18s ease,opacity .18s}
 .nav-group.open .nav-chev{transform:rotate(90deg);opacity:1}
 .nav-group.open>.nav-btn{background:#1e293b;color:#fff}
