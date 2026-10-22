@@ -21,7 +21,10 @@ RUN pip install --upgrade pip \
 COPY backend/app ./app
 
 # Frontend statis -> /app/frontend (disajikan FastAPI via FRONTEND_DIR)
-COPY index.html api.js script.js style.css config.js monitor.html /app/frontend/
+# PENTING: daftar file di sini harus lengkap. Kalau ada file frontend baru
+# (mis. manifest.json / sw.js untuk PWA) tapi tidak dicopy -> 404 di produksi
+# walau file-nya ada di repo.
+COPY index.html api.js script.js style.css config.js monitor.html manifest.json sw.js /app/frontend/
 # Aset ikon (opsional, abaikan bila tidak ada -> pakai wildcard aman via shell)
 COPY icon.png icon-192.png apple-touch-icon.png /app/frontend/
 
