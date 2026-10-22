@@ -141,3 +141,74 @@ class TestRekapHarian:
 
     def test_requires_auth(self, client):
         assert client.get("/api/stats/harian").status_code == 401
+
+
+# ==================== BIAYA & PENDAPATAN LAIN ====================
+class TestPendapatanLain:
+    TGL = "2031-05-05"
+
+    def _user(self, client):
+        reg = client.post("/api/auth/register", json={
+            "nama": f"Kasir Lain {os.urandom(2).hex()}",
+            "email": f"lain-{os.urandom(4).hex()}@konter.id",
+            "password": "rahasia123",
+        })
+        assert reg.status_code == 200, reg.text
+        h = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+        client.post("/api/kas/open", headers=h, json={"modal_awal": 0})
+        return h
+
+    def test_create_income_and_report(self, client):
+        h = self._user(client)
+        inc = client.post("/api/expenses", headers=h, json={
+            "tanggal": self.TGL, "jenis": "pendapatan",
+            "kategori": "Bunga Bank", "keterangan": "Bunga", "jumlah": 50000,
+        })
+        assert inc.status_code == 201, inc.text
+        assert inc.json()["jenis"] == "pendapatan"
+        biaya = client.post("/api/expenses", headers=h, json={
+            "tanggal": self.TGL, "kategori": "Listrik", "keterangan": "Token", "jumlah": 30000,
+        })
+        assert biaya.status_code == 201, biaya.text
+        assert biaya.json()["jenis"] == "biaya"
+
+        rep = client.get("/api/stats/report", headers=h,
+                         params={"dari": self.TGL, "sampai": self.TGL}).json()
+        assert rep["income_count"] == 1 and rep["income_total"] == 50000
+        assert rep["expense_count"] == 1 and rep["expense_total"] == 30000
+        assert rep["total_pendapatan"] == 50000
+        assert rep["total_laba"] == 50000 - 30000
+
+        har = client.get("/api/stats/harian", headers=h,
+                         params={"dari": self.TGL, "sampai": self.TGL}).json()
+        rows = [x for x in har["rows"] if x["tanggal"] == self.TGL]
+        assert rows and rows[0]["inc"] == 50000 and rows[0]["exp"] == 30000
+        assert rows[0]["total_laba"] == 20000
+        assert har["ringkasan"]["inc"] == 50000
+
+    def test_income_adds_to_kas_sistem(self, client):
+        h = self._user(client)
+        cur0 = client.get("/api/kas/current", headers=h).json()
+        client.post("/api/expenses", headers=h, json={
+            "tanggal": self.TGL, "jenis": "pendapatan",
+            "kategori": "Cashback", "keterangan": "Cashback", "jumlah": 15000,
+        })
+        cur1 = client.get("/api/kas/current", headers=h).json()
+        assert cur1["kas_sistem"] == (cur0 or {}).get("kas_sistem", 0) + 15000
+
+    def test_update_jenis(self, client, admin):
+        h = self._user(client)
+        r = client.post("/api/expenses", headers=h, json={
+            "tanggal": self.TGL, "jenis": "pendapatan",
+            "kategori": "Lainnya", "keterangan": "Ubah jenis", "jumlah": 10000,
+        })
+        eid = r.json()["id"]
+        up = client.put(f"/api/expenses/{eid}", headers=admin,
+                        json={"jenis": "biaya"})
+        assert up.status_code == 200, up.text
+        assert up.json()["jenis"] == "biaya"
+
+    def test_jenis_column_exists(self):
+        with SessionLocal() as db:
+            cols = {c.name for c in models.Expense.__table__.columns}
+        assert "jenis" in cols

@@ -175,12 +175,13 @@ class SaleItem(Base):
 
 
 class Expense(Base):
-    """Pengeluaran / biaya operasional. Mengurangi laba bersih di laporan."""
+    """Biaya operasional (mengurangi laba) atau pendapatan lain (menambah laba)."""
 
     __tablename__ = "expenses"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tanggal: Mapped[str] = mapped_column(String(20), default="", index=True)
+    jenis: Mapped[str] = mapped_column(String(20), default="biaya", index=True)
     kategori: Mapped[str] = mapped_column(String(80), default="Lainnya", index=True)
     keterangan: Mapped[str] = mapped_column(Text, default="")
     jumlah: Mapped[int] = mapped_column(Integer, default=0)

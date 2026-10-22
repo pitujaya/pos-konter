@@ -10,10 +10,15 @@ from ..auth import get_current_user, require_admin
 router = APIRouter(tags=["expenses"])
 
 
+def _norm_jenis(jenis: str | None) -> str:
+    return "pendapatan" if str(jenis or "").strip().lower() == "pendapatan" else "biaya"
+
+
 def _expense_to_out(e: models.Expense) -> dict:
     return {
         "id": e.id,
         "tanggal": e.tanggal or "",
+        "jenis": _norm_jenis(getattr(e, "jenis", "biaya")),
         "kategori": e.kategori or "Lainnya",
         "keterangan": e.keterangan or "",
         "jumlah": int(e.jumlah or 0),
@@ -37,11 +42,13 @@ def create_expense(body: schemas.ExpenseIn, db: Session = Depends(get_db),
     require_open_session(db, user)
     jumlah = int(body.jumlah or 0)
     if jumlah <= 0:
-        raise HTTPException(400, "Jumlah pengeluaran harus lebih dari 0")
+        raise HTTPException(400, "Jumlah harus lebih dari 0")
+    jenis = _norm_jenis(body.jenis)
     tanggal = ((body.tanggal or "")[:10] or datetime.now().date().isoformat())
     kategori = (body.kategori or "Lainnya").strip() or "Lainnya"
     e = models.Expense(
         tanggal=tanggal,
+        jenis=jenis,
         kategori=kategori,
         keterangan=(body.keterangan or "").strip(),
         jumlah=jumlah,
@@ -91,10 +98,12 @@ def update_expense(expense_id: int, body: schemas.ExpenseUpdateIn,
     data = body.model_dump(exclude_unset=True)
     if "jumlah" in data and data["jumlah"] is not None:
         if int(data["jumlah"]) <= 0:
-            raise HTTPException(400, "Jumlah pengeluaran harus lebih dari 0")
+            raise HTTPException(400, "Jumlah harus lebih dari 0")
         e.jumlah = int(data["jumlah"])
     if "tanggal" in data and data["tanggal"]:
         e.tanggal = str(data["tanggal"])[:10]
+    if "jenis" in data and data["jenis"]:
+        e.jenis = _norm_jenis(data["jenis"])
     if "kategori" in data and data["kategori"]:
         e.kategori = str(data["kategori"]).strip() or e.kategori
     if "keterangan" in data and data["keterangan"] is not None:

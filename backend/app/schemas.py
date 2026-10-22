@@ -278,9 +278,10 @@ class SaleOut(BaseModel):
     model_config = {"from_attributes": False}
 
 
-# ---------- Pengeluaran / Biaya ----------
+# ---------- Biaya / Pendapatan Lain ----------
 class ExpenseIn(BaseModel):
     tanggal: str | None = None
+    jenis: str | None = "biaya"
     kategori: str | None = "Lainnya"
     keterangan: str | None = ""
     jumlah: int = Field(ge=0)
@@ -288,6 +289,7 @@ class ExpenseIn(BaseModel):
 
 class ExpenseUpdateIn(BaseModel):
     tanggal: str | None = None
+    jenis: str | None = None
     kategori: str | None = None
     keterangan: str | None = None
     jumlah: int | None = Field(default=None, ge=0)
@@ -296,6 +298,7 @@ class ExpenseUpdateIn(BaseModel):
 class ExpenseOut(BaseModel):
     id: int
     tanggal: str = ""
+    jenis: str = "biaya"
     kategori: str = "Lainnya"
     keterangan: str = ""
     jumlah: int = 0
@@ -319,6 +322,8 @@ class ReportOut(BaseModel):
     penjualan_laba: int = 0
     expense_count: int = 0
     expense_total: int = 0
+    income_count: int = 0
+    income_total: int = 0
     total_pendapatan: int = 0
     total_laba: int = 0
     stok_item: int = 0

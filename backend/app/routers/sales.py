@@ -18,6 +18,10 @@ def _norm_status(s: str | None) -> str:
     return s if s in STATUS_SERVICE else "Dikerjakan"
 
 
+def _is_income(e) -> bool:
+    return str(getattr(e, "jenis", "biaya") or "biaya").strip().lower() == "pendapatan"
+
+
 def _sale_to_out(s: models.Sale) -> dict:
     items = sorted(s.items or [], key=lambda x: x.id or 0)
     return {
@@ -209,10 +213,13 @@ def report(
     penjualan_omzet = sum(int(r.total or 0) for r in sales)
     penjualan_hpp = sum(int(r.hpp_total or 0) for r in sales)
     penjualan_laba = penjualan_omzet - penjualan_hpp
-    expense_total = sum(int(getattr(r, "jumlah", 0) or 0) for r in expenses)
+    income = [r for r in expenses if _is_income(r)]
+    biaya = [r for r in expenses if not _is_income(r)]
+    expense_total = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya)
+    income_total = sum(int(getattr(r, "jumlah", 0) or 0) for r in income)
     # Laba service dianggap = omzet jasa (tanpa HPP tercatat).
-    # Total laba (bersih) = omzet service + laba penjualan - pengeluaran.
-    total_laba = service_omzet + penjualan_laba - expense_total
+    # Total laba (bersih) = omzet service + laba penjualan + pendapatan lain - biaya.
+    total_laba = service_omzet + penjualan_laba + income_total - expense_total
     diambil_sorted = sorted(diambil, key=lambda r: r.id or 0, reverse=True)[:50]
     return {
         "dari": dari or "", "sampai": sampai or "", "kasir": kasir,
@@ -231,9 +238,11 @@ def report(
         "penjualan_omzet": penjualan_omzet,
         "penjualan_hpp": penjualan_hpp,
         "penjualan_laba": penjualan_laba,
-        "expense_count": len(expenses),
+        "expense_count": len(biaya),
         "expense_total": expense_total,
-        "total_pendapatan": service_omzet + penjualan_omzet,
+        "income_count": len(income),
+        "income_total": income_total,
+        "total_pendapatan": service_omzet + penjualan_omzet + income_total,
         "total_laba": total_laba,
         "stok_item": len(spares),
         "stok_nilai_hpp": sum(int(s.hpp or 0) * int(s.stok or 0) for s in spares),
@@ -280,7 +289,7 @@ def report_harian(
                 "tanggal": tgl, "kasir": nama,
                 "svc_masuk": 0, "svc_diambil": 0, "svc_omzet": 0,
                 "nota": 0, "jual_omzet": 0, "jual_laba": 0,
-                "exp_n": 0, "exp": 0, "wa_terkirim": 0,
+                "exp_n": 0, "exp": 0, "inc_n": 0, "inc": 0, "wa_terkirim": 0,
                 "total_pendapatan": 0, "total_laba": 0,
             }
         return rows[key]
@@ -308,13 +317,17 @@ def report_harian(
         tgl = (getattr(e, "tanggal", "") or "")[:10]
         nama = (getattr(e, "dicatat_oleh", "") or "").strip() or "-"
         r = _row(tgl, nama)
-        r["exp_n"] += 1
-        r["exp"] += int(getattr(e, "jumlah", 0) or 0)
+        if _is_income(e):
+            r["inc_n"] += 1
+            r["inc"] += int(getattr(e, "jumlah", 0) or 0)
+        else:
+            r["exp_n"] += 1
+            r["exp"] += int(getattr(e, "jumlah", 0) or 0)
 
     out = []
     for r in rows.values():
-        r["total_pendapatan"] = r["svc_omzet"] + r["jual_omzet"]
-        r["total_laba"] = r["svc_omzet"] + r["jual_laba"] - r["exp"]
+        r["total_pendapatan"] = r["svc_omzet"] + r["jual_omzet"] + r["inc"]
+        r["total_laba"] = r["svc_omzet"] + r["jual_laba"] + r["inc"] - r["exp"]
         out.append(r)
     out.sort(key=lambda r: (r["tanggal"], r["kasir"]), reverse=True)
 
@@ -327,6 +340,7 @@ def report_harian(
         "jual_omzet": sum(r["jual_omzet"] for r in out),
         "jual_laba": sum(r["jual_laba"] for r in out),
         "exp": sum(r["exp"] for r in out),
+        "inc": sum(r["inc"] for r in out),
         "wa_terkirim": sum(r["wa_terkirim"] for r in out),
         "total_pendapatan": sum(r["total_pendapatan"] for r in out),
         "total_laba": sum(r["total_laba"] for r in out),

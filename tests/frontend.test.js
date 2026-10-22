@@ -113,6 +113,7 @@ const SALES = [
 ];
 const EXPENSES = [
   { tanggal: '2026-10-18', dicatat_oleh: 'Kasir A', jumlah: 30000 },
+  { tanggal: '2026-10-18', dicatat_oleh: 'Kasir A', jumlah: 20000, jenis: 'pendapatan' },
 ];
 
 const sandbox2 = new Function(
@@ -132,10 +133,11 @@ ok('svc_omzet A = 100000', rA && rA.svc_omzet === 100000);
 ok('nota A = 1', rA && rA.nota === 1);
 ok('omzet jual A = 200000', rA && rA.jual_omzet === 200000);
 ok('laba jual A = 80000', rA && rA.jual_laba === 80000);
-ok('exp A = 30000', rA && rA.exp === 30000);
+ok('exp A = 30000 (pendapatan lain tidak masuk biaya)', rA && rA.exp === 30000);
+ok('inc A = 20000', rA && rA.inc === 20000, rA && rA.inc);
 ok('WA A = 1', rA && rA.wa_terkirim === 1);
-ok('total laba A = 100000+80000-30000 = 150000', rA && rA.total_laba === 150000, rA && rA.total_laba);
-ok('total pendapatan A = 100000+200000 = 300000', rA && rA.total_pendapatan === 300000);
+ok('total laba A = 100000+80000-30000+20000 = 170000', rA && rA.total_laba === 170000, rA && rA.total_laba);
+ok('total pendapatan A = 100000+200000+20000 = 320000', rA && rA.total_pendapatan === 320000);
 
 const rB = h.rows.find(r => r.kasir === 'Kasir B');
 ok('kasir B tanpa penjualan', rB && rB.nota === 0 && rB.jual_omzet === 0);
@@ -145,8 +147,19 @@ ok('ringkasan hari = 2', h.ringkasan.hari === 2, h.ringkasan.hari);
 ok('ringkasan svc_masuk = 3', h.ringkasan.svc_masuk === 3);
 ok('ringkasan svc_diambil = 2', h.ringkasan.svc_diambil === 2);
 ok('ringkasan omzet = 170000', h.ringkasan.svc_omzet === 170000);
-ok('ringkasan laba = 220000', h.ringkasan.total_laba === 220000, h.ringkasan.total_laba);
+ok('ringkasan pendapatan lain = 20000', h.ringkasan.inc === 20000, h.ringkasan.inc);
+ok('ringkasan laba = 240000', h.ringkasan.total_laba === 240000, h.ringkasan.total_laba);
 ok('ringkasan WA = 1', h.ringkasan.wa_terkirim === 1);
+
+console.log('--- jenis biaya / pendapatan lain ---');
+{
+  const exJenis = new Function(extract('exJenis') + '\nreturn exJenis;')();
+  ok('jenis kosong -> biaya', exJenis({}) === 'biaya');
+  ok('jenis biaya -> biaya', exJenis({ jenis: 'biaya' }) === 'biaya');
+  ok('jenis pendapatan -> pendapatan', exJenis({ jenis: 'pendapatan' }) === 'pendapatan');
+  ok('jenis PENDAPATAN (kapital) -> pendapatan', exJenis({ jenis: ' PENDAPATAN ' }) === 'pendapatan');
+  ok('jenis tidak dikenal -> biaya', exJenis({ jenis: 'xyz' }) === 'biaya');
+}
 
 console.log('--- filter ---');
 const hA = computeHarianLocal('2026-10-18', '2026-10-19', 'Kasir A');
