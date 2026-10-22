@@ -1936,6 +1936,12 @@ if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
       else await window.API.createSparepart({nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
       $('modalSpare').classList.add('hidden');
       await pullSpareparts(); renderAll();
+      // backend lama belum punya kolom "jenis" -> beri tahu user
+      const cek=(SPARE||[]).find(x=>String(x.sku||'').toLowerCase()===sku.toLowerCase());
+      if(jenis!=='Sparepart' && cek && spJenis(cek)!==jenis){
+        toast('⚠️ Backend belum mendukung Jenis Produk — update server (git pull + restart)');
+        return;
+      }
       toast('Produk tersimpan ✅'); return;
     }catch(err){ toast(err.message); return; }
   }
@@ -1949,7 +1955,7 @@ if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
   }
   saveSpareLocal();
   $('modalSpare').classList.add('hidden');
-  renderAll(); toast('Sparepart tersimpan ✅');
+  renderAll(); toast('Produk tersimpan ✅');
 };
 window.spHapus=async function(id){
   if(!needAdmin()) return;
@@ -1959,7 +1965,7 @@ window.spHapus=async function(id){
     try{ await window.API.deleteSparepart(x.id); await pullSpareparts(); renderAll(); toast('Produk dihapus'); return; }
     catch(err){ toast(err.message); return; }
   }
-  SPARE=SPARE.filter(d=>String(d.id)!==String(x.id)); saveSpareLocal(); renderAll(); toast('Sparepart dihapus');
+  SPARE=SPARE.filter(d=>String(d.id)!==String(x.id)); saveSpareLocal(); renderAll(); toast('Produk dihapus');
 };
 window.spStock=async function(id, delta){
   const x=findSpare(id); if(!x){ toast('Data tidak ditemukan'); return; }
@@ -2395,7 +2401,7 @@ function lpRange(){
   return {dari:(dari||'').slice(0,10), sampai:(sampai||'').slice(0,10), kasir:($('lp_kasir')?($('lp_kasir').value||''):'').trim()};
 }
 // ===== FILTER PER KASIR =====
-const normKasir = (s)=>' '.join(String(s||'').split()).toLowerCase();
+const normKasir = (s)=>String(s||'').trim().split(/\s+/).join(' ').toLowerCase();
 function matchKasir(nama, kasir){
   if(!kasir) return true;
   return normKasir(nama)===normKasir(kasir);
