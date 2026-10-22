@@ -3,8 +3,9 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -215,5 +216,19 @@ FRONTEND_CANDIDATES = [
     Path("/app/frontend"),
 ]
 FRONTEND_DIR = next((p for p in FRONTEND_CANDIDATES if p.name != "__EMPTY__" and (p / "index.html").exists()), None)
+LANDING_DIR = Path(os.getenv("LANDING_DIR", "") or (Path(__file__).resolve().parent.parent.parent / "landing"))
+LANDING_HOSTS = {"pitujaya.my.id", "www.pitujaya.my.id"}
 if FRONTEND_DIR is not None:
+    @app.get("/", include_in_schema=False)
+    @app.get("/index.html", include_in_schema=False)
+    def root_page(request: Request):
+        host = (request.headers.get("host", "").split(":")[0] or "").lower()
+        if host == "www.pitujaya.my.id":
+            return RedirectResponse("https://pitujaya.my.id/", status_code=308)
+        if host in LANDING_HOSTS:
+            landing_index = LANDING_DIR / "index.html"
+            if landing_index.exists():
+                return FileResponse(landing_index, media_type="text/html")
+        return FileResponse(FRONTEND_DIR / "index.html", media_type="text/html")
+
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

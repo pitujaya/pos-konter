@@ -28,7 +28,10 @@ COPY index.html api.js script.js style.css config.js monitor.html manifest.json 
 # Aset ikon (opsional, abaikan bila tidak ada -> pakai wildcard aman via shell)
 COPY icon.png icon-192.png apple-touch-icon.png /app/frontend/
 
+COPY landing /app/landing
+
 ENV FRONTEND_DIR=/app/frontend \
+    LANDING_DIR=/app/landing \
     UPLOAD_DIR=/data/uploads \
     DATABASE_URL=sqlite:////data/servishp.db \
     APP_VERSION=1.1.0-ubuntu \

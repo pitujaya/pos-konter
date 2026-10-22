@@ -26,6 +26,10 @@ originRequest:
   connectTimeout: 10s
   noTLSVerify: false
 ingress:
+  - hostname: pitujaya.my.id
+    service: http://127.0.0.1:8000
+  - hostname: www.pitujaya.my.id
+    service: http://127.0.0.1:8000
   - hostname: pos.pitujaya.my.id
     service: http://127.0.0.1:8000
   - hostname: api.pitujaya.my.id
