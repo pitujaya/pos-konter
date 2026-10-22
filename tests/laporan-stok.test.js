@@ -85,8 +85,11 @@ ok('opsi Semua Jenis', /id="lp_jenis"[\s\S]{0,400}?value="">Semua Jenis/.test(ht
 ok('opsi Sparepart', /value="Sparepart"/.test(html));
 ok('opsi Accessories', /value="Accessories"/.test(html));
 ok('opsi Handphone', /value="Handphone"/.test(html));
-ok('ada di card Stok Produk', html.indexOf('id="lp_jenis"') > html.indexOf('id="lpStokBody"') - 3000
+ok('ada di area Laporan (di atas tabel Stok Produk)',
+   html.indexOf('id="lp_jenis"') > html.indexOf('id="page-laporan"')
    && html.indexOf('id="lp_jenis"') < html.indexOf('id="lpStokBody"'));
+ok('filter jenis menggantikan baris filter kasir',
+   html.includes('id="lp_kasirRow"') && html.includes('id="lp_jenisRow"'));
 ok('style .lp-filter ada di CSS', css.includes('.lp-filter'));
 
 console.log('=== 2. Filter jenis benar-benar menyaring ===');

@@ -2955,15 +2955,24 @@ function bindLaporan(){
     $('lp_jenis').value=lpJenis();
     $('lp_jenis').onchange=()=>{ lpSetJenis($('lp_jenis').value); renderLaporan(); };
   }
+  if($('lpResetJenis')) $('lpResetJenis').onclick=()=>{ lpSetJenis(''); renderLaporan(); toast('Filter jenis direset ↺'); };
   if($('btnLpCSV')) $('btnLpCSV').onclick=exportLaporanCSV;
   if($('btnLpPrint')) $('btnLpPrint').onclick=printLaporan;
   syncLpKasirOptions();
+  try{ syncLpFilterRows(NAVLTAB.laporan||'laba'); }catch{}
+}
+// Tab Stok Produk tidak butuh filter kasir -> tampilkan filter jenis di tempatnya.
+function syncLpFilterRows(name){
+  const isStok=(name==='stok');
+  if($('lp_kasirRow')) $('lp_kasirRow').classList.toggle('hidden', isStok);
+  if($('lp_jenisRow')) $('lp_jenisRow').classList.toggle('hidden', !isStok);
 }
 window.gotoLtab=function(name){
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.ltab===name));
   document.querySelectorAll('.ltab-pane').forEach(p=>p.classList.toggle('active', p.id==='ltab-'+name));
   curLtab=name;
   NAVLTAB.laporan=name;
+  try{ syncLpFilterRows(name); }catch{}
   try{ navSyncActive('laporan', name, 'laporan'); }catch{}
 };
 function exportLaporanCSV(){
