@@ -1057,16 +1057,26 @@ function filtered(){
 
 function renderAll(){ renderStats(); renderOmzetChart(); renderRecent(); renderData(); renderQueue(); renderSettingUI(); refreshPreview(); renderUsers(); renderHeadbar(); renderSlideManager(); renderSpareparts(); try{ renderSales(); }catch{} try{ renderExpenses(); }catch{} try{ renderLaporan(); }catch{} try{ renderKasUI(); }catch{} }
 
+let DASH_RANGE=1; // 1 = hari ini (default), 7 = 7 hari, 30 = 30 hari
+function dashRangeSet(n){
+  DASH_RANGE=[1,7,30].includes(Number(n))?Number(n):1;
+  document.querySelectorAll('#dashRange [data-dash]').forEach(b=>b.classList.toggle('active',Number(b.dataset.dash)===DASH_RANGE));
+  const lbl=DASH_RANGE===1?'hari ini':`${DASH_RANGE} hari terakhir`;
+  if($('dashSub')) $('dashSub').textContent=`Ringkasan operasional service HP ${lbl} • klik status untuk melihat datanya`;
+  renderStats();
+}
+window.dashRangeSet=dashRangeSet;
 function renderStats(){
-  // Dashboard = ringkasan HARI INI (per tanggal), bukan akumulasi semua waktu.
-  const today=new Date().toISOString().slice(0,10);
-  const day=DB.filter(x=>String(x.tanggal||'').slice(0,10)===today);
+  // Dashboard = ringkasan per tanggal (default hari ini), bukan akumulasi semua waktu.
+  const sampai=new Date().toISOString().slice(0,10);
+  const dari=new Date(Date.now()-(DASH_RANGE-1)*864e5).toISOString().slice(0,10);
+  const day=DB.filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
   const c=(s)=>day.filter(x=>normStatus(x.status)===s).length;
   $('stTotal').textContent=day.length;
   $('stAntri').textContent=c('Dikerjakan');
   $('stProses').textContent=c('Selesai');
   $('stSelesai').textContent=c('Diambil');
-  // Omzet hanya dari service yang SUDAH DIAMBIL (hari ini)
+  // Omzet hanya dari service yang SUDAH DIAMBIL (dalam rentang tanggal)
   $('stOmzet').textContent=fmtRp(day.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
   // Link status di dashboard -> ketuk untuk buka Data Service terfilter
   if($('statusLinks')){ try { $('statusLinks').innerHTML=''; } catch(e){} }
