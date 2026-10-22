@@ -1716,19 +1716,49 @@ $('btnSavePw').onclick=async ()=>{
 
 // ===== DATA SPAREPART =====
 const LS_SPARE = 'servishp_spareparts_v1';
+const LS_JENIS = 'servishp_spare_jenis_v1';
 let SPARE = loadSpareLocal();
+// cache jenis per SKU: dipakai kalau backend belum punya kolom "jenis"
+let SPARE_JENIS = loadSpareJenis();
+let BACKEND_JENIS_OK = null;   // null = belum diketahui, true/false = dukung/tidak
+function loadSpareJenis(){ try{ return JSON.parse(localStorage.getItem(LS_JENIS)) || {}; }catch{ return {}; } }
+function saveSpareJenis(){ try{ localStorage.setItem(LS_JENIS, JSON.stringify(SPARE_JENIS)); }catch{} }
+function setSpareJenis(sku, jenis){
+  const k=String(sku||'').trim().toLowerCase();
+  if(!k || !jenis) return;
+  SPARE_JENIS[k]=jenis; saveSpareJenis();
+}
+// terapkan cache jenis ke data produk (backend lama tidak menyimpan kolom jenis)
+function applySpareJenis(){
+  (SPARE||[]).forEach(x=>{
+    const k=String(x.sku||'').trim().toLowerCase();
+    if(!k) return;
+    const cached=SPARE_JENIS[k];
+    const dariBackend=String(x.jenis||'').trim();
+    if((!dariBackend || dariBackend==='Sparepart') && cached) x.jenis=cached;
+    if(!x.jenis) x.jenis='Sparepart';
+  });
+  // NOTE: cache TIDAK di-prune di sini, karena bisa ada pull paralel
+  //       yang datanya lebih lama -> entri cache ikut terhapus.
+  //       Entri untuk SKU yang dihapus tetap dibersihkan di spHapus().
+}
 let spLowOnly = false;
 let spEditId = null;
 let scanStream = null;
 let scanRaf = null;
 
 function loadSpareLocal(){ try{ return JSON.parse(localStorage.getItem(LS_SPARE)) || []; }catch{ return []; } }
+try{ applySpareJenis(); }catch{}
 function saveSpareLocal(){ try{ localStorage.setItem(LS_SPARE, JSON.stringify(SPARE)); }catch{} }
 if(!localStorage.getItem(LS_SPARE)){
   SPARE=[
     {id:1, nama:'LCD Samsung A12', sku:'LCD-SSA12', merk:'Samsung', kategori:'LCD', hpp:180000, harga_jual:250000, stok:8, stok_min:3},
     {id:2, nama:'Baterai Redmi 12C', sku:'BAT-R12C', merk:'Xiaomi', kategori:'Baterai', hpp:65000, harga_jual:95000, stok:2, stok_min:5},
     {id:3, nama:'Charger 25W USB-C', sku:'CHR-25WC', merk:'Samsung', kategori:'Charger', hpp:45000, harga_jual:75000, stok:15, stok_min:5},
+    {id:4, nama:'Tempered Glass A12', sku:'ACC-TG12', merk:'Generic', kategori:'Aksesoris', jenis:'Accessories', hpp:8000, harga_jual:20000, stok:40, stok_min:10},
+    {id:5, nama:'Case Silikon A12', sku:'ACC-CS12', merk:'Generic', kategori:'Aksesoris', jenis:'Accessories', hpp:12000, harga_jual:30000, stok:25, stok_min:8},
+    {id:6, nama:'Nokia 105 2G', sku:'HP-NK105', merk:'Nokia', kategori:'Handphone', jenis:'Handphone', hpp:550000, harga_jual:650000, stok:6, stok_min:2},
+    {id:7, nama:'Infinix Hot 30', sku:'HP-IH30', merk:'Infinix', kategori:'Handphone', jenis:'Handphone', hpp:1350000, harga_jual:1550000, stok:4, stok_min:2},
   ];
   saveSpareLocal();
 }
@@ -1760,11 +1790,19 @@ function refreshSpKategoriUI(){
   const dl=$('spKategoriList');
   if(dl) dl.innerHTML=list.map(k=>`<option value="${esc(k)}"></option>`).join('');
 }
+let SPARE_PULL_SEQ = 0;
 async function pullSpareparts(){
   if(!useBackend()) return false;
+  const seq = ++SPARE_PULL_SEQ;
   try{
     const list = await window.API.listSpareparts({limit:1000, sort:'nama'});
-    SPARE = Array.isArray(list) ? list : [];
+    // ada request lain yang lebih baru -> jangan timpa dengan data lama
+    if(seq !== SPARE_PULL_SEQ) return false;
+    const arr = Array.isArray(list) ? list : [];
+    // deteksi apakah backend sudah mengembalikan kolom "jenis"
+    if(arr.length) BACKEND_JENIS_OK = arr.some(x=>Object.prototype.hasOwnProperty.call(x||{}, 'jenis'));
+    SPARE = arr;
+    applySpareJenis();
     saveSpareLocal(); renderSpareparts();
     return true;
   }catch(e){ console.warn('pullSpareparts gagal:', e.message); return false; }
@@ -1797,7 +1835,10 @@ function renderSpareparts(){
   if($('spLow')) $('spLow').textContent=low;
   if($('spCount')) $('spCount').textContent=pool.length+' item';
   if($('spInfo')) $('spInfo').textContent = spLowOnly ? `• menampilkan ${r.length} stok menipis` : (low?`• ${low} stok menipis`:'' );
-  $('emptySpare').classList.toggle('hidden', r.length>0);
+  if($('emptySpare')){
+    $('emptySpare').textContent='Belum ada produk '+jenis+'. Klik "+ Tambah Barang" untuk menambah.';
+    $('emptySpare').classList.toggle('hidden', r.length>0);
+  }
   // Kasir boleh lihat + ubah stok, tapi TIDAK boleh tambah/edit/hapus sparepart
   const admin=isAdminUp();
   const bAdd=$('btnAddSpare'), bAddBtm=$('btnAddSpareBottom');
@@ -1932,14 +1973,14 @@ if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
   const isEdit=(spEditId!==null && spEditId!==undefined);
   if(useBackend()){
     try{
+      setSpareJenis(sku, jenis);
       if(isEdit) await window.API.updateSparepart(spEditId,{nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
       else await window.API.createSparepart({nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
       $('modalSpare').classList.add('hidden');
       await pullSpareparts(); renderAll();
-      // backend lama belum punya kolom "jenis" -> beri tahu user
-      const cek=(SPARE||[]).find(x=>String(x.sku||'').toLowerCase()===sku.toLowerCase());
-      if(jenis!=='Sparepart' && cek && spJenis(cek)!==jenis){
-        toast('⚠️ Backend belum mendukung Jenis Produk — update server (git pull + restart)');
+      // backend lama belum mendukung kolom "jenis" -> jenis tetap tersimpan di perangkat ini
+      if(BACKEND_JENIS_OK===false && jenis!=='Sparepart'){
+        toast('Produk tersimpan ✅ (jenis tersimpan di perangkat ini — server perlu update untuk sinkron)');
         return;
       }
       toast('Produk tersimpan ✅'); return;
@@ -1949,9 +1990,11 @@ if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
     const x=findSpare(spEditId); if(!x){ toast('Data tidak ditemukan'); return; }
     if(SPARE.some(d=>String(d.id)!==String(spEditId)&&String(d.sku).toLowerCase()===sku.toLowerCase())){ toast('SKU sudah dipakai'); return; }
     Object.assign(x,{nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
+    setSpareJenis(sku, jenis);
   } else {
     if(SPARE.some(d=>String(d.sku).toLowerCase()===sku.toLowerCase())){ toast('SKU sudah dipakai'); return; }
     SPARE.push({id:Date.now(),nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
+    setSpareJenis(sku, jenis);
   }
   saveSpareLocal();
   $('modalSpare').classList.add('hidden');
@@ -1965,7 +2008,9 @@ window.spHapus=async function(id){
     try{ await window.API.deleteSparepart(x.id); await pullSpareparts(); renderAll(); toast('Produk dihapus'); return; }
     catch(err){ toast(err.message); return; }
   }
-  SPARE=SPARE.filter(d=>String(d.id)!==String(x.id)); saveSpareLocal(); renderAll(); toast('Produk dihapus');
+  SPARE=SPARE.filter(d=>String(d.id)!==String(x.id));
+  try{ const k=String(x.sku||'').trim().toLowerCase(); if(k){ delete SPARE_JENIS[k]; saveSpareJenis(); } }catch{}
+  saveSpareLocal(); renderAll(); toast('Produk dihapus');
 };
 window.spStock=async function(id, delta){
   const x=findSpare(id); if(!x){ toast('Data tidak ditemukan'); return; }
