@@ -44,6 +44,9 @@ class Service(Base):
     kasir: Mapped[str] = mapped_column(String(120), default="", index=True)
     # Cara bayar service saat diambil (tunai/non-tunai) -> menentukan kas fisik.
     metode_bayar: Mapped[str] = mapped_column(String(30), default="tunai")
+    # Jejak notifikasi WhatsApp yang sudah dikirim ke pelanggan.
+    wa_terkirim_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    wa_terkirim_oleh: Mapped[str] = mapped_column(String(120), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

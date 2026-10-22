@@ -289,6 +289,7 @@
     createService(payload) { return this.req("/services", { method: "POST", body: payload }); },
     updateService(id, payload) { return this.req("/services/" + id, { method: "PUT", body: payload }); },
     setStatus(id, status) { return this.req("/services/" + id + "/status", { method: "PATCH", body: { status } }); },
+    markWaSent(id) { return this.req("/services/" + id + "/wa-notifikasi", { method: "POST", body: {} }); },
     deleteService(id) { return this.req("/services/" + id, { method: "DELETE" }); },
     purgeServices(scope) { return this.req("/services/purge", { method: "POST", body: { scope: scope } }); },
     dashboard() { return this.req("/stats/dashboard"); },
@@ -363,6 +364,12 @@
         dari: dari || "", sampai: sampai || "", kasir: kasir || "",
       }).toString();
       return this.req("/stats/report?" + qs);
+    },
+    reportHarian(dari = "", sampai = "", kasir = "") {
+      const qs = new URLSearchParams({
+        dari: dari || "", sampai: sampai || "", kasir: kasir || "",
+      }).toString();
+      return this.req("/stats/harian?" + qs);
     },
     async uploadSlide(file) {
       const tok = this.getToken();

@@ -238,6 +238,23 @@ function waHref(x){
   const msg=`Halo ${x.nama||'kak'}, ini dari ${(typeof SET!=='undefined'&&SET.nama)||'konter kami'}. Update service ${x.noService||''} (${x.merk||''} ${x.tipe||''}): status *${normStatus(x.status)}*, biaya ${fmtRp(x.biaya)}. Terima kasih 🙏`;
   return `https://wa.me/${n}?text=${encodeURIComponent(msg)}`;
 }
+// Pesan "service sudah selesai & siap diambil". Dipakai saat status -> Diambil.
+function waPesanAmbil(x){
+  const toko=(typeof SET!=='undefined'&&SET.nama)||'konter kami';
+  const nama=x.nama||'kak';
+  const device=[x.merk,x.tipe].filter(Boolean).join(' ');
+  const l1=`Halo ${nama}, ini dari ${toko}. 🙏`;
+  const l2=`Unit ${device||'HP Anda'} (${x.noService||''}) sudah selesai dan siap diambil.`;
+  const l3=`Keluhan: ${String(x.keluhan||'-').slice(0,80)}`;
+  const l4=`Total biaya: *${fmtRp(x.biaya)}*`;
+  const l5=`Silakan datang ke ${toko} untuk ambil & cek unit Anda.`;
+  return [l1,l2,l3,l4,l5].join('\n');
+}
+function waHrefAmbil(x){
+  const n=waNumber(x.telp);
+  if(!n || n.length<10 || n.length>15) return '';
+  return `https://wa.me/${n}?text=${encodeURIComponent(waPesanAmbil(x))}`;
+}
 // APK WebView: link wa.me / whatsapp:// harus dibuka via Intent native (bukan di WebView),
 // kalau tidak -> net::ERR_UNKNOWN_URL_SCHEME. Delegasi global untuk semua tombol .wa-btn.
 document.addEventListener('click', function(e){
@@ -1184,19 +1201,66 @@ window.detail=function(id){
     <small class="muted">${(x.riwayat||[]).map(r=>`• ${new Date(r.t).toLocaleString('id-ID')} — <b>${esc(r.s)}</b>`).join('<br>')||'-'}</small>`;
   $('detailFoot').innerHTML=`
     <button class="btn ghost" onclick="cetak(${jsStr(x.id)})">🖨 Cetak Nota</button>
+    ${waHref(x) ? `<button class="btn ghost" onclick="bukaWa(${jsStr(x.id)},'status')">💬 Chat WA</button>` : ``}
     ${isAdminUp() ? `<button class="btn ghost" onclick="edit(${jsStr(x.id)})">✏️ Edit</button>` : ``}
     <button class="btn primary" onclick="saveStatus(${jsStr(x.id)})">Simpan Status</button>`;
   $('modalDetail').classList.remove('hidden');
 };
+// ===== KIRIM WHATSAPP =====
+// Buka modal konfirmasi WA (preview pesan + tombol buka WhatsApp).
+// mode: 'ambil' = pesan "siap diambil", 'status' = update status biasa.
+window.bukaWa=function(id, mode){
+  const x=DB.find(d=>d.id===id); if(!x) return;
+  const mode2=mode||'status';
+  const href = mode2==='ambil' ? waHrefAmbil(x) : waHref(x);
+  if(!href){ toast('Nomor HP pelanggan tidak valid untuk WhatsApp'); return; }
+  const n=waNumber(x.telp);
+  $('waTujuan').innerHTML=`Pelanggan: <b>${esc(x.nama||'-')}</b> • ${esc(x.telp||'-')} (${esc(n)})<br>Service <b>${esc(x.noService||'')}</b> — ${esc(x.merk||'')} ${esc(x.tipe||'')}`;
+  const pesan = mode2==='ambil' ? waPesanAmbil(x)
+    : decodeURIComponent((href.split('text=')[1]||''));
+  $('waPesan').value=pesan;
+  $('waFoot').innerHTML=`
+    <button class="btn ghost" onclick="closeWa()">Batal</button>
+    <a class="btn primary wa-btn" id="waKirimLink" href="${esc(href)}" target="_blank" rel="noopener" onclick="tandaiWaTerkirim(${jsStr(x.id)})">📱 Buka WhatsApp</a>`;
+  $('modalWa').classList.remove('hidden');
+  $('waPesan').focus();
+};
+window.closeWa=function(){ $('modalWa').classList.add('hidden'); };
+// Tandai notifikasi WA sudah dikirim (agar masuk rekap harian).
+window.tandaiWaTerkirim=function(id){
+  try{
+    if(!useBackend()) return;
+    window.API.markWaSent(id).then(()=>{
+      try{ const x=DB.find(d=>d.id===id); if(x){ x.wa_terkirim_at=new Date().toISOString(); } }catch{}
+    }).catch(()=>{});
+  }catch{}
+};
+// Setelah service -> Diambil: buka modal WA "siap diambil".
+// Pelanggan otomatis diberi tahu unitnya sudah selesai.
+function tawarkanWaAmbil(id){
+  const x=DB.find(d=>d.id===id); if(!x) return;
+  if(!waHrefAmbil(x)) return;                       // nomor HP tidak valid -> diamkan
+  if(x.wa_terkirim_at){ toast('Status → Diambil. Notifikasi WA sudah pernah dikirim.', 3500); return; }
+  setTimeout(()=>{ try{ window.bukaWa(id,'ambil'); }catch{} }, 350);
+}
 window.saveStatus=async function(id){
   const x=DB.find(d=>d.id===id); const ns=$('quickStatus').value;
   if(useBackend()){
-    try{ await window.API.setStatus(id, ns); await pullServices(); renderAll(); $('modalDetail').classList.add('hidden'); toast('Status → '+ns); return; }
+    try{
+      await window.API.setStatus(id, ns);
+      await pullServices();
+      renderAll(); $('modalDetail').classList.add('hidden');
+      toast('Status → '+ns);
+      // Status "Diambil" = pelanggan siap mengambil -> tawarkan kirim WA.
+      if(normStatus(ns)==='Diambil'){ try{ tawarkanWaAmbil(id); }catch{} }
+      return;
+    }
     catch(err){ toast('Backend gagal: '+err.message); }
   }
   if(!x) return;
   x.status=ns; x.riwayat=x.riwayat||[]; x.riwayat.push({t:new Date().toISOString(),s:ns});
   saveData(); renderAll(); $('modalDetail').classList.add('hidden'); toast('Status → '+ns);
+  if(normStatus(ns)==='Diambil'){ try{ tawarkanWaAmbil(id); }catch{} }
 };
 
 // ===== EDIT / HAPUS (Admin & Super Admin saja) =====
@@ -1237,7 +1301,7 @@ window.hapus=async function(id){
   DB=DB.filter(d=>d.id!==id); saveData(); renderAll(); toast('Data dihapus');
 };
 function closeAllModals(){
-  ['modalDetail','modalEdit','modalSpare','modalExpense','modalKasBuka','modalKasTutup'].forEach(id=>{ const m=$(id); if(m) m.classList.add('hidden'); });
+  ['modalDetail','modalEdit','modalSpare','modalExpense','modalKasBuka','modalKasTutup','modalWa'].forEach(id=>{ const m=$(id); if(m) m.classList.add('hidden'); });
   if(typeof closeScan==='function'){
     try{
       const ms=$('modalScan');
@@ -1248,6 +1312,7 @@ function closeAllModals(){
   }
   try{ window.closeAllModals=closeAllModals; }catch{}
 }
+window.closeAllModals=closeAllModals;
 function bindCloseButtons(){
   // Delegasi global: semua [data-close] pasti menutup modal (tahan terhadap render ulang)
   document.addEventListener('click',(e)=>{
@@ -2699,6 +2764,7 @@ async function renderLaporan(){
     <td style="text-align:right"><b>${fmtRp(Number(x.hpp||0)*Number(x.stok||0))}</b></td></tr>`; }).join('')
     + `<tr><td colspan="6"><b>Total nilai stok (HPP)</b> • ${esc(r.stok_menipis)} menipis</td><td style="text-align:right"><b>${fmtRp(r.stok_nilai_hpp)}</b></td></tr>`;
   renderRekapKasir(dari, sampai);
+  renderRekapHarian(dari, sampai, kasir);
 }
 // Rekap gabungan per kasir (dihitung dari data lokal yg sudah sync dari backend)
 function renderRekapKasir(dari, sampai){
@@ -2740,6 +2806,85 @@ function renderRekapKasir(dari, sampai){
     <td style="text-align:right"><b>${fmtRp(laba(r))}</b></td></tr>`).join('')
     + `<tr><td><b>TOTAL</b></td><td style="text-align:right"><b>${esc(t.svc)}</b></td><td style="text-align:right"><b>${fmtRp(t.svcOm)}</b></td><td style="text-align:right"><b>${esc(t.nota)}</b></td><td style="text-align:right"><b>${fmtRp(t.jual)}</b></td><td style="text-align:right"><b>${fmtRp(t.labaJual)}</b></td><td style="text-align:right"><b>(${fmtRp(t.exp)})</b></td><td style="text-align:right"><b>${fmtRp(t.svcOm+t.labaJual-t.exp)}</b></td></tr>`
     || '<tr><td colspan="8">Belum ada transaksi pada periode ini.</td></tr>';
+}
+// ===== REKAP HARIAN PER KASIR =====
+// Satu baris per (tanggal, kasir). Sumber: backend /api/stats/harian.
+// Kalau backend tidak ada (mode offline), dihitung dari data lokal.
+function computeHarianLocal(dari,sampai,kasir){
+  const rows=new Map();
+  const get=(tgl,nama)=>{
+    const k=tgl+'||'+normKasir(nama);
+    if(!rows.has(k)) rows.set(k,{tanggal:tgl,kasir:String(nama||'').trim()||'-',svc_masuk:0,svc_diambil:0,svc_omzet:0,nota:0,jual_omzet:0,jual_laba:0,exp:0,exp_n:0,wa_terkirim:0,total_pendapatan:0,total_laba:0});
+    return rows.get(k);
+  };
+  (typeof DB!=='undefined'?DB:[]).forEach(x=>{
+    if(!inPeriode(x.tanggal||'',dari,sampai)) return;
+    if(kasir && !matchKasir(x.kasir,kasir)) return;
+    const r=get(String(x.tanggal||'').slice(0,10), x.kasir||'-');
+    r.svc_masuk++;
+    if(normStatus(x.status)==='Diambil'){ r.svc_diambil++; r.svc_omzet+=Number(x.biaya||0); }
+    if(x.wa_terkirim_at) r.wa_terkirim++;
+  });
+  (typeof SALES!=='undefined'?SALES:[]).forEach(x=>{
+    if(!inPeriode(x.tanggal||'',dari,sampai)) return;
+    if(kasir && !matchKasir(x.kasir,kasir)) return;
+    const r=get(String(x.tanggal||'').slice(0,10), x.kasir||'-');
+    r.nota++; r.jual_omzet+=Number(x.total||0);
+    r.jual_laba+=Number(x.laba!=null?x.laba:(Number(x.total||0)-Number(x.hpp_total||0)));
+  });
+  (typeof EXPENSES!=='undefined'?EXPENSES:[]).forEach(x=>{
+    if(!inPeriode(x.tanggal||'',dari,sampai)) return;
+    if(kasir && !matchKasir(x.dicatat_oleh,kasir)) return;
+    const r=get(String(x.tanggal||'').slice(0,10), x.dicatat_oleh||'-');
+    r.exp+=Number(x.jumlah||0); r.exp_n++;
+  });
+  const out=[...rows.values()];
+  out.forEach(r=>{ r.total_pendapatan=r.svc_omzet+r.jual_omzet; r.total_laba=r.svc_omzet+r.jual_laba-r.exp; });
+  out.sort((a,b)=>(b.tanggal+a.kasir).localeCompare(a.tanggal+b.kasir));
+  const sum=(k)=>out.reduce((o,r)=>o+Number(r[k]||0),0);
+  return {dari:dari||'',sampai:sampai||'',kasir:kasir||'',rows:out,
+    ringkasan:{hari:new Set(out.map(r=>r.tanggal)).size, svc_masuk:sum('svc_masuk'), svc_diambil:sum('svc_diambil'),
+      svc_omzet:sum('svc_omzet'), nota:sum('nota'), jual_omzet:sum('jual_omzet'), jual_laba:sum('jual_laba'),
+      exp:sum('exp'), wa_terkirim:sum('wa_terkirim'), total_pendapatan:sum('total_pendapatan'), total_laba:sum('total_laba')}};
+}
+let HARIAN_CACHE=null;
+async function renderRekapHarian(dari,sampai,kasir){
+  if(!$('lpHarianBody')) return;
+  let h=null;
+  if(useBackend() && window.API.reportHarian){
+    try{ h=await window.API.reportHarian(dari,sampai,kasir); }catch(e){ h=null; }
+  }
+  if(!h) h=computeHarianLocal(dari,sampai,kasir);
+  HARIAN_CACHE=h;
+  const rows=h.rows||[], rk=h.ringkasan||{};
+  if($('lpHarianCount')) $('lpHarianCount').textContent=rows.length;
+  if($('lpHarianPeriode')) $('lpHarianPeriode').textContent=(dari||sampai)?`${dari||'…'} s/d ${sampai||'…'}`:'Semua periode';
+  if($('lpHariCount')) $('lpHariCount').textContent=rk.hari||0;
+  if($('lpHariSvc')) $('lpHariSvc').textContent=rk.svc_diambil||0;
+  if($('lpHariOmzet')) $('lpHariOmzet').textContent=fmtRp(rk.svc_omzet||0);
+  if($('lpHariWa')) $('lpHariWa').textContent=rk.wa_terkirim||0;
+  const body=rows.map(r=>`<tr>
+    <td>${fmtTgl(r.tanggal)}</td>
+    <td><b>${esc(r.kasir)}</b></td>
+    <td style="text-align:right">${esc(r.svc_masuk||0)}</td>
+    <td style="text-align:right">${esc(r.svc_diambil||0)}</td>
+    <td style="text-align:right"><b>${fmtRp(r.svc_omzet||0)}</b></td>
+    <td style="text-align:right">${esc(r.nota||0)}</td>
+    <td style="text-align:right">${fmtRp(r.jual_omzet||0)}</td>
+    <td style="text-align:right">(${fmtRp(r.exp||0)})</td>
+    <td style="text-align:right"><b>${fmtRp(r.total_laba||0)}</b></td>
+    <td style="text-align:right">${r.wa_terkirim?'✅ '+esc(r.wa_terkirim):'—'}</td></tr>`).join('');
+  $('lpHarianBody').innerHTML=(body
+    + `<tr><td><b>TOTAL</b></td><td></td>
+        <td style="text-align:right"><b>${esc(rk.svc_masuk||0)}</b></td>
+        <td style="text-align:right"><b>${esc(rk.svc_diambil||0)}</b></td>
+        <td style="text-align:right"><b>${fmtRp(rk.svc_omzet||0)}</b></td>
+        <td style="text-align:right"><b>${esc(rk.nota||0)}</b></td>
+        <td style="text-align:right"><b>${fmtRp(rk.jual_omzet||0)}</b></td>
+        <td style="text-align:right"><b>(${fmtRp(rk.exp||0)})</b></td>
+        <td style="text-align:right"><b>${fmtRp(rk.total_laba||0)}</b></td>
+        <td style="text-align:right"><b>${esc(rk.wa_terkirim||0)}</b></td></tr>`)
+    || '<tr><td colspan="10">Belum ada transaksi pada periode ini.</td></tr>';
 }
 function syncLpKasirOptions(){
   const el=$('lp_kasir'); if(!el) return;
@@ -2807,15 +2952,32 @@ function exportLaporanCSV(){
     });
   }catch{}
   L.push('');
+  L.push('REKAP HARIAN PER KASIR');
+  L.push('Tanggal,Kasir,Svc Masuk,Svc Diambil,Omzet Service,Nota,Omzet Jual,Pengeluaran,Laba Bersih,WA Terkirim');
+  try{
+    const h=HARIAN_CACHE||computeHarianLocal(...Object.values(lpRange()));
+    (h.rows||[]).forEach(x=>L.push([x.tanggal,'"'+String(x.kasir||'').replace(/"/g,'""')+'"',x.svc_masuk||0,x.svc_diambil||0,x.svc_omzet||0,x.nota||0,x.jual_omzet||0,x.exp||0,x.total_laba||0,x.wa_terkirim||0].join(',')));
+    const rk=h.ringkasan||{};
+    L.push(['TOTAL','',rk.svc_masuk||0,rk.svc_diambil||0,rk.svc_omzet||0,rk.nota||0,rk.jual_omzet||0,rk.exp||0,rk.total_laba||0,rk.wa_terkirim||0].join(','));
+  }catch{}
+  L.push('');
   L.push('STOK');
   L.push('SKU,Nama,Merk,Kategori,HPP,Jual,Stok,Nilai HPP');
   (typeof SPARE!=='undefined'?SPARE:[]).forEach(x=>L.push([x.sku,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.merk,'"'+String(((x&&x.kategori)||'Lainnya')).replace(/"/g,'""')+'"',x.hpp,x.harga_jual,x.stok,Number(x.hpp||0)*Number(x.stok||0)].join(',')));
-  download('laporan-'+(r.dari||'semua')+'-sd-'+(r.sampai||'semua')+'.csv',L.join('\n'),'text/csv');
+  download('laporan-'+(r.dari||'semua')+'-sd-'+(r.sampai||'semua')+'.csv','\uFEFF'+L.join('\n'),'text/csv');
   toast('CSV laporan diunduh ⬇');
 }
 function printLaporan(){
   const r=LAPORAN_CACHE||computeReportLocal(...Object.values(lpRange()));
   const sp=(typeof SPARE!=='undefined'?SPARE:[]);
+  let harianHtml='';
+  try{
+    const h=HARIAN_CACHE||computeHarianLocal(...Object.values(lpRange()));
+    const rows=(h.rows||[]).slice(0,40);
+    harianHtml=`<hr>
+    <p><b>Rekap Harian per Kasir</b> (${esc((h.rows||[]).length)} baris)<br>
+    ${rows.map(x=>esc(x.tanggal)+' • '+esc(x.kasir)+' — svc '+esc(x.svc_diambil||0)+' • '+fmtRp(x.svc_omzet||0)+' • laba '+fmtRp(x.total_laba||0)+(x.wa_terkirim?(' • WA '+esc(x.wa_terkirim)):'')).join('<br>')||'-'}</p>`;
+  }catch{}
   $('printArea').innerHTML=`<div class="nota">
     <h2>${esc(SET.nama)}</h2>
     <p style="text-align:center">${esc(SET.alamat)}<br>Telp: ${esc(SET.telp)}</p>
@@ -2831,6 +2993,7 @@ function printLaporan(){
     <b>Laba bersih: ${fmtRp(r.total_laba)}</b></p>
     <hr>
     <p><b>Service per status:</b><br>${STATUS.map(s=>esc(s)+': '+esc((r.service_per_status||{})[s]||0)).join('<br>')}</p>
+    ${harianHtml}
     <hr>
     <p><b>Stok:</b> ${esc(r.stok_item)} item • Nilai HPP ${fmtRp(r.stok_nilai_hpp)} • ${esc(r.stok_menipis)} menipis<br>
     ${sp.slice(0,60).map(x=>esc(x.sku)+' '+esc(x.nama)+' — stok '+esc(x.stok)).join('<br>')}${sp.length>60?'<br>... +'+(sp.length-60)+' item lain':''}</p>

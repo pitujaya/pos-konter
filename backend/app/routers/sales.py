@@ -240,3 +240,96 @@ def report(
         "stok_nilai_jual": sum(int(s.harga_jual or 0) * int(s.stok or 0) for s in spares),
         "stok_menipis": sum(1 for s in spares if int(s.stok or 0) <= int(s.stok_min or 0)),
     }
+
+
+@router.get("/stats/harian")
+def report_harian(
+    dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
+    sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),
+    kasir: str = Query("", description="filter per kasir (nama), kosong = semua"),
+    db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
+):
+    """Rekap HARIAN per kasir: satu baris per (tanggal, kasir).
+
+    Dipakai untuk melihat performa tiap kasir per hari: berapa service masuk,
+    berapa yang Diambil (+omzetnya), berapa nota penjualan, pengeluaran, laba,
+    dan berapa notifikasi WhatsApp yang sudah dikirim.
+    """
+    services = db.query(models.Service).all()
+    sales = db.query(models.Sale).all()
+    try:
+        expenses = db.query(models.Expense).all()
+    except Exception:
+        expenses = []
+    if dari or sampai:
+        services = [r for r in services if _in_range(r.tanggal or "", dari, sampai)]
+        sales = [r for r in sales if _in_range(r.tanggal or "", dari, sampai)]
+        expenses = [r for r in expenses if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
+    kasir = (kasir or "").strip()
+    if kasir:
+        services = [r for r in services if _match_kasir(getattr(r, "kasir", ""), kasir)]
+        sales = [r for r in sales if _match_kasir(r.kasir, kasir)]
+        expenses = [r for r in expenses if _match_kasir(getattr(r, "dicatat_oleh", ""), kasir)]
+
+    rows: dict[tuple[str, str], dict] = {}
+
+    def _row(tgl: str, nama: str) -> dict:
+        key = (tgl, nama)
+        if key not in rows:
+            rows[key] = {
+                "tanggal": tgl, "kasir": nama,
+                "svc_masuk": 0, "svc_diambil": 0, "svc_omzet": 0,
+                "nota": 0, "jual_omzet": 0, "jual_laba": 0,
+                "exp_n": 0, "exp": 0, "wa_terkirim": 0,
+                "total_pendapatan": 0, "total_laba": 0,
+            }
+        return rows[key]
+
+    for s in services:
+        tgl = (s.tanggal or "")[:10]
+        nama = (getattr(s, "kasir", "") or "").strip() or "-"
+        r = _row(tgl, nama)
+        r["svc_masuk"] += 1
+        if _norm_status(s.status) == "Diambil":
+            r["svc_diambil"] += 1
+            r["svc_omzet"] += int(s.biaya or 0)
+        if getattr(s, "wa_terkirim_at", None):
+            r["wa_terkirim"] += 1
+
+    for s in sales:
+        tgl = (s.tanggal or "")[:10]
+        nama = (s.kasir or "").strip() or "-"
+        r = _row(tgl, nama)
+        r["nota"] += 1
+        r["jual_omzet"] += int(s.total or 0)
+        r["jual_laba"] += int(s.laba if s.laba is not None else (int(s.total or 0) - int(s.hpp_total or 0)))
+
+    for e in expenses:
+        tgl = (getattr(e, "tanggal", "") or "")[:10]
+        nama = (getattr(e, "dicatat_oleh", "") or "").strip() or "-"
+        r = _row(tgl, nama)
+        r["exp_n"] += 1
+        r["exp"] += int(getattr(e, "jumlah", 0) or 0)
+
+    out = []
+    for r in rows.values():
+        r["total_pendapatan"] = r["svc_omzet"] + r["jual_omzet"]
+        r["total_laba"] = r["svc_omzet"] + r["jual_laba"] - r["exp"]
+        out.append(r)
+    out.sort(key=lambda r: (r["tanggal"], r["kasir"]), reverse=True)
+
+    ringkasan = {
+        "hari": len({r["tanggal"] for r in out}),
+        "svc_masuk": sum(r["svc_masuk"] for r in out),
+        "svc_diambil": sum(r["svc_diambil"] for r in out),
+        "svc_omzet": sum(r["svc_omzet"] for r in out),
+        "nota": sum(r["nota"] for r in out),
+        "jual_omzet": sum(r["jual_omzet"] for r in out),
+        "jual_laba": sum(r["jual_laba"] for r in out),
+        "exp": sum(r["exp"] for r in out),
+        "wa_terkirim": sum(r["wa_terkirim"] for r in out),
+        "total_pendapatan": sum(r["total_pendapatan"] for r in out),
+        "total_laba": sum(r["total_laba"] for r in out),
+    }
+    return {"dari": dari or "", "sampai": sampai or "", "kasir": kasir,
+            "rows": out, "ringkasan": ringkasan}

@@ -146,6 +146,8 @@ try:
     _ensure_columns("services", {
         "kasir": "VARCHAR(120) DEFAULT ''",
         "metode_bayar": "VARCHAR(30) DEFAULT 'tunai'",
+        "wa_terkirim_at": "DATETIME",
+        "wa_terkirim_oleh": "VARCHAR(120) DEFAULT ''",
     })
     _ensure_index("services", "ix_services_kasir", "kasir")
     _ensure_columns("cash_sessions", {"service_tunai": "INTEGER DEFAULT 0"})

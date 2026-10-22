@@ -79,7 +79,11 @@ Auth: kirim header `Authorization: Bearer <token>` setelah login.
 - `PATCH /api/services/{id}/status` (semua role login; status `Diambil` butuh sesi kasir)
 - `DELETE /api/services/{id}` (admin+)
 - `POST /api/services/purge` {scope:"diambil"|"all"} (hapus massal; `all` = superadmin)
+- `POST /api/services/{id}/wa-notifikasi` (tandai notifikasi WhatsApp sudah dikirim)
 - `GET /api/stats/dashboard`
+- `GET /api/stats/harian?dari=&sampai=&kasir=` → rekap **per tanggal & kasir**
+  (`rows[]` + `ringkasan`: hari, svc_masuk, svc_diambil, svc_omzet, nota, jual_omzet,
+  jual_laba, exp, wa_terkirim, total_pendapatan, total_laba)
 
 Sesi kasir (shift) — transaksi service/penjualan/pengeluaran ditolak (409) bila
 sesi belum dibuka:
@@ -122,6 +126,12 @@ python -m pytest tests -q
 
 Test memakai database SQLite sementara yang terpisah — data produksi tidak
 pernah tersentuh.
+
+Test frontend (logika murni JS, tanpa browser):
+
+```bat
+node tests\frontend.test.js
+```
 
 
 ## 5. Frontend

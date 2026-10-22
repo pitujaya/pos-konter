@@ -46,6 +46,8 @@ def to_out(s: models.Service) -> dict:
         "catatan": s.catatan or "", "status": s.status,
         "kasir": getattr(s, "kasir", "") or "",
         "metode_bayar": getattr(s, "metode_bayar", "tunai") or "tunai",
+        "wa_terkirim_at": (s.wa_terkirim_at.isoformat() if getattr(s, "wa_terkirim_at", None) else ""),
+        "wa_terkirim_oleh": getattr(s, "wa_terkirim_oleh", "") or "",
         "riwayat": [{"t": (x.created_at.isoformat() if x.created_at else ""), "s": x.status} for x in h],
     }
 
@@ -208,6 +210,25 @@ def purge_services(body: dict, db: Session = Depends(get_db),
         db.delete(s)
     db.commit()
     return {"ok": True, "deleted": n, "scope": scope}
+
+
+@router.post("/services/{service_id}/wa-notifikasi", response_model=schemas.ServiceOut)
+def mark_wa_sent(service_id: int, db: Session = Depends(get_db),
+                 user: models.User = Depends(get_current_user)):
+    """Tandai notifikasi WhatsApp sudah dikirim ke pelanggan.
+
+    Dipakai frontend setelah kasir menekan tombol "Kirim WhatsApp", supaya
+    ada rekap berapa notifikasi yang sudah keluar (bisa dilihat di tab
+    Rekap Harian).
+    """
+    s = db.get(models.Service, service_id)
+    if not s:
+        raise HTTPException(404, "Data tidak ditemukan")
+    s.wa_terkirim_at = datetime.utcnow()
+    s.wa_terkirim_oleh = (user.nama or "").strip()
+    db.commit()
+    db.refresh(s)
+    return to_out(s)
 
 
 @router.delete("/services/{service_id}")

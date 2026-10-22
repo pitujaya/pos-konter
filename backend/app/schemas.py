@@ -137,6 +137,9 @@ class ServiceOut(BaseModel):
     status: str
     kasir: str = ""
     metode_bayar: str = "tunai"
+    # ISO string ("" = belum dikirim notifikasi WA)
+    wa_terkirim_at: str = ""
+    wa_terkirim_oleh: str = ""
     riwayat: list[dict] = []
 
     model_config = {"from_attributes": False}
