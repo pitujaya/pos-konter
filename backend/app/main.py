@@ -153,6 +153,7 @@ try:
     _ensure_columns("expenses", {"jenis": "VARCHAR(20) DEFAULT 'biaya'"})
     _ensure_index("expenses", "ix_expenses_jenis", "jenis")
     _ensure_columns("cash_sessions", {"service_tunai": "INTEGER DEFAULT 0"})
+    _ensure_columns("settings", {"akses": "JSON DEFAULT '{}'"})
     with SessionLocal() as _db:
         seed(_db)
 except Exception as e:  # jangan bikin container crash-loop tanpa pesan

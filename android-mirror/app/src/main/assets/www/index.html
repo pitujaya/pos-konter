@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="ServisHP Pro" />
 <meta name="mobile-web-app-capable" content="yes" />
 <title>ServisHP Pro - Management Service HP</title>
-<link rel="stylesheet" href="style.css?v=1.9.8" />
+<link rel="stylesheet" href="style.css?v=1.9.9" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -139,6 +139,7 @@
         <button type="button" class="nav-btn nav-head" data-page="pengaturan" id="navPengaturan" aria-expanded="false">⚙️ <span>Pengaturan</span><i class="nav-chev">▸</i></button>
         <div class="nav-sub">
           <button type="button" class="nav-sub-btn" data-page="pengaturan" data-show="setAkun">👤 Akun Saya</button>
+          <button type="button" class="nav-sub-btn hidden" id="navHakAkses" data-page="pengaturan" data-show="setHakAkses">🔐 Hak Akses</button>
           <button type="button" class="nav-sub-btn" data-page="pengaturan" data-show="setKonter">🏪 Profil Konter</button>
           <button type="button" class="nav-sub-btn" data-page="pengaturan" data-show="setTeknisi">👨‍🔧 Teknisi &amp; Merek</button>
           <button type="button" class="nav-sub-btn" data-page="pengaturan" data-show="setPrinter">🖨️ Printer Bluetooth</button>
@@ -831,6 +832,11 @@
           <hr class="sep"/>
           <div id="slideList" class="pill-list"></div>
         </div>
+        <div class="card akses-card hidden" id="setHakAkses">
+          <h3>🔐 Hak Akses</h3>
+          <p class="muted">Atur fitur yang boleh dipakai tiap role. Super Admin selalu punya akses penuh. Perubahan langsung berlaku di semua perangkat yang tersambung ke server ini.</p>
+          <div id="aksesList"></div>
+        </div>
         <div class="card" id="setPrinter">
           <h3>🖨️ Printer Bluetooth Thermal</h3>
           <p class="muted">Cetak struk 58mm langsung ke printer (XPrinter / RPP02 / sejenis) via <b>APK Android</b>. Pairing dulu di <b>Settings HP → Bluetooth</b>, lalu Scan di sini.</p>
@@ -1052,7 +1058,7 @@
 
 <script src="config.js?v=1.2.0"></script>
 <script src="api.js?v=1.3.3"></script>
-<script src="script.js?v=2.1.10"></script>
+<script src="script.js?v=2.1.11"></script>
 <script>
 // Daftarkan Service Worker supaya aplikasi bisa dipasang (PWA) & cache shell.
 if('serviceWorker' in navigator && location.protocol !== 'file:'){

@@ -49,8 +49,9 @@ async function pullSettings(){
   if(!useBackend()) return false;
   try{
     const s = await window.API.getSettings();
-    SET = { nama:s.nama, alamat:s.alamat, telp:s.telp, nota:s.nota, teknisi:s.teknisi||[], merk:s.merk||[] };
+    SET = { nama:s.nama, alamat:s.alamat, telp:s.telp, nota:s.nota, teknisi:s.teknisi||[], merk:s.merk||[], akses:normAkses(s.akses!==undefined?s.akses:(SET&&SET.akses)) };
     try{ localStorage.setItem(LS_SET, JSON.stringify(SET)); }catch{}
+    try{ renderAkses(); applyAksesUI(); }catch(e){}
     return true;
   }catch(e){ console.warn('pullSettings gagal:', e.message); return false; }
 }
@@ -137,6 +138,7 @@ function applyRoleUI(){
   if(gu) gu.style.display = isSuperAdmin() ? '' : 'none';
   const lock=$('penggunaLock'), wrap=$('penggunaWrap');
   if(lock&&wrap){ lock.classList.toggle('hidden', isSuperAdmin()); wrap.classList.toggle('hidden', !isSuperAdmin()); }
+  try{ applyAksesUI(); }catch(e){}
 }
 function showApp(user){
   ME_CACHE = user;
@@ -192,7 +194,62 @@ let DB = loadData();
     if(changed) saveData();
   }catch{}
 })();
+// ===== HAK AKSES =====
+// Nilai default TRUE supaya perilaku aplikasi lama tidak berubah sampai
+// Super Admin mematikan izin tertentu di Pengaturan > Hak Akses.
+const AKSES_DEF = {
+  admin_ubah_produk: true,
+  admin_hapus_penjualan: true,
+  admin_hapus_pembelian: true,
+  kasir_ganti_harga: true,
+  kasir_lihat_laba: true,
+  kasir_diskon: true,
+  kasir_biaya_pendapatan: true,
+  kasir_pelanggan_baru: true,
+  kasir_penjualan_tempo: true,
+  kasir_saldo_kipa: true,
+  kasir_detail_produk: true,
+  kasir_laporan_penjualan_detail: true,
+  kasir_laporan_per_produk: true,
+};
+const AKSES_GRUP = [
+  { judul: 'ADMIN', items: [
+    ['admin_ubah_produk', 'Izinkan mengubah produk'],
+    ['admin_hapus_penjualan', 'Izinkan menghapus penjualan'],
+    ['admin_hapus_pembelian', 'Izinkan menghapus pembelian'],
+  ]},
+  { judul: '2. KASIR', items: [
+    ['kasir_ganti_harga', 'Izinkan mengganti harga produk di penjualan?'],
+    ['kasir_lihat_laba', 'Izinkan melihat Laba Rugi?'],
+    ['kasir_diskon', 'Izinkan menambahkan diskon penjualan?'],
+    ['kasir_biaya_pendapatan', 'Izinkan mengakses menu Biaya dan Pendapatan?'],
+    ['kasir_pelanggan_baru', 'Izinkan menambahkan pelanggan baru?'],
+    ['kasir_penjualan_tempo', 'Izinkan menambahkan penjualan tempo?'],
+    ['kasir_saldo_kipa', 'Izinkan melihat riwayat penggunaan Saldo Kipa?'],
+    ['kasir_detail_produk', 'Izinkan melihat detail produk?'],
+    ['kasir_laporan_penjualan_detail', 'Izinkan melihat laporan penjualan detail'],
+    ['kasir_laporan_per_produk', 'Izinkan melihat laporan penjualan per produk'],
+  ]},
+];
+function normAkses(a){
+  const out = Object.assign({}, AKSES_DEF);
+  if(a && typeof a === 'object'){
+    Object.keys(out).forEach(k=>{ if(a[k] !== undefined) out[k] = !!a[k]; });
+  }
+  return out;
+}
+function aksesOn(key){ return !!(SET.akses && SET.akses[key] !== false); }
+// Super Admin selalu penuh. Admin hanya terpengaruh izin "admin_*",
+// sedangkan izin "kasir_*" tidak membatasi Admin/Super Admin.
+function bolehAkses(key){
+  const role = myRole();
+  if(role === 'superadmin') return true;
+  if(String(key).startsWith('admin_')) return role === 'admin' && aksesOn(key);
+  if(String(key).startsWith('kasir_')) return role !== 'kasir' || aksesOn(key);
+  return true;
+}
 let SET = loadSetting();
+SET.akses = normAkses(SET.akses);
 const LS_SLIDES = 'servishp_slides_v1';
 let SLIDES = loadSlidesLocal();
 let headIdx = 0;
@@ -719,6 +776,7 @@ document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',(
 function goto(page, filter){
   if(page==='pengaturan' && myRole()==='kasir'){ toast('⛔ Pengaturan khusus Admin / Super Admin'); return; }
   if(page==='pengguna' && !isSuperAdmin()){ toast('⛔ Kelola Pengguna khusus Super Admin'); return; }
+  if(page==='pengeluaran' && !bolehAkses('kasir_biaya_pendapatan')){ toast('⛔ Hak akses: menu Biaya & Pendapatan dimatikan'); return; }
   try{ clearFocus(); }catch{}
   try{ clearFokusLaporan(); }catch{}
   try{ clearFokusProduk(); }catch{}
@@ -1510,6 +1568,60 @@ function renderSettingUI(){
   $('listMerk').innerHTML=(SET.merk||[]).map(m=>`<option value="${esc(m)}">`).join('');
   $('teknisiList').innerHTML=(SET.teknisi||[]).map((t,i)=>`<span class="pill">${esc(t)}<button onclick="delTeknisi(${i})">✕</button></span>`).join('');
   $('merkList').innerHTML=(SET.merk||[]).map((m,i)=>`<span class="pill">${esc(m)}<button onclick="delMerk(${i})">✕</button></span>`).join('');
+  renderAkses();
+}
+// ===== HAK AKSES: render + simpan + terapkan =====
+function renderAkses(){
+  const box=$('aksesList'); if(!box) return;
+  const a=normAkses(SET.akses);
+  box.innerHTML=AKSES_GRUP.map(g=>
+    `<div class="akses-group">${esc(g.judul)}</div>`+
+    g.items.map(([k,label])=>`<label class="akses-row"><span>${esc(label)}</span>
+      <span class="switch"><input type="checkbox" data-akses="${k}" ${a[k]?'checked':''}><span class="slider"></span></span>
+    </label>`).join('')
+  ).join('');
+}
+window.setAkses=async function(key,val){
+  if(!isSuperAdmin()){ toast('⛔ Hak akses hanya bisa diubah Super Admin'); renderAkses(); return; }
+  SET.akses=normAkses(SET.akses);
+  SET.akses[key]=!!val;
+  saveSetting(); renderAkses();
+  try{ applyAksesUI(); }catch(e){}
+  if(useBackend()){
+    try{ await window.API.updateSettings({akses:SET.akses}); toast('Hak akses disimpan ✅'); }
+    catch(err){
+      toast('Gagal simpan hak akses: '+err.message+' ❌');
+      try{ await pullSettings(); renderAkses(); applyAksesUI(); }catch(e){}
+    }
+  } else toast('Hak akses disimpan ✅');
+};
+if($('aksesList')) $('aksesList').addEventListener('change',e=>{
+  const el=e.target && e.target.closest ? e.target.closest('input[data-akses]') : null;
+  if(el) window.setAkses(el.dataset.akses, el.checked);
+});
+function applyAksesUI(){
+  const superAdmin=isSuperAdmin(), isKasir=myRole()==='kasir';
+  const navA=$('navHakAkses'); if(navA) navA.classList.toggle('hidden', !superAdmin);
+  const cardA=$('setHakAkses'); if(cardA) cardA.classList.toggle('hidden', !superAdmin);
+  const bolehBiaya=!isKasir || aksesOn('kasir_biaya_pendapatan');
+  const bolehLaba=!isKasir || aksesOn('kasir_lihat_laba');
+  const bolehJual=!isKasir || aksesOn('kasir_laporan_penjualan_detail');
+  document.querySelectorAll('.nav-sub-btn[data-page="pengeluaran"]').forEach(b=>b.classList.toggle('hidden', !bolehBiaya));
+  document.querySelectorAll('[data-ltab="laba"]').forEach(b=>b.classList.toggle('hidden', !bolehLaba));
+  document.querySelectorAll('[data-ltab="jual"]').forEach(b=>b.classList.toggle('hidden', !bolehJual));
+  const pLaba=$('ltab-laba'); if(pLaba) pLaba.classList.toggle('hidden', !bolehLaba);
+  const pJual=$('ltab-jual'); if(pJual) pJual.classList.toggle('hidden', !bolehJual);
+  const sel=$('j_metode');
+  if(sel){
+    const bolehTempo=!isKasir || aksesOn('kasir_penjualan_tempo');
+    Array.prototype.forEach.call(sel.options,o=>{ if(o.value==='Tempo'){ o.hidden=!bolehTempo; o.disabled=!bolehTempo; } });
+    if(!bolehTempo && sel.value==='Tempo') sel.value='Tunai';
+  }
+  if(!bolehBiaya && $('page-pengeluaran') && $('page-pengeluaran').classList.contains('active')){ try{ goto('dashboard'); }catch(e){} }
+  if(isKasir){
+    if(!bolehLaba && typeof curLtab!=='undefined' && curLtab==='laba'){ try{ gotoLtab('service'); }catch(e){} }
+    if(!bolehJual && typeof curLtab!=='undefined' && curLtab==='jual'){ try{ gotoLtab('service'); }catch(e){} }
+  }
 }
 // Tandai form pengaturan "berubah" saat user mengetik, supaya render tidak menimpa.
 ['s_nama','s_alamat','s_telp','s_nota'].forEach(function(id){
@@ -2046,13 +2158,13 @@ function renderSpareparts(){
   if($('spJenisLabel')) $('spJenisLabel').textContent=labelJ;
   if($('emptySpare')){
     $('emptySpare').innerHTML=`Belum ada produk <b>${esc(jenis)}</b> di kategori ini.`
-      + (isAdminUp()?` <button class="btn small primary" onclick="openSpareModal()">+ Input ${esc(jenis)}</button>`:'');
+      + (bolehAkses('admin_ubah_produk')?` <button class="btn small primary" onclick="openSpareModal()">+ Input ${esc(jenis)}</button>`:'');
     $('emptySpare').classList.toggle('hidden', r.length>0);
   }
   // Kasir boleh lihat + ubah stok, tapi TIDAK boleh tambah/edit/hapus sparepart
-  const admin=isAdminUp();
+  const admin=isAdminUp(), canChange=bolehAkses('admin_ubah_produk');
   const bAdd=$('btnAddSpare');
-  if(bAdd) bAdd.style.display=admin?'':'none';
+  if(bAdd) bAdd.style.display=canChange?'':'none';
   if(!r.length){ $('spTable').innerHTML=''; return; }
   $('spTable').innerHTML=r.map(x=>{
     const isLow=Number(x.stok||0)<=Number(x.stok_min||0);
@@ -2068,7 +2180,7 @@ function renderSpareparts(){
       <td><div class="act-btns">
         <button class="icon-btn" onclick="spStock('${jsStr(sid)}',-1)" title="Kurangi 1">−</button>
         <button class="icon-btn" onclick="spStock('${jsStr(sid)}',1)" title="Tambah 1">+</button>
-        ${admin?`<button class="icon-btn" onclick="spEdit('${jsStr(sid)}')" title="Edit">✏️</button>
+        ${canChange?`<button class="icon-btn" onclick="spEdit('${jsStr(sid)}')" title="Edit">✏️</button>
         <button class="icon-btn" onclick="spHapus('${jsStr(sid)}')" title="Hapus">🗑</button>`:''}
       </div></td></tr>`;
   }).join('');
@@ -2140,6 +2252,7 @@ try{
 }catch{}
 function openSpareModal(){
   if(!needAdmin()) return;
+  if(!bolehAkses('admin_ubah_produk')){ toast('⛔ Hak akses: mengubah produk dimatikan'); return; }
   spEditId=null;
   $('spareTitle').textContent='Tambah Produk';
   $('sp_nama').value=''; $('sp_sku').value='';
@@ -2159,6 +2272,7 @@ if($('sp_hpp')) $('sp_hpp').addEventListener('input',updSpMargin);
 if($('sp_jual')) $('sp_jual').addEventListener('input',updSpMargin);
 window.spEdit=function(id){
   if(!needAdmin()) return;
+  if(!bolehAkses('admin_ubah_produk')){ toast('⛔ Hak akses: mengubah produk dimatikan'); return; }
   const x=findSpare(id); if(!x){ toast('Data tidak ditemukan'); return; } spEditId=x.id;
   $('spareTitle').textContent='Edit Produk';
   $('sp_nama').value=x.nama; $('sp_sku').value=x.sku;
@@ -2170,6 +2284,7 @@ window.spEdit=function(id){
 };
 if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
   if(!needAdmin()) return;
+  if(!bolehAkses('admin_ubah_produk')){ toast('⛔ Hak akses: mengubah produk dimatikan'); return; }
   const nama=$('sp_nama').value.trim(), sku=$('sp_sku').value.trim();
   let merk=(($('sp_merk')||{}).value||'').trim(); if(merk==='__baru') merk='';
   const kategori=(($('sp_kategori')||{}).value||'').trim();
@@ -2210,6 +2325,7 @@ if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
 };
 window.spHapus=async function(id){
   if(!needAdmin()) return;
+  if(!bolehAkses('admin_ubah_produk')){ toast('⛔ Hak akses: mengubah produk dimatikan'); return; }
   const x=findSpare(id); if(!x){ toast('Data tidak ditemukan'); return; }
   if(!confirm('Hapus '+x.nama+' ('+x.sku+')?')) return;
   if(useBackend()){
@@ -2391,7 +2507,7 @@ function renderSales(){
     <td><b>${esc(x.no_nota)}</b><br><small class="muted">${fmtTgl(x.tanggal)} • ${esc(x.metode||'Tunai')}</small></td>
     <td>${esc(x.pelanggan||'Umum')}<br><small class="muted">${esc((x.items||[]).map(i=>i.nama+' ×'+i.qty).join(', ').slice(0,60))}</small></td>
     <td><b>${fmtRp(x.total)}</b><br><small class="muted">laba ${fmtRp(x.laba)}</small></td>
-    <td><div class="act-btns"><button class="icon-btn" onclick="cetakJual(${jsStr(x.id)})" title="Nota">🖨</button><button class="icon-btn" onclick="detailJual(${jsStr(x.id)})" title="Detail">👁</button>${isAdminUp()?`<button class="icon-btn" onclick="hapusJual(${jsStr(x.id)})" title="Hapus">🗑</button>`:''}</div></td></tr>`).join('');
+    <td><div class="act-btns"><button class="icon-btn" onclick="cetakJual(${jsStr(x.id)})" title="Nota">🖨</button><button class="icon-btn" onclick="detailJual(${jsStr(x.id)})" title="Detail">👁</button>${bolehAkses('admin_hapus_penjualan')?`<button class="icon-btn" onclick="hapusJual(${jsStr(x.id)})" title="Hapus">🗑</button>`:''}</div></td></tr>`).join('');
 }
 window.cartQty=function(i,d){
   const c=CART[i]; if(!c) return;
@@ -2439,11 +2555,13 @@ function bindPenjualan(){
 async function simpanJual(){
   if(!CART.length){ toast('Keranjang masih kosong'); return; }
   if(!requireSesi()) return;
+  const metode=val('j_metode','Tunai');
+  if(metode==='Tempo' && !bolehAkses('kasir_penjualan_tempo')){ toast('⛔ Hak akses: penjualan tempo dimatikan'); return; }
   const payload={
     tanggal: val('j_tanggal') || new Date().toISOString().slice(0,10),
     pelanggan: val('j_nama').trim() || 'Umum',
     telp: val('j_telp').trim(),
-    metode: val('j_metode','Tunai'),
+    metode,
     catatan: val('j_catatan').trim(),
     items: CART.map(c=>({sparepart_id:Number(c.id), sku:c.sku, qty:Number(c.qty)})),
   };
@@ -2517,12 +2635,13 @@ window.detailJual=function(id){
     <div class="kv"><b>Item</b><span>${(x.items||[]).map(i=>esc(i.nama)+' ×'+esc(i.qty)+' = '+fmtRp(i.subtotal)).join('<br>')||'-'}</span></div>
     <div class="kv"><b>Total</b><span><b>${fmtRp(x.total)}</b> (laba ${fmtRp(x.laba)})</span></div>
     <div class="kv"><b>Catatan</b><span>${esc(x.catatan||'-')}</span></div>`;
-  $('detailFoot').innerHTML=`<button class="btn ghost" onclick="cetakJual(${jsStr(x.id)})">🖨 Cetak Nota</button>${isAdminUp()?`<button class="btn ghost" onclick="hapusJual(${jsStr(x.id)})">🗑 Hapus</button>`:''}<button class="btn primary" data-close>Tutup</button>`;
+  $('detailFoot').innerHTML=`<button class="btn ghost" onclick="cetakJual(${jsStr(x.id)})">🖨 Cetak Nota</button>${bolehAkses('admin_hapus_penjualan')?`<button class="btn ghost" onclick="hapusJual(${jsStr(x.id)})">🗑 Hapus</button>`:''}<button class="btn primary" data-close>Tutup</button>`;
   $('modalDetail').classList.remove('hidden');
 };
 window.hapusJual=async function(id){
   const x=SALES.find(d=>d.id===id); if(!x) return;
   if(!needAdmin()) return;
+  if(!bolehAkses('admin_hapus_penjualan')){ toast('⛔ Hak akses: menghapus penjualan dimatikan'); return; }
   if(!confirm('Hapus nota '+x.no_nota+'? Stok akan dikembalikan.')) return;
   if(useBackend()){
     try{ await window.API.deleteSale(id); await pullSales(); await pullSpareparts(); renderAll(); $('modalDetail').classList.add('hidden'); toast('Nota dihapus, stok dikembalikan'); return; }
@@ -2600,6 +2719,7 @@ function renderExpenses(){
 }
 async function simpanExLike(jenis){
   if(!requireSesi()) return;
+  if(!bolehAkses('kasir_biaya_pendapatan')){ toast('⛔ Hak akses: menu Biaya & Pendapatan dimatikan'); return; }
   const isInc=jenis==='pendapatan';
   const p=isInc?'in_':'ex_';
   const tanggal=(val(p+'tanggal')||new Date().toISOString().slice(0,10)).slice(0,10);
@@ -3030,6 +3150,8 @@ function syncLpFilterRows(name){
   if($('lp_jenisRow')) $('lp_jenisRow').classList.toggle('hidden', !isStok);
 }
 window.gotoLtab=function(name){
+  if(name==='laba' && !bolehAkses('kasir_lihat_laba')){ toast('⛔ Hak akses: Laba Rugi dimatikan'); return; }
+  if(name==='jual' && !bolehAkses('kasir_laporan_penjualan_detail')){ toast('⛔ Hak akses: laporan penjualan dimatikan'); return; }
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.ltab===name));
   document.querySelectorAll('.ltab-pane').forEach(p=>p.classList.toggle('active', p.id==='ltab-'+name));
   curLtab=name;

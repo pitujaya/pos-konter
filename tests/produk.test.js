@@ -83,7 +83,7 @@ const JENIS_PRODUK = ['Sparepart', 'Accessories', 'Handphone'];
 const PR_TABS = { sparepart: 'Sparepart', accessories: 'Accessories', handphone: 'Handphone' };
 
 const sandbox = new Function(
-  'SPARE', 'JENIS_PRODUK', 'PR_TABS', '$', 'esc', 'fmtRp', 'isAdminUp', 'spMargin',
+  'SPARE', 'JENIS_PRODUK', 'PR_TABS', '$', 'esc', 'fmtRp', 'isAdminUp', 'spMargin', 'bolehAkses',
   extract('spKat') + '\n' + extract('spJenis') + '\n' + extract('spJenisAktif') + '\n' +
   extract('spKategoriList') + '\n' + extract('refreshSpKategoriUI') + '\n' +
   extract('renderSpareparts') + '\n' +
@@ -91,7 +91,7 @@ const sandbox = new Function(
 );
 const api = sandbox(SPARE, JENIS_PRODUK, PR_TABS, (id) => els[id] || null,
   (s) => String(s ?? ''), (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID'),
-  () => true, (x) => '+10%');
+  () => true, (x) => '+10%', () => true);
 
 // helper: set tab aktif lalu render
 function renderWithTab(tab) {
@@ -119,10 +119,10 @@ function renderFor(tab) {
     ${extract('renderSpareparts')}
     renderSpareparts();
   `;
-  const run = new Function('SPARE', '$', 'esc', 'fmtRp', 'isAdminUp', 'spMargin', 'jsStr', code);
+  const run = new Function('SPARE', '$', 'esc', 'fmtRp', 'isAdminUp', 'spMargin', 'jsStr', 'bolehAkses', code);
   run(SPARE, (id) => els[id] || null, (s) => String(s ?? ''),
     (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID'), () => true, (x) => '+10%',
-    (v) => String(v));
+    (v) => String(v), () => true);
   return els.spTable.innerHTML;
 }
 

@@ -175,6 +175,7 @@ class SettingOut(BaseModel):
     nota: str
     teknisi: list[str] = []
     merk: list[str] = []
+    akses: dict[str, bool] = {}
 
 
 class SettingUpdateIn(BaseModel):
@@ -182,6 +183,7 @@ class SettingUpdateIn(BaseModel):
     alamat: str | None = None
     telp: str | None = None
     nota: str | None = None
+    akses: dict[str, bool] | None = None
 
 
 class NameIn(BaseModel):

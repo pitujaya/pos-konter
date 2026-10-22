@@ -32,15 +32,19 @@ def get_or_create(db: Session) -> models.Setting:
     return s
 
 
+def _out(s: models.Setting) -> dict:
+    return {"nama": s.nama, "alamat": s.alamat, "telp": s.telp, "nota": s.nota,
+            "teknisi": s.teknisi or [], "merk": s.merk or [], "akses": s.akses or {}}
+
+
 @router.get("", response_model=schemas.SettingOut)
 def get_settings(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
-    s = get_or_create(db)
-    return {"nama": s.nama, "alamat": s.alamat, "telp": s.telp, "nota": s.nota,
-            "teknisi": s.teknisi or [], "merk": s.merk or []}
+    return _out(get_or_create(db))
 
 
 @router.put("", response_model=schemas.SettingOut)
-def update_settings(body: schemas.SettingUpdateIn, db: Session = Depends(get_db), __: models.User = Depends(require_admin)):
+def update_settings(body: schemas.SettingUpdateIn, db: Session = Depends(get_db),
+                    user: models.User = Depends(require_admin)):
     s = get_or_create(db)
     if body.nama is not None:
         s.nama = body.nama
@@ -50,10 +54,14 @@ def update_settings(body: schemas.SettingUpdateIn, db: Session = Depends(get_db)
         s.telp = body.telp
     if body.nota is not None:
         s.nota = body.nota
+    if body.akses is not None:
+        # Hanya Super Admin yang boleh mengubah hak akses.
+        if user.role != "superadmin":
+            raise HTTPException(403, "Hak akses hanya bisa diubah Super Admin")
+        s.akses = {str(k): bool(v) for k, v in body.akses.items()}
     db.commit()
     db.refresh(s)
-    return {"nama": s.nama, "alamat": s.alamat, "telp": s.telp, "nota": s.nota,
-            "teknisi": s.teknisi or [], "merk": s.merk or []}
+    return _out(s)
 
 
 @router.post("/teknisi", response_model=schemas.SettingOut)
@@ -65,7 +73,7 @@ def add_teknisi(body: schemas.NameIn, db: Session = Depends(get_db), __: models.
     s.teknisi = lst
     db.commit()
     db.refresh(s)
-    return {"nama": s.nama, "alamat": s.alamat, "telp": s.telp, "nota": s.nota, "teknisi": s.teknisi, "merk": s.merk}
+    return _out(s)
 
 
 @router.delete("/teknisi/{index}", response_model=schemas.SettingOut)
@@ -79,7 +87,7 @@ def del_teknisi(index: int, db: Session = Depends(get_db), __: models.User = Dep
         db.refresh(s)
     else:
         raise HTTPException(404, "Index tidak ada")
-    return {"nama": s.nama, "alamat": s.alamat, "telp": s.telp, "nota": s.nota, "teknisi": s.teknisi, "merk": s.merk}
+    return _out(s)
 
 
 @router.post("/merk", response_model=schemas.SettingOut)
@@ -91,7 +99,7 @@ def add_merk(body: schemas.NameIn, db: Session = Depends(get_db), __: models.Use
     s.merk = lst
     db.commit()
     db.refresh(s)
-    return {"nama": s.nama, "alamat": s.alamat, "telp": s.telp, "nota": s.nota, "teknisi": s.teknisi, "merk": s.merk}
+    return _out(s)
 
 
 @router.delete("/merk/{index}", response_model=schemas.SettingOut)
@@ -105,4 +113,4 @@ def del_merk(index: int, db: Session = Depends(get_db), __: models.User = Depend
         db.refresh(s)
     else:
         raise HTTPException(404, "Index tidak ada")
-    return {"nama": s.nama, "alamat": s.alamat, "telp": s.telp, "nota": s.nota, "teknisi": s.teknisi, "merk": s.merk}
+    return _out(s)

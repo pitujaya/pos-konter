@@ -170,6 +170,31 @@ const hKosong = computeHarianLocal('2020-01-01', '2020-01-02', '');
 ok('periode tanpa data -> rows kosong', hKosong.rows.length === 0);
 ok('periode kosong -> ringkasan nol', hKosong.ringkasan.total_laba === 0);
 
+console.log('\n=== hak akses (normAkses & bolehAkses) ===');
+const aksesStart = js.indexOf('const AKSES_DEF');
+const aksesEnd = js.indexOf('let SET = loadSetting();');
+const aksesCode = js.slice(aksesStart, aksesEnd);
+function makeAkses(role, akses) {
+  const fn = new Function('myRole', 'SET',
+    aksesCode + '\nreturn {AKSES_DEF, normAkses, aksesOn, bolehAkses};');
+  const set = { akses: null };
+  const api = fn(() => role, set);
+  set.akses = api.normAkses(akses || {});
+  return api;
+}
+const sa = makeAkses('superadmin', { kasir_lihat_laba: false, admin_ubah_produk: false });
+ok('13 izin didefinisikan', Object.keys(sa.AKSES_DEF).length === 13);
+ok('default semua izin aktif', Object.values(sa.normAkses({})).every(v => v === true));
+ok('override false dihormati', sa.normAkses({ kasir_lihat_laba: false }).kasir_lihat_laba === false);
+ok('key tak dikenal diabaikan', !('xyz' in sa.normAkses({ xyz: false })));
+ok('superadmin selalu boleh', sa.bolehAkses('kasir_lihat_laba') && sa.bolehAkses('admin_ubah_produk'));
+const ad = makeAkses('admin', { admin_ubah_produk: false, kasir_lihat_laba: false });
+ok('admin terkena izin admin_*', ad.bolehAkses('admin_ubah_produk') === false);
+ok('admin tidak terkena izin kasir_*', ad.bolehAkses('kasir_lihat_laba') === true);
+const ks = makeAkses('kasir', { kasir_penjualan_tempo: false, admin_hapus_penjualan: false });
+ok('kasir terkena izin kasir_*', ks.bolehAkses('kasir_penjualan_tempo') === false);
+ok('kasir tetap tidak punya izin admin_*', ks.bolehAkses('admin_hapus_penjualan') === false);
+
 console.log('\n=== RINGKASAN ===');
 console.log(`  ${pass} lulus, ${fail} gagal`);
 process.exit(fail ? 1 : 0);

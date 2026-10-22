@@ -81,6 +81,9 @@ class Setting(Base):
     merk: Mapped[list] = mapped_column(
         JSON, default=lambda: ["Samsung", "iPhone", "Xiaomi", "Oppo", "Vivo", "Realme", "Infinix"]
     )
+    # Hak akses per role yang diatur Super Admin. Disimpan sebagai override:
+    # key yang tidak ada berarti izinkan (default lama tetap sama).
+    akses: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class Slide(Base):
