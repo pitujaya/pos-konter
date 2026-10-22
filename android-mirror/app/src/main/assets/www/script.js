@@ -680,6 +680,17 @@ function fokusLaporanTab(ltab){
   const b=$('btnLaporanAll'); if(b) b.classList.remove('hidden');
 }
 window.laporanSemua=function(){ clearFokusLaporan(); };
+// ===== FOKUS PRODUK: submenu sidebar -> hanya stok jenis itu yang tampil =====
+function clearFokusProduk(){
+  const tabs=$('prTabs'); if(tabs) tabs.classList.remove('hidden');
+  const b=$('btnProdukAll'); if(b) b.classList.add('hidden');
+}
+function fokusProdukTab(ltab){
+  clearFokusProduk();
+  const tabs=$('prTabs'); if(tabs) tabs.classList.add('hidden');
+  const b=$('btnProdukAll'); if(b) b.classList.remove('hidden');
+}
+window.produkSemua=function(){ clearFokusProduk(); };
 // Klik sub-menu -> baru pindah halaman / tab
 document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',(e)=>{
   e.preventDefault();
@@ -693,7 +704,8 @@ document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',
     try{ gotoLtab(ltab); }catch{}
   }
   goto(page);
-  if(ltab && gkey!=='produk'){ try{ fokusLaporanTab(ltab); }catch{} }
+  if(gkey==='produk'){ if(ltab){ try{ fokusProdukTab(ltab); }catch{} } }
+  else if(ltab){ try{ fokusLaporanTab(ltab); }catch{} }
   if(b.dataset.show){ try{ focusSection('page-'+page, b.dataset.show); }catch{} }
   else if(b.dataset.anchor){
     const el=$(b.dataset.anchor);
@@ -707,6 +719,7 @@ function goto(page, filter){
   if(page==='pengguna' && !isSuperAdmin()){ toast('⛔ Kelola Pengguna khusus Super Admin'); return; }
   try{ clearFocus(); }catch{}
   try{ clearFokusLaporan(); }catch{}
+  try{ clearFokusProduk(); }catch{}
   navSyncActive(page);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');
@@ -1143,6 +1156,7 @@ window.gGoSpare=function(id){
     try{ gotoProdukTab(tab); navSyncActive('produk', tab, 'produk'); }catch{}
   }
   goto('produk');
+  try{ fokusProdukTab(Object.keys(PR_TABS).find(k=>PR_TABS[k]===spJenis(x)) || 'sparepart'); }catch{}
   if($('spSearch')) $('spSearch').value=x?String(x.sku||''):'';
   try{ renderSpareparts(); }catch{}
 };
