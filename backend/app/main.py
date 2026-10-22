@@ -11,6 +11,11 @@ from sqlalchemy import text
 APP_VERSION = os.getenv("APP_VERSION", "1.1.0-ubuntu")
 STARTED_AT = time.time()
 
+# Dokumentasi API (Swagger/Redoc/OpenAPI) TIDAK boleh publik di production:
+# skema API menjelaskan seluruh endpoint & parameter, memudahkan penyerang.
+# Di development bisa dihidupkan lewat ENABLE_API_DOCS=1.
+ENABLE_API_DOCS = os.getenv("ENABLE_API_DOCS", "").strip().lower() in ("1", "true", "yes", "on")
+
 # Muat .env sederhana tanpa dependensi tambahan (aman bila python-dotenv tidak ada)
 def _load_dotenv():
     try:
@@ -51,7 +56,14 @@ from .routers import kas_sessions as kas_router
 from .routers import ai_monitor as ai_monitor_router
 from .seed import seed
 
-app = FastAPI(title="ServisHP Pro API", version=APP_VERSION)
+app = FastAPI(
+    title="ServisHP Pro API",
+    version=APP_VERSION,
+    # Hanya hidup kalau ENABLE_API_DOCS=1 (development).
+    docs_url="/docs" if ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if ENABLE_API_DOCS else None,
+    openapi_url="/openapi.json" if ENABLE_API_DOCS else None,
+)
 
 # CORS: bisa dikunci via env CORS_ORIGINS (koma-separated) untuk production.
 # Default "*" agar tetap jalan di LAN / file:// / Live Server saat development.
