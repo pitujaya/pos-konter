@@ -1565,7 +1565,7 @@ function renderHeadbar(){
     const img=safeUrl(fullImageUrl(s.image_url), true);
     // URL gambar masuk ke context CSS -> escape dulu supaya tidak bisa
     // keluar dari url("...") dan menyuntik properti CSS lain.
-    const bg=img?`background-image:url("${cssUrl(img)}")`:'background:linear-gradient(135deg,#2563eb,#7c3aed)';
+    const bg=img?`background-image:url('${cssUrl(img)}')`:'background:linear-gradient(135deg,#2563eb,#7c3aed)';
     const inner=`<div class="shade"></div><div class="cap"><h2>${esc(s.judul||'Promo')}</h2><p>${esc(s.subjudul||'')}</p></div>`;
     const href=safeUrl(s.link);
     return href
@@ -1655,7 +1655,16 @@ if($('sl_file')) $('sl_file').addEventListener('change', async (e)=>{
       toast('Mengupload...');
       const r=await window.API.uploadSlide(f);
       $('sl_url').value=r.url;
-      toast('Upload OK ✅');
+      // Langsung jadikan slide supaya banner muncul tanpa klik "+ Tambah Slide".
+      const all=await window.API.listAllSlides().catch(()=>SLIDES);
+      await window.API.createSlide({
+        judul:$('sl_judul').value.trim(), subjudul:$('sl_sub').value.trim(),
+        image_url:r.url, urutan:(all||[]).length, aktif:true,
+      });
+      $('sl_judul').value=''; $('sl_sub').value=''; $('sl_url').value='';
+      const pv=$('slidePreview'); if(pv) pv.classList.add('hidden');
+      await refreshSlideManager();
+      toast('Gambar terupload & banner tampil ✅');
     }catch(err){ toast('Upload gagal: '+err.message); }
   } else {
     // offline: simpan sebagai dataURL (tetap tampil di HP ini)
