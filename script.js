@@ -562,6 +562,10 @@ function navSyncActive(page, ltab){
     const head=grp.querySelector('.nav-head');
     const onPage=kids.some(k=>k.dataset.page===page) || !!(head && head.dataset.page && head.dataset.page===page);
     if(head) head.classList.toggle('active', onPage);
+    if(onPage && kids.length){
+      document.querySelectorAll('.nav-group.open').forEach(g=>{ if(g!==grp) navSetGroup(g,false); });
+      navSetGroup(grp, true);
+    }
     kids.forEach(k=>{
       const samePage=k.dataset.page===page;
       const sameTab=!k.dataset.ltab || k.dataset.ltab===curLtab;
