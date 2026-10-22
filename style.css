@@ -211,12 +211,22 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
 .search-result .pick:hover{border-color:var(--blue);background:#eff6ff}
 .search-result .pick small{color:var(--muted);white-space:nowrap}
 #lpStats{grid-template-columns:repeat(4,1fr)}
-.ltabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.ltab{flex:1;min-width:140px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 12px;font-weight:800;font-size:13.5px;cursor:pointer;font-family:inherit;display:flex;gap:8px;align-items:center;justify-content:center;box-shadow:var(--shadow);color:var(--ink)}
+.ltabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.ltab{flex:1;min-width:140px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 12px;font-weight:800;font-size:13.5px;cursor:pointer;font-family:inherit;display:flex;gap:8px;align-items:center;justify-content:center;box-shadow:var(--shadow);color:var(--ink)}
 .ltab:hover{border-color:var(--blue)}
 .ltab.active{background:#0f172a;color:#fff;border-color:#0f172a}
 .ltab-pane{display:none}
 .ltab-pane.active{display:block;animation:fade .2s}
+/* ===== BAR PRODUK (sticky) =====
+   Tab jenis + tombol "Input Produk Baru" menempel di atas halaman.
+   Jadi kasir tidak perlu scroll ke bawah cuma untuk menambah barang. */
+.produk-bar{position:sticky;top:70px;z-index:6;display:flex;align-items:center;gap:10px;
+  flex-wrap:wrap;background:var(--bg);padding:8px 0;margin-bottom:12px;
+  border-bottom:1px solid var(--line);box-shadow:0 4px 12px rgba(15,23,42,.06)}
+.produk-bar .ltabs{flex:1 1 auto;min-width:0;margin:0;flex-wrap:nowrap;overflow-x:auto;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none}
+.produk-bar .ltabs::-webkit-scrollbar{display:none}
+.produk-bar .ltab{flex:0 0 auto;min-width:0;padding:9px 13px;font-size:13px;white-space:nowrap}
+.produk-bar .btn{flex:0 0 auto;white-space:nowrap}
 .omzet-wrap{overflow-x:hidden;overflow-y:hidden;width:100%;max-width:100%;box-sizing:border-box}
 .omzet-chart{min-width:0;width:100%;max-width:100%;box-sizing:border-box}
 .omzet-chart svg{width:100% !important;max-width:100% !important;height:auto !important;display:block}
@@ -343,6 +353,10 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
   .toolbar{flex-direction:column;align-items:stretch}
   .toolbar-right{display:flex;gap:8px;flex-wrap:wrap}
   .toolbar-right select{flex:1;min-height:40px}
+  /* Bar produk: tombol Input Produk Baru full width di bawah tab (tetapi di ATAS tabel) */
+  .produk-bar{top:58px;flex-direction:column;align-items:stretch;gap:8px;padding:8px 0}
+  .produk-bar .ltabs{width:100%}
+  .produk-bar .btn{width:100%;justify-content:center;min-height:42px}
   .form-banner{flex-direction:column;align-items:stretch;gap:10px}
   .form-actions{flex-direction:column-reverse;align-items:stretch}
   .form-actions .btn{width:100%}

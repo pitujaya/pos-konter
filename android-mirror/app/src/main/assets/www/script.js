@@ -1947,6 +1947,8 @@ function gotoProdukTab(name){
   NAVLTAB.produk = prTab;
   document.querySelectorAll('#prTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.prtab===prTab));
   try{ renderSpareparts(); }catch{}
+  // Ganti jenis -> kembali ke atas supaya tabel langsung terlihat (tidak nyangkut di bawah).
+  try{ window.scrollTo({top:0,behavior:'smooth'}); }catch{}
 }
 function spKategoriList(jenis){
   const j = jenis || spJenisAktif();
@@ -2003,20 +2005,24 @@ function renderSpareparts(){
   else r.sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
   const low=pool.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).length;
   const nilai=pool.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0);
+  // Label jenis aktif -> jelas sedang menampilkan kategori yang dipilih saja.
+  const LABEL_JENIS={Sparepart:'🔧 Stok Sparepart', Accessories:'🎧 Stok Accessories', Handphone:'📱 Stok Handphone'};
+  const labelJ=LABEL_JENIS[jenis]||jenis;
   if($('spTotal')) $('spTotal').textContent=pool.length;
   if($('spNilai')) $('spNilai').textContent=fmtRp(nilai);
   if($('spLow')) $('spLow').textContent=low;
   if($('spCount')) $('spCount').textContent=pool.length+' item';
   if($('spInfo')) $('spInfo').textContent = spLowOnly ? `• menampilkan ${r.length} stok menipis` : (low?`• ${low} stok menipis`:'' );
+  if($('spJenisLabel')) $('spJenisLabel').textContent=labelJ;
   if($('emptySpare')){
-    $('emptySpare').textContent='Belum ada produk '+jenis+'. Klik "+ Tambah Barang" untuk menambah.';
+    $('emptySpare').innerHTML=`Belum ada produk <b>${esc(jenis)}</b> di kategori ini.`
+      + (isAdminUp()?` <button class="btn small primary" onclick="openSpareModal()">+ Input ${esc(jenis)}</button>`:'');
     $('emptySpare').classList.toggle('hidden', r.length>0);
   }
   // Kasir boleh lihat + ubah stok, tapi TIDAK boleh tambah/edit/hapus sparepart
   const admin=isAdminUp();
-  const bAdd=$('btnAddSpare'), bAddBtm=$('btnAddSpareBottom');
+  const bAdd=$('btnAddSpare');
   if(bAdd) bAdd.style.display=admin?'':'none';
-  if(bAddBtm) bAddBtm.style.display=admin?'':'none';
   if(!r.length){ $('spTable').innerHTML=''; return; }
   $('spTable').innerHTML=r.map(x=>{
     const isLow=Number(x.stok||0)<=Number(x.stok_min||0);
@@ -2115,7 +2121,6 @@ function openSpareModal(){
   setTimeout(()=>{ const el=$('sp_nama'); if(el) el.focus(); },50);
 }
 if($('btnAddSpare')) $('btnAddSpare').onclick=openSpareModal;
-if($('btnAddSpareBottom')) $('btnAddSpareBottom').onclick=openSpareModal;
 function updSpMargin(){
   const hpp=Number(($('sp_hpp')||{}).value||0), jual=Number(($('sp_jual')||{}).value||0);
   if($('spMargin')) $('spMargin').textContent = hpp>0 ? `Margin: ${fmtRp(jual-hpp)} (${(jual-hpp>=0?'+':'')+Math.round((jual-hpp)/hpp*100)}%)` : '';

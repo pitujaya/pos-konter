@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="ServisHP Pro" />
 <meta name="mobile-web-app-capable" content="yes" />
 <title>ServisHP Pro - Management Service HP</title>
-<link rel="stylesheet" href="style.css?v=1.9.4" />
+<link rel="stylesheet" href="style.css?v=1.9.5" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -401,11 +401,16 @@
     <!-- PRODUK (SPAREPART / ACCESSORIES / HANDPHONE) -->
     <section class="page" id="page-produk">
       <h1 class="page-title">Produk</h1>
-      <p class="page-sub">Stok barang: sparepart, aksesoris & handphone • <b id="spCount">0 item</b> <span id="spInfo" class="muted"></span></p>
-      <div class="ltabs" id="prTabs">
-        <button class="ltab active" data-prtab="sparepart">🔧 Stok Sparepart</button>
-        <button class="ltab" data-prtab="accessories">🎧 Stok Accessories</button>
-        <button class="ltab" data-prtab="handphone">📱 Stok Handphone</button>
+      <p class="page-sub" id="spSubtitle">Menampilkan <b id="spJenisLabel">🔧 Stok Sparepart</b> • <b id="spCount">0 item</b> <span id="spInfo" class="muted"></span></p>
+      <!-- BAR STICKY: tab jenis + tombol Input Produk Baru (selalu terjangkau,
+           tidak perlu scroll ke bawah) -->
+      <div class="produk-bar" id="prBar">
+        <div class="ltabs" id="prTabs">
+          <button class="ltab active" data-prtab="sparepart">🔧 Stok Sparepart</button>
+          <button class="ltab" data-prtab="accessories">🎧 Stok Accessories</button>
+          <button class="ltab" data-prtab="handphone">📱 Stok Handphone</button>
+        </div>
+        <button class="btn primary" id="btnAddSpare">+ Input Produk Baru</button>
       </div>
       <div class="stats lp-stats lp-stats-3">
         <div class="stat"><div class="stat-icon blue">📦</div><div><small>Total Item</small><h3 id="spTotal">0</h3></div></div>
@@ -427,7 +432,6 @@
             <option value="stok">Stok tersedikit</option>
           </select>
           <button class="btn small ghost" id="spLowBtn" title="Tampilkan yg stok menipis">⚠️ Menipis</button>
-          <button class="btn small primary" id="btnAddSpare">+ Tambah Barang</button>
         </div>
       </div>
       <div class="card table-wrap">
@@ -438,9 +442,6 @@
           <tbody id="spTable"></tbody>
         </table>
         <div id="emptySpare" class="empty hidden">Belum ada produk di kategori ini.</div>
-      </div>
-      <div class="bottom-cta">
-        <button class="btn primary big full" id="btnAddSpareBottom">+ Input Produk Baru</button>
       </div>
     </section>
 
@@ -1003,7 +1004,7 @@
 
 <script src="config.js?v=1.2.0"></script>
 <script src="api.js?v=1.3.3"></script>
-<script src="script.js?v=2.1.0"></script>
+<script src="script.js?v=2.1.1"></script>
 <script>
 // Daftarkan Service Worker supaya aplikasi bisa dipasang (PWA) & cache shell.
 if('serviceWorker' in navigator && location.protocol !== 'file:'){
