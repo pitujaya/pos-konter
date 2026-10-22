@@ -3,7 +3,7 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -38,6 +38,7 @@ def _load_dotenv():
 _load_dotenv()
 
 from .database import Base, engine, SessionLocal
+from .paths import UPLOAD_DIR as _SHARED_UPLOAD_DIR
 from .routers import auth as auth_router
 from .routers import users as users_router
 from .routers import services as services_router
@@ -84,39 +85,58 @@ async def _security_headers(request, call_next):
     return resp
 
 
+def _ensure_columns(table: str, cols: dict[str, str]) -> None:
+    """Tambah kolom yang belum ada. Bekerja di SQLite maupun Postgres.
+
+    Sebelumnya migrasi memakai PRAGMA table_info -> hanya jalan di SQLite.
+    Di Postgres PRAGMA gagal, error-nya ditelan diam-diam, kolom pun tidak
+    pernah dibuat -> seluruh query yang memakai kolom itu jadi 500.
+    Sekarang pakai SQLAlchemy Inspector (portabel) + ALTER TABLE standar.
+    """
+    from sqlalchemy import inspect
+
+    try:
+        insp = inspect(engine)
+        if not insp.has_table(table):
+            return
+        existing = {c["name"] for c in insp.get_columns(table)}
+        missing = {k: v for k, v in cols.items() if k not in existing}
+        if not missing:
+            return
+        with engine.begin() as conn:
+            for name, ddl in missing.items():
+                try:
+                    conn.exec_driver_sql(f'ALTER TABLE {table} ADD COLUMN "{name}" {ddl}')
+                    print(f"[MIGRASI] kolom {table}.{name} ditambahkan")
+                except Exception as e:
+                    print(f"[WARN] gagal tambah kolom {table}.{name}: {e}")
+    except Exception as e:
+        print(f"[WARN] migrasi tabel {table}: {e}")
+
+
+def _ensure_index(table: str, index: str, column: str) -> None:
+    try:
+        with engine.begin() as conn:
+            conn.exec_driver_sql(f'CREATE INDEX IF NOT EXISTS "{index}" ON "{table}" ("{column}")')
+    except Exception as e:
+        print(f"[WARN] gagal buat index {index}: {e}")
+
+
 try:
     Base.metadata.create_all(bind=engine)
-    # Migrasi ringan SQLite: tambah kolom kategori bila DB lama belum punya.
-    try:
-        with engine.begin() as _conn:
-            _cols = [r[1] for r in _conn.exec_driver_sql("PRAGMA table_info(spareparts)").fetchall()]
-            if "kategori" not in _cols:
-                _conn.exec_driver_sql("ALTER TABLE spareparts ADD COLUMN kategori VARCHAR(80) DEFAULT 'Lainnya'")
-                _conn.exec_driver_sql("UPDATE spareparts SET kategori='Lainnya' WHERE kategori IS NULL OR kategori=''")
-    except Exception as _me:
-        print(f"[WARN] migrasi kategori sparepart: {_me}")
-    # Migrasi ringan SQLite: tambah kolom jenis (Sparepart/Accessories/Handphone).
-    try:
-        with engine.begin() as _conn:
-            _cols = [r[1] for r in _conn.exec_driver_sql("PRAGMA table_info(spareparts)").fetchall()]
-            if _cols and "jenis" not in _cols:
-                _conn.exec_driver_sql("ALTER TABLE spareparts ADD COLUMN jenis VARCHAR(40) DEFAULT 'Sparepart'")
-                _conn.exec_driver_sql("UPDATE spareparts SET jenis='Sparepart' WHERE jenis IS NULL OR jenis=''")
-                _conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_spareparts_jenis ON spareparts (jenis)")
-    except Exception as _me:
-        print(f"[WARN] migrasi jenis sparepart: {_me}")
-    # Migrasi ringan SQLite: tambah kolom kasir pada services (filter laporan per kasir).
-    try:
-        with engine.begin() as _conn:
-            _cols = [r[1] for r in _conn.exec_driver_sql("PRAGMA table_info(services)").fetchall()]
-            if _cols and "kasir" not in _cols:
-                _conn.exec_driver_sql("ALTER TABLE services ADD COLUMN kasir VARCHAR(120) DEFAULT ''")
-                try:
-                    _conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_services_kasir ON services (kasir)")
-                except Exception:
-                    pass
-    except Exception as _me:
-        print(f"[WARN] migrasi kolom kasir service: {_me}")
+    # Migrasi ringan: kolom baru yang belum ada di DB lama.
+    _ensure_columns("spareparts", {
+        "kategori": "VARCHAR(80) DEFAULT 'Lainnya'",
+        "jenis": "VARCHAR(40) DEFAULT 'Sparepart'",
+    })
+    _ensure_index("spareparts", "ix_spareparts_kategori", "kategori")
+    _ensure_index("spareparts", "ix_spareparts_jenis", "jenis")
+    _ensure_columns("services", {
+        "kasir": "VARCHAR(120) DEFAULT ''",
+        "metode_bayar": "VARCHAR(30) DEFAULT 'tunai'",
+    })
+    _ensure_index("services", "ix_services_kasir", "kasir")
+    _ensure_columns("cash_sessions", {"service_tunai": "INTEGER DEFAULT 0"})
     with SessionLocal() as _db:
         seed(_db)
 except Exception as e:  # jangan bikin container crash-loop tanpa pesan
@@ -133,15 +153,16 @@ app.include_router(expenses_router.router, prefix="/api")
 app.include_router(kas_router.router, prefix="/api")
 app.include_router(ai_monitor_router.router, prefix="/api")
 
-# Folder upload gambar headbar -> serve di /static/uploads (hanya folder uploads)
-# Bisa dioverride via UPLOAD_DIR (mis. /data/uploads di docker)
-UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", str(Path(__file__).resolve().parent / "uploads")))
+# Folder upload gambar headbar -> serve di /static/uploads.
+# Path diambil dari app.paths supaya PENTING sama dengan folder yang dipakai
+# router slides saat menulis file. Kalau berbeda, hasil upload selalu 404.
+UPLOAD_DIR = _SHARED_UPLOAD_DIR
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 
 @app.get("/api/health")
-def health():
+def health(response: Response):
     db_ok = True
     db_error = None
     try:
@@ -150,8 +171,13 @@ def health():
     except Exception as e:
         db_ok = False
         db_error = str(e)[:200]
+    if not db_ok:
+        # Healthcheck harus benar-benar gagal kalau DB tidak bisa dipakai.
+        response.status_code = 503
     return {
-        "ok": True,
+        # ok mencerminkan kondisi DB, bukan selalu true. Kalau DB rusak,
+        # healthcheck docker harus gagal supaya container ditandai tidak sehat.
+        "ok": db_ok,
         "app": "ServisHP Pro API",
         "version": APP_VERSION,
         "db_ok": db_ok,

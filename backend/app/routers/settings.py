@@ -16,10 +16,19 @@ def get_or_create(db: Session) -> models.Setting:
         db.add(s)
         db.commit()
         db.refresh(s)
+    # Default lama harus DISIMPAN. Sebelumnya hanya di-set di memori tanpa
+    # commit -> kolom tetap NULL di DB dan default dipasang ulang tiap
+    # request (dan diam-diam ikut ter-flush di commit berikutnya).
+    dirty = False
     if s.teknisi is None:
         s.teknisi = ["Andi", "Budi"]
+        dirty = True
     if s.merk is None:
         s.merk = ["Samsung", "iPhone", "Xiaomi", "Oppo", "Vivo", "Realme", "Infinix"]
+        dirty = True
+    if dirty:
+        db.commit()
+        db.refresh(s)
     return s
 
 

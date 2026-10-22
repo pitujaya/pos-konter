@@ -64,8 +64,43 @@ def _resolve_db_url(raw: str) -> str:
 
 DATABASE_URL = _resolve_db_url(os.getenv("DATABASE_URL", "sqlite:///./servishp.db"))
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args, future=True)
+_IS_SQLITE = DATABASE_URL.startswith("sqlite")
+connect_args = {"check_same_thread": False} if _IS_SQLITE else {}
+if _IS_SQLITE:
+    # Tunggu lebih lama kalau file sedang dikunci (2 uvicorn worker menulis
+    # bersamaan). Default pysqlite cuma 5 detik -> "database is locked" -> 500.
+    connect_args["timeout"] = 30
+
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
+    future=True,
+    pool_pre_ping=not _IS_SQLITE,
+)
+
+if _IS_SQLITE:
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_pragmas(dbapi_conn, _rec):
+        """Aktifkan WAL + busy_timeout + foreign_keys untuk SQLite.
+
+        Tanpa WAL, satu writer memblokir semua reader dan 2 uvicorn worker
+        akan saling tabrak saat ada transaksi bersamaan.
+        """
+        cur = dbapi_conn.cursor()
+        for pragma in (
+            "PRAGMA journal_mode=WAL",
+            "PRAGMA busy_timeout=30000",
+            "PRAGMA synchronous=NORMAL",
+            "PRAGMA foreign_keys=ON",
+        ):
+            try:
+                cur.execute(pragma)
+            except Exception:
+                pass
+        cur.close()
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 Base = declarative_base()
 

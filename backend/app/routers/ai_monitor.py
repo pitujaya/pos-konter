@@ -16,8 +16,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from .. import models
-from ..auth import get_current_user
+from .. import models, schemas
+from ..auth import get_current_user, require_admin, require_superadmin
 
 router = APIRouter(prefix="/ai", tags=["ai-monitor"])
 
@@ -194,9 +194,16 @@ def list_providers(db: Session = Depends(get_db), _: models.User = Depends(get_c
 
 
 @router.post("/providers", status_code=201)
-def upsert_provider(body: dict, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+def upsert_provider(body: schemas.AiProviderIn, db: Session = Depends(get_db),
+                    _: models.User = Depends(require_admin)):
+    """Kelola provider AI = hak admin.
+
+    Dulu endpoint ini hanya butuh login biasa, jadi kasir biasa bisa menulis
+    base_url provider miliknya sendiri -> semua prompt + kunci API milik
+    konter bocor ke server dia. Sekarang wajib admin/superadmin.
+    """
     _ensure_seed(db)
-    name = (body.get("name") or "").strip()
+    name = (body.name or "").strip()
     if not name:
         raise HTTPException(400, "name wajib diisi")
     p = db.query(models.AiProvider).filter(models.AiProvider.name == name).first()
@@ -204,28 +211,30 @@ def upsert_provider(body: dict, db: Session = Depends(get_db), _: models.User = 
         p = models.AiProvider(name=name)
         db.add(p)
     for f in ("kind", "base_url", "api_key", "model"):
-        if f in body and body[f] is not None:
-            setattr(p, f, str(body[f]).strip())
+        v = getattr(body, f, None)
+        if v is not None:
+            setattr(p, f, str(v).strip())
     for f in ("price_prompt_per_1k", "price_completion_per_1k"):
-        if f in body and body[f] is not None:
+        v = getattr(body, f, None)
+        if v is not None:
             try:
-                setattr(p, f, float(body[f]))
+                setattr(p, f, float(v))
             except Exception:
                 pass
-    if "priority" in body and body["priority"] is not None:
+    if body.priority is not None:
         try:
-            p.priority = int(body["priority"])
+            p.priority = int(body.priority)
         except Exception:
             pass
-    if "is_active" in body and body["is_active"] is not None:
-        p.is_active = 1 if body["is_active"] else 0
+    if body.is_active is not None:
+        p.is_active = 1 if body.is_active else 0
     db.commit()
     db.refresh(p)
     return _provider_to_out(p)
 
 
 @router.post("/providers/{pid}/test")
-def test_provider(pid: int, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+def test_provider(pid: int, db: Session = Depends(get_db), _: models.User = Depends(require_admin)):
     p = db.get(models.AiProvider, pid)
     if not p:
         raise HTTPException(404, "Provider tidak ditemukan")
@@ -274,7 +283,7 @@ def test_provider(pid: int, db: Session = Depends(get_db), _: models.User = Depe
 
 
 @router.delete("/providers/{pid}")
-def del_provider(pid: int, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+def del_provider(pid: int, db: Session = Depends(get_db), _: models.User = Depends(require_admin)):
     p = db.get(models.AiProvider, pid)
     if not p:
         raise HTTPException(404, "Provider tidak ditemukan")
@@ -286,11 +295,17 @@ def del_provider(pid: int, db: Session = Depends(get_db), _: models.User = Depen
 # ---------- Clients ----------
 @router.get("/clients")
 def list_clients(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+    """Daftar client TANPA kunci API mentah.
+
+    Dulu endpoint ini mengirim api_key utuh ke semua user yang login. Kunci
+    client ini bisa dipakai langsung ke gateway tanpa JWT, jadi hanya
+    superadmin yang boleh melihatnya (via /ai/clients/{id}/key).
+    """
     _ensure_seed(db)
     rows = db.query(models.AiClient).order_by(models.AiClient.id).all()
     out = []
     for c in rows:
-        out.append({"id": c.id, "name": c.name, "api_key": c.api_key,
+        out.append({"id": c.id, "name": c.name,
                     "api_key_masked": _mask(c.api_key),
                     "rate_limit_per_min": c.rate_limit_per_min, "is_active": bool(c.is_active),
                     "total_requests": c.total_requests or 0, "total_tokens": c.total_tokens or 0,
@@ -298,26 +313,39 @@ def list_clients(db: Session = Depends(get_db), _: models.User = Depends(get_cur
     return out
 
 
+@router.get("/clients/{cid}/key")
+def reveal_client_key(cid: int, db: Session = Depends(get_db),
+                      _: models.User = Depends(require_superadmin)):
+    """Tampilkan kunci API client. Hanya superadmin (kunci = akses penuh gateway)."""
+    c = db.get(models.AiClient, cid)
+    if not c:
+        raise HTTPException(404, "Client tidak ditemukan")
+    return {"id": c.id, "name": c.name, "api_key": c.api_key,
+            "api_key_masked": _mask(c.api_key)}
+
+
 @router.post("/clients", status_code=201)
-def create_client(body: dict, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+def create_client(body: schemas.AiClientIn, db: Session = Depends(get_db),
+                  _: models.User = Depends(require_admin)):
     _ensure_seed(db)
-    name = (body.get("name") or "").strip()
+    name = (body.name or "").strip()
     if not name:
         raise HTTPException(400, "name wajib diisi")
     if db.query(models.AiClient).filter(models.AiClient.name == name).first():
         raise HTTPException(400, "Nama client sudah ada")
     c = models.AiClient(name=name, api_key="nxr_" + secrets.token_hex(16),
-                        rate_limit_per_min=int(body.get("rate_limit_per_min") or 60))
+                        rate_limit_per_min=int(body.rate_limit_per_min or 60))
     db.add(c)
     db.commit()
     db.refresh(c)
+    # Kunci ditampilkan SEKALI saat dibuat (setelah ini hanya tersamar).
     return {"id": c.id, "name": c.name, "api_key": c.api_key,
             "api_key_masked": _mask(c.api_key), "rate_limit_per_min": c.rate_limit_per_min,
             "is_active": True, "total_requests": 0, "total_tokens": 0, "last_used_at": None}
 
 
 @router.delete("/clients/{cid}")
-def del_client(cid: int, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+def del_client(cid: int, db: Session = Depends(get_db), _: models.User = Depends(require_admin)):
     c = db.get(models.AiClient, cid)
     if not c:
         raise HTTPException(404, "Client tidak ditemukan")
@@ -328,7 +356,14 @@ def del_client(cid: int, db: Session = Depends(get_db), _: models.User = Depends
 
 # ---------- Gateway beneran ----------
 @router.post("/chat/completions")
-def chat_completions(body: dict, request: Request, db: Session = Depends(get_db)):
+def chat_completions(body: schemas.AiChatIn, request: Request, db: Session = Depends(get_db)):
+    """Gateway chat.
+
+    Body divalidasi Pydantic (schemas.AiChatIn). Dulu body-nya `dict` mentah,
+    jadi payload dengan bentuk salah (mis. messages = "halo") memicu
+    AttributeError -> HTTP 500. Sekarang payload salah bentuk -> 422 dengan
+    pesan yang jelas.
+    """
     _ensure_seed(db)
     # auth: X-API-Key ATAU JWT (dashboard). Tanpa keduanya -> tolak agar tidak disalahgunakan.
     client = None
@@ -350,7 +385,7 @@ def chat_completions(body: dict, request: Request, db: Session = Depends(get_db)
         if not user:
             raise HTTPException(401, "User tidak ditemukan")
         client = db.query(models.AiClient).filter(models.AiClient.name == "Default Key").first()
-    msgs = body.get("messages") or []
+    msgs = body.messages or []
     if not msgs:
         raise HTTPException(400, "messages wajib diisi")
     # rate limit sederhana per client
@@ -361,15 +396,15 @@ def chat_completions(body: dict, request: Request, db: Session = Depends(get_db)
             models.AiRequestLog.created_at >= since).count()
         if n >= (client.rate_limit_per_min or 60):
             raise HTTPException(429, "Rate limit per menit tercapai")
-    provider = _pick_provider(db, body.get("provider") or "", body.get("model") or "")
+    provider = _pick_provider(db, body.provider or "", body.model or "")
     if not provider:
         raise HTTPException(503, "Tidak ada provider aktif")
-    clean_msgs = [{"role": str(m.get("role") or "user"), "content": str(m.get("content") or "")} for m in msgs]
+    clean_msgs = [{"role": str(m.role or "user"), "content": str(m.content or "")} for m in msgs]
     t0 = time.time()
     status, err, text, pt, ct = "ok", "", "", 0, 0
     try:
-        text, pt, ct = _forward(provider, clean_msgs, body.get("model") or "",
-                                int(body.get("max_tokens") or 512), float(body.get("temperature") or 0.7))
+        text, pt, ct = _forward(provider, clean_msgs, body.model or "",
+                                int(body.max_tokens or 512), float(body.temperature or 0.7))
     except Exception as e:
         status, err = "error", str(e)[:500]
         provider.status = "error"
@@ -384,7 +419,7 @@ def chat_completions(body: dict, request: Request, db: Session = Depends(get_db)
     provider.last_check_at = datetime.utcnow()
     log = models.AiRequestLog(
         client_id=client.id if client else None, client_name=(client.name if client else (user.nama if user else "")),
-        provider_id=provider.id, provider_name=provider.name, model=body.get("model") or provider.model,
+        provider_id=provider.id, provider_name=provider.name, model=body.model or provider.model,
         prompt_tokens=pt, completion_tokens=ct, total_tokens=total, cost_usd=cost,
         latency_ms=ms, status=status, error=err)
     db.add(log)
@@ -395,7 +430,7 @@ def chat_completions(body: dict, request: Request, db: Session = Depends(get_db)
     db.commit()
     if status == "error":
         raise HTTPException(502, f"Provider {provider.name} gagal: {err}")
-    return {"provider": provider.name, "model": body.get("model") or provider.model,
+    return {"provider": provider.name, "model": body.model or provider.model,
             "reply": text, "prompt_tokens": pt, "completion_tokens": ct,
             "total_tokens": total, "cost_usd": round(cost, 6), "latency_ms": ms}
 

@@ -7,11 +7,30 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, schemas
 from ..auth import get_current_user, require_admin
+from ..paths import UPLOAD_DIR
 
 router = APIRouter(prefix="/slides", tags=["slides"])
-UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+SAFE_LINK_SCHEMES = ("http://", "https://", "/", "#", "mailto:", "tel:")
+
+
+def safe_link(raw: str | None) -> str:
+    """Bersihkan URL tautan slide.
+
+    Nilai ini nanti dipakai sebagai href di halaman dashboard. Skema seperti
+    javascript: / data: bisa menjalankan skrip di origin aplikasi (XSS), jadi
+    hanya skema aman yang boleh lewat. Kalau tidak aman -> dikosongkan.
+    """
+    v = (raw or "").strip()
+    if not v:
+        return ""
+    low = v.lower()
+    if low.startswith(SAFE_LINK_SCHEMES):
+        return v
+    # skema relatif tanpa "//" (mis. "halaman/detail") juga aman
+    if not low.startswith(("javascript:", "data:", "vbscript:", "file:")) and ":" not in v.split("/")[0]:
+        return v
+    return ""
 
 
 def to_out(s: models.Slide) -> dict:
@@ -38,7 +57,7 @@ def list_all(db: Session = Depends(get_db), __: models.User = Depends(require_ad
 def create_slide(body: schemas.SlideIn, db: Session = Depends(get_db), __: models.User = Depends(require_admin)):
     s = models.Slide(
         judul=(body.judul or "").strip(), subjudul=(body.subjudul or "").strip(),
-        image_url=(body.image_url or "").strip(), link=(body.link or "").strip(),
+        image_url=(body.image_url or "").strip(), link=safe_link(body.link),
         urutan=int(body.urutan or 0), aktif=1 if body.aktif else 0,
     )
     db.add(s)
@@ -59,7 +78,7 @@ def update_slide(slide_id: int, body: schemas.SlideIn, db: Session = Depends(get
     if body.image_url is not None:
         s.image_url = body.image_url
     if body.link is not None:
-        s.link = body.link
+        s.link = safe_link(body.link)
     if body.urutan is not None:
         s.urutan = int(body.urutan)
     if body.aktif is not None:

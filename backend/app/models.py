@@ -42,6 +42,8 @@ class Service(Base):
     catatan: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(30), default="Dikerjakan", index=True)
     kasir: Mapped[str] = mapped_column(String(120), default="", index=True)
+    # Cara bayar service saat diambil (tunai/non-tunai) -> menentukan kas fisik.
+    metode_bayar: Mapped[str] = mapped_column(String(30), default="tunai")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -106,6 +108,27 @@ class Sparepart(Base):
     stok_min: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class StockAdjustment(Base):
+    """Jejak audit perubahan stok manual.
+
+    Tanpa log ini, siapa pun yang bisa ubah stok bisa menaikkan stok bebas
+    tanpa meninggalkan jejak, dan selisih stok vs fisik tidak bisa ditelusuri.
+    """
+
+    __tablename__ = "stock_adjustments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sparepart_id: Mapped[int | None] = mapped_column(
+        ForeignKey("spareparts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    nama_barang: Mapped[str] = mapped_column(String(160), default="")
+    delta: Mapped[int] = mapped_column(Integer, default=0)
+    stok_akhir: Mapped[int] = mapped_column(Integer, default=0)
+    alasan: Mapped[str] = mapped_column(String(255), default="")
+    oleh: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
 class Sale(Base):
@@ -188,8 +211,9 @@ class CashSession(Base):
     pengeluaran_total: Mapped[int] = mapped_column(Integer, default=0)
     service_count: Mapped[int] = mapped_column(Integer, default=0)
     service_omzet: Mapped[int] = mapped_column(Integer, default=0)
+    service_tunai: Mapped[int] = mapped_column(Integer, default=0)
     # hasil hitung kas
-    kas_sistem: Mapped[int] = mapped_column(Integer, default=0)  # modal awal + tunai - pengeluaran
+    kas_sistem: Mapped[int] = mapped_column(Integer, default=0)  # modal awal + tunai (+kas service) - pengeluaran
     kas_akhir: Mapped[int] = mapped_column(Integer, default=0)   # hitungan fisik
     selisih: Mapped[int] = mapped_column(Integer, default=0)
     catatan: Mapped[str] = mapped_column(Text, default="")

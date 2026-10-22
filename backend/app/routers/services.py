@@ -13,10 +13,25 @@ STATUS = ["Dikerjakan", "Selesai", "Diambil", "Cancel"]
 STATUS_NORM = {"Antri": "Dikerjakan", "Menunggu Sparepart": "Dikerjakan", "Batal": "Cancel"}
 
 
+def _map_status(s: str | None) -> str:
+    """Petakan status legacy ke status baru, TANPA fallback diam-diam."""
+    raw = (s or "").strip()
+    return STATUS_NORM.get(raw, raw)
+
+
 def norm_status(s: str | None) -> str:
-    s = (s or "").strip()
-    s = STATUS_NORM.get(s, s)
-    return s if s in STATUS else "Dikerjakan"
+    """Untuk MEMBACA data lama: status tak dikenal dianggap 'Dikerjakan'."""
+    m = _map_status(s)
+    return m if m in STATUS else "Dikerjakan"
+
+
+def validate_status(s: str | None) -> str:
+    """Untuk MENYIMPAN: status tak dikenal harus DITOLAK (400), bukan ditulis
+    diam-diam jadi 'Dikerjakan' (pernah membuat riwayat status palsu)."""
+    m = _map_status(s)
+    if m not in STATUS:
+        raise HTTPException(400, "Status tidak valid. Pilihan: " + ", ".join(STATUS))
+    return m
 
 
 def to_out(s: models.Service) -> dict:
@@ -30,6 +45,7 @@ def to_out(s: models.Service) -> dict:
         "biaya": s.biaya or 0, "dp": s.dp or 0, "estimasi": s.estimasi or "",
         "catatan": s.catatan or "", "status": s.status,
         "kasir": getattr(s, "kasir", "") or "",
+        "metode_bayar": getattr(s, "metode_bayar", "tunai") or "tunai",
         "riwayat": [{"t": (x.created_at.isoformat() if x.created_at else ""), "s": x.status} for x in h],
     }
 
@@ -77,9 +93,7 @@ def create_service(body: schemas.ServiceIn, db: Session = Depends(get_db),
     for f in ("nama", "telp", "merk", "tipe", "keluhan"):
         if not (getattr(body, f) or "").strip():
             raise HTTPException(400, f"{f} wajib diisi")
-    body.status = norm_status(body.status)
-    if body.status not in STATUS:
-        raise HTTPException(400, "Status tidak valid")
+    body.status = validate_status(body.status)
     s = models.Service(
         no_service=gen_no_service(db),
         tanggal=body.tanggal or datetime.now().date().isoformat(),
@@ -90,7 +104,10 @@ def create_service(body: schemas.ServiceIn, db: Session = Depends(get_db),
         kondisi=(body.kondisi or ""), teknisi=(body.teknisi or ""),
         biaya=int(body.biaya or 0), dp=int(body.dp or 0),
         estimasi=(body.estimasi or ""), catatan=(body.catatan or ""), status=body.status,
-        kasir=(body.kasir or user.nama or "").strip(),
+        # Kasir SELALU dari user yang login (jangan dari body) -> tidak bisa
+        #oustonREDIT service ke nama kasir lain & menggeser rekap per kasir.
+        kasir=(user.nama or "").strip(),
+        metode_bayar=(body.metode_bayar or "tunai").strip().lower() or "tunai",
     )
     db.add(s)
     db.flush()
@@ -115,19 +132,23 @@ def get_service(service_id: int, db: Session = Depends(get_db), _: models.User =
 
 @router.put("/services/{service_id}", response_model=schemas.ServiceOut)
 def update_service(service_id: int, body: schemas.ServiceUpdateIn,
-                   db: Session = Depends(get_db), __: models.User = Depends(require_admin)):
+                   db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
     s = db.get(models.Service, service_id)
     if not s:
         raise HTTPException(404, "Data tidak ditemukan")
     data = body.model_dump(exclude_unset=True)
     new_status = data.pop("status", None)
+    # Kasir tidak boleh diubah lewat edit (menyesuaikan rekap per kasir).
+    data.pop("kasir", None)
+    if new_status and validate_status(new_status) == "Diambil":
+        # Status -> Diambil = membukukan omzet -> butuh sesi kasir terbuka.
+        from .kas_sessions import require_open_session
+        require_open_session(db, user)
     for k, v in data.items():
         if v is not None:
             setattr(s, k, v)
-    if new_status and norm_status(new_status) != norm_status(s.status):
-        new_status = norm_status(new_status)
-        if new_status not in STATUS:
-            raise HTTPException(400, "Status tidak valid")
+    if new_status and validate_status(new_status) != norm_status(s.status):
+        new_status = validate_status(new_status)
         s.status = new_status
         db.add(models.ServiceHistory(service_id=s.id, status=new_status))
     db.commit()
@@ -137,18 +158,56 @@ def update_service(service_id: int, body: schemas.ServiceUpdateIn,
 
 @router.patch("/services/{service_id}/status", response_model=schemas.ServiceOut)
 def set_status(service_id: int, body: schemas.StatusUpdateIn,
-               db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
-    body.status = norm_status(body.status)
-    if body.status not in STATUS:
-        raise HTTPException(400, "Status tidak valid")
+               db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    new_status = validate_status(body.status)
     s = db.get(models.Service, service_id)
     if not s:
         raise HTTPException(404, "Data tidak ditemukan")
-    s.status = body.status
-    db.add(models.ServiceHistory(service_id=s.id, status=body.status))
+    # Mengubah status ke "Diambil" = membukukan omzet ke sesi kasir.
+    # Kalau tidak ada sesi terbuka, omzetnya masuk ke sesi berikutnya / hilang
+    # -> harus minta buka sesi dulu, sama seperti input transaksi lain.
+    if new_status == "Diambil":
+        from .kas_sessions import require_open_session
+        require_open_session(db, user)
+    s.status = new_status
+    db.add(models.ServiceHistory(service_id=s.id, status=new_status))
     db.commit()
     db.refresh(s)
     return to_out(s)
+
+
+@router.post("/services/purge")
+def purge_services(body: dict, db: Session = Depends(get_db),
+                   user: models.User = Depends(get_current_user)):
+    """Hapus massal service.
+
+    scope = "diambil" -> hapus semua yang statusnya Diambil (admin+)
+    scope = "all"     -> hapus semua service (superadmin)
+
+    Endpoint ini WAJIB ada karena tombol "Hapus SEMUA data" di frontend
+    sebelumnya hanya mengubah LocalStorage: data di server tetap utuh dan
+    muncul lagi begitu halaman di-refresh, padahal user sudah diberi toast
+    "Semua data dihapus".
+    """
+    scope = str((body or {}).get("scope") or "").strip().lower()
+    if scope == "all":
+        if user.role != "superadmin":
+            raise HTTPException(403, "Hanya Super Admin yang bisa menghapus semua data")
+    elif scope == "diambil":
+        if user.role not in ("admin", "superadmin"):
+            raise HTTPException(403, "Hanya Admin/Super Admin yang bisa menghapus data selesai")
+    else:
+        raise HTTPException(400, "scope tidak valid (diambil|all)")
+
+    q = db.query(models.Service)
+    if scope == "diambil":
+        q = q.filter(models.Service.status == "Diambil")
+    rows = q.all()
+    n = len(rows)
+    for s in rows:
+        db.delete(s)
+    db.commit()
+    return {"ok": True, "deleted": n, "scope": scope}
 
 
 @router.delete("/services/{service_id}")

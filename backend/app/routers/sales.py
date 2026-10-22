@@ -69,23 +69,42 @@ def create_sale(body: schemas.SaleIn, db: Session = Depends(get_db),
     if not body.items:
         raise HTTPException(400, "Keranjang masih kosong, pilih minimal 1 barang")
     tanggal = (body.tanggal or datetime.now().date().isoformat())[:10]
-    rows: list[tuple[models.Sparepart, int]] = []
+    # Baris keranjang (pertahankan 1 baris = 1 item di nota).
+    lines: list[tuple[models.Sparepart, int]] = []
+    # Agregasi per SKU: barang yang sama bisa masuk 2 baris keranjang.
+    # Kalau stok dicek per baris, tiap baris lolos cek lalu dikurangi sendiri ->
+    # stok akhir jadi NEGATIF. Jadi cek & kurangi pakai total qty per SKU.
+    per_item: dict[int, int] = {}
+    sp_cache: dict[int, models.Sparepart] = {}
     for it in body.items:
         qty = int(it.qty or 0)
         if qty <= 0:
             raise HTTPException(400, "Qty harus minimal 1")
         sp = None
         if it.sparepart_id:
-            sp = db.get(models.Sparepart, int(it.sparepart_id))
+            sp = sp_cache.get(int(it.sparepart_id))
+            if sp is None:
+                sp = db.get(models.Sparepart, int(it.sparepart_id))
+                if sp is not None:
+                    sp_cache[sp.id] = sp
         if not sp and it.sku:
             sp = db.query(models.Sparepart).filter(models.Sparepart.sku == it.sku.strip()).first()
+            if sp is not None:
+                sp_cache[sp.id] = sp
         if not sp:
             raise HTTPException(404, f"Barang tidak ditemukan (id={it.sparepart_id} sku={it.sku})")
-        if (sp.stok or 0) < qty:
-            raise HTTPException(400, f"Stok {sp.nama} kurang (sisa {sp.stok}, diminta {qty})")
-        rows.append((sp, qty))
-    total = sum((sp.harga_jual or 0) * qty for sp, qty in rows)
-    hpp_total = sum((sp.hpp or 0) * qty for sp, qty in rows)
+        per_item[sp.id] = per_item.get(sp.id, 0) + qty
+        lines.append((sp, qty))
+    # Validasi stok terhadap TOTAL qty per SKU
+    for sp_id, total_qty in per_item.items():
+        sp = sp_cache[sp_id]
+        if (sp.stok or 0) < total_qty:
+            raise HTTPException(
+                400,
+                f"Stok {sp.nama} kurang (sisa {sp.stok}, diminta {total_qty})",
+            )
+    total = sum((sp.harga_jual or 0) * qty for sp, qty in lines)
+    hpp_total = sum((sp.hpp or 0) * qty for sp, qty in lines)
     sale = models.Sale(
         no_nota=_gen_no_nota(db), tanggal=tanggal,
         pelanggan=(body.pelanggan or "").strip() or "Umum",
@@ -97,8 +116,11 @@ def create_sale(body: schemas.SaleIn, db: Session = Depends(get_db),
     )
     db.add(sale)
     db.flush()
-    for sp, qty in rows:
-        sp.stok = (sp.stok or 0) - qty
+    # Kurangi stok per SKU (agregat), lalu tulis 1 baris item per baris keranjang.
+    for sp_id, total_qty in per_item.items():
+        sp = sp_cache[sp_id]
+        sp.stok = (sp.stok or 0) - total_qty
+    for sp, qty in lines:
         db.add(models.SaleItem(
             sale_id=sale.id, sparepart_id=sp.id, sku=sp.sku or "", nama=sp.nama or "",
             hpp=sp.hpp or 0, harga=sp.harga_jual or 0, qty=qty,

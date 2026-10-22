@@ -6,8 +6,8 @@ Aturan:
 - Rekap dihitung dari rentang waktu sesi (opened_at..closed_at):
     * penjualan  -> milik kasir ini (kolom kasir), pisahkan tunai & non-tunai
     * pengeluaran-> milik kasir ini (kolom dicatat_oleh)
-    * service    -> yang status Diambil dalam sesi (omzet kas)
-- kas_sistem = modal_awal + tunai_masuk - pengeluaran_total
+    * service    -> milik kasir ini (kolom services.kasir) yang status Diambil
+- kas_sistem = modal_awal + penjualan_tunai + kas_service_tunai - pengeluaran
 - selisih    = kas_akhir (hitungan fisik) - kas_sistem
 """
 from datetime import datetime
@@ -22,6 +22,7 @@ from ..auth import get_current_user
 router = APIRouter(prefix="/kas", tags=["kas"])
 
 KASIR_ROLES = ("kasir", "admin", "superadmin")
+ADMIN_ROLES = ("admin", "superadmin")
 
 
 def require_open_session(db: Session, user: models.User) -> models.CashSession:
@@ -44,13 +45,72 @@ def _find_open(db: Session, user: models.User) -> models.CashSession | None:
                  .order_by(models.CashSession.id.desc()).first()
         if by_id:
             return by_id
-    return q.filter(models.CashSession.kasir == (user.nama or "")) \
-            .order_by(models.CashSession.id.desc()).first()
+    # Fallback untuk sesi legacy (user_id NULL): cocokkan by nama, TAPI hanya
+    # kalau tidak ambigu. Kalau ada 2 sesi terbuka dengan nama sama, jangan
+    # menebak -> kembalikan None supaya user buka sesi sendiri (bukan session
+    # milik orang lain).
+    nama = (user.nama or "").strip()
+    if not nama:
+        return None
+    by_name = q.filter(models.CashSession.kasir == nama).order_by(
+        models.CashSession.id.desc()).all()
+    if len(by_name) == 1:
+        return by_name[0]
+    return None
 
 
 def _is_tunai(metode: str) -> bool:
     m = (metode or "").strip().lower()
     return m in ("", "tunai", "cash", "tunai/lunas")
+
+
+def _session_open_at(db: Session, ts: datetime) -> models.CashSession | None:
+    """Sesi yang sedang aktif pada waktu ts (untuk service legacy tanpa kasir)."""
+    q = db.query(models.CashSession).filter(
+        models.CashSession.opened_at <= ts,
+        (models.CashSession.closed_at.is_(None)) | (models.CashSession.closed_at >= ts),
+    ).order_by(models.CashSession.opened_at.desc())
+    return q.first()
+
+
+def _services_for_session(db: Session, sess: models.CashSession) -> list[models.Service]:
+    """Service yang diambil (Diambil) di dalam rentang waktu sesi INI.
+
+    PENTING: sebelumnya query ini tidak memfilter kasir sama sekali, jadi
+    service yang dikerjakan kasir lain ikut terhitung ke sesi ini -> omzet
+    salah orang. Sekarang:
+      - service yang punya kolom kasir -> hanya cocok bila kasir sama.
+      - service legacy (kasir kosong) -> dipakai oleh sesi yang aktif pada
+        saat statusnya diubah ke Diambil (fallback terbaik).
+    """
+    t0 = sess.opened_at or datetime.utcnow()
+    t1 = sess.closed_at or datetime.utcnow()
+    kasir = (sess.kasir or "").strip()
+    hist = (db.query(models.ServiceHistory)
+            .filter(models.ServiceHistory.status == "Diambil",
+                    models.ServiceHistory.created_at >= t0,
+                    models.ServiceHistory.created_at <= t1)
+            .order_by(models.ServiceHistory.created_at.asc())
+            .all())
+    out: list[models.Service] = []
+    seen: set[int] = set()
+    for h in hist:
+        if h.service_id in seen:
+            continue
+        s = db.get(models.Service, h.service_id)
+        if s is None:
+            continue
+        svc_kasir = (s.kasir or "").strip()
+        if svc_kasir:
+            if kasir and svc_kasir != kasir:
+                continue  # milik kasir lain -> bukan bagian sesi ini
+        else:
+            owner = _session_open_at(db, h.created_at)
+            if owner is not None and owner.id != sess.id:
+                continue  # legacy: sesi lain yang aktif saat itu
+        seen.add(h.service_id)
+        out.append(s)
+    return out
 
 
 def _summary(db: Session, sess: models.CashSession) -> dict:
@@ -71,21 +131,18 @@ def _summary(db: Session, sess: models.CashSession) -> dict:
     if kasir:
         expenses = [e for e in expenses if (e.dicatat_oleh or "").strip() == kasir]
 
-    # Service: tidak ada kolom kasir -> pakai waktu status Diambil (ServiceHistory)
-    hist = (db.query(models.ServiceHistory)
-            .filter(models.ServiceHistory.status == "Diambil",
-                    models.ServiceHistory.created_at >= t0,
-                    models.ServiceHistory.created_at <= t1)
-            .all())
-    svc_ids = {h.service_id for h in hist}
-    svcs = [db.get(models.Service, i) for i in svc_ids] if svc_ids else []
-    svcs = [s for s in svcs if s is not None]
+    svcs = _services_for_session(db, sess)
 
     penjualan_total = sum(int(s.total or 0) for s in sales)
     tunai = sum(int(s.total or 0) for s in sales if _is_tunai(s.metode))
     pengeluaran = sum(int(e.jumlah or 0) for e in expenses)
     service_omzet = sum(int(s.biaya or 0) for s in svcs)
-    kas_sistem = int(sess.modal_awal or 0) + tunai - pengeluaran
+    # Service dibayar tunai -> uang masuk laci kas, harus ikut kas_sistem.
+    # Kalau tidak, setiap shift yang ada pembayaran service cash selalu
+    # nampil "selisih" palsu sebesar total service.
+    service_tunai = sum(int(s.biaya or 0) for s in svcs
+                        if _is_tunai(getattr(s, "metode_bayar", "tunai")))
+    kas_sistem = int(sess.modal_awal or 0) + tunai + service_tunai - pengeluaran
 
     return {
         "jml_transaksi": len(sales) + len(svcs) + len(expenses),
@@ -96,6 +153,7 @@ def _summary(db: Session, sess: models.CashSession) -> dict:
         "pengeluaran_total": pengeluaran,
         "service_count": len(svcs),
         "service_omzet": service_omzet,
+        "service_tunai": service_tunai,
         "kas_sistem": kas_sistem,
     }
 
@@ -122,6 +180,7 @@ def _to_out(sess: models.CashSession, db: Session | None = None) -> dict:
         "pengeluaran_total": int((live or {}).get("pengeluaran_total", sess.pengeluaran_total or 0)),
         "service_count": int((live or {}).get("service_count", sess.service_count or 0)),
         "service_omzet": int((live or {}).get("service_omzet", sess.service_omzet or 0)),
+        "service_tunai": int((live or {}).get("service_tunai", sess.service_tunai or 0)),
         "kas_sistem": kas_sistem,
         "kas_akhir": kas_akhir,
         "selisih": selisih,
@@ -196,8 +255,16 @@ def list_sessions(
     limit: int = 50,
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user),
 ):
+    scope = (scope or "auto").strip().lower()
+    if scope not in ("mine", "all", "auto"):
+        raise HTTPException(400, "scope tidak valid (mine|all|auto)")
+    # scope="all" HANYA untuk admin/superadmin. Sebelumnya parameter ini
+    # melewati pengecekan role sama sekali -> kasir biasa bisa membaca sesi
+    # kasir lain (modal awal, kas akhir, selisih) lewat scope=all.
+    if scope == "all" and user.role not in ADMIN_ROLES:
+        raise HTTPException(403, "Hanya admin/superadmin yang bisa melihat semua sesi kasir")
     q = db.query(models.CashSession)
-    want_all = scope == "all" or (scope == "auto" and user.role in ("admin", "superadmin"))
+    want_all = user.role in ADMIN_ROLES and scope in ("all", "auto")
     if not want_all:
         if user.id:
             q = q.filter(models.CashSession.user_id == user.id)

@@ -85,6 +85,7 @@ class ServiceIn(BaseModel):
     catatan: str | None = ""
     status: str = "Dikerjakan"
     kasir: str | None = ""
+    metode_bayar: str = "tunai"
 
 
 class ServiceUpdateIn(BaseModel):
@@ -106,6 +107,7 @@ class ServiceUpdateIn(BaseModel):
     catatan: str | None = None
     status: str | None = None
     kasir: str | None = None
+    metode_bayar: str | None = None
 
 
 class StatusUpdateIn(BaseModel):
@@ -134,6 +136,7 @@ class ServiceOut(BaseModel):
     catatan: str = ""
     status: str
     kasir: str = ""
+    metode_bayar: str = "tunai"
     riwayat: list[dict] = []
 
     model_config = {"from_attributes": False}
@@ -209,6 +212,7 @@ class SparepartUpdateIn(BaseModel):
 
 class StockAdjustIn(BaseModel):
     delta: int
+    alasan: str | None = ""
 
 
 class SparepartOut(BaseModel):
@@ -349,6 +353,7 @@ class CashSessionOut(BaseModel):
     pengeluaran_total: int = 0
     service_count: int = 0
     service_omzet: int = 0
+    service_tunai: int = 0
     kas_sistem: int = 0
     kas_akhir: int = 0
     selisih: int = 0

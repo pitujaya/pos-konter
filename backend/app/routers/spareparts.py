@@ -149,7 +149,8 @@ def update_sparepart(sp_id: int, body: schemas.SparepartUpdateIn,
 
 @router.patch("/{sp_id}/stock", response_model=schemas.SparepartOut)
 def adjust_stock(sp_id: int, body: schemas.StockAdjustIn,
-                 db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+                 db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    """Sesuaikan stok manual (+/-). Setiap perubahan dicatat di log audit."""
     s = db.get(models.Sparepart, sp_id)
     if not s:
         raise HTTPException(404, "Data tidak ditemukan")
@@ -157,9 +158,29 @@ def adjust_stock(sp_id: int, body: schemas.StockAdjustIn,
     if baru < 0:
         raise HTTPException(400, "Stok tidak boleh minus")
     s.stok = baru
+    db.add(models.StockAdjustment(
+        sparepart_id=s.id, nama_barang=s.nama or "", delta=int(body.delta or 0),
+        stok_akhir=baru, alasan=(body.alasan or "").strip()[:255],
+        oleh=(user.nama or "").strip(),
+    ))
     db.commit()
     db.refresh(s)
     return to_out(s)
+
+
+@router.get("/{sp_id}/stock-log")
+def stock_log(sp_id: int, limit: int = 50,
+              db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+    """Riwayat perubahan stok manual untuk 1 barang (jejak audit)."""
+    rows = (db.query(models.StockAdjustment)
+            .filter(models.StockAdjustment.sparepart_id == sp_id)
+            .order_by(models.StockAdjustment.id.desc())
+            .limit(max(1, min(limit, 200))).all())
+    return [{
+        "id": r.id, "nama": r.nama_barang or "", "delta": r.delta or 0,
+        "stok_akhir": r.stok_akhir or 0, "alasan": r.alasan or "",
+        "oleh": r.oleh or "", "tanggal": r.created_at.isoformat() if r.created_at else "",
+    } for r in rows]
 
 
 @router.delete("/{sp_id}")

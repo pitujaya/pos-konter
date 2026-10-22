@@ -591,7 +591,7 @@ class MainActivity : AppCompatActivity() {
             // Jangan reload berulang saat onResume — hanya load kalau belum ada URL,
             // atau reload kalau sebelumnya sedang offline / URL bukan backend.
             val cur = try { web.url ?: "" } catch (_: Exception) { "" }
-            if (cur.isEmpty() || !cur.startsWith(BACKEND_URL)) {
+            if (cur.isEmpty() || !isBackendUrl(cur)) {
                 web.loadUrl(BACKEND_URL)
             } else if (wasOffline) {
                 web.reload()
@@ -643,25 +643,55 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
+    private fun defaultPort(scheme: String?): Int =
+        if (scheme.equals("https", ignoreCase = true)) 443
+        else if (scheme.equals("http", ignoreCase = true)) 80
+        else -1
+
+    /**
+     * URL dianggap INTERNAL (milik backend sendiri) bila:
+     * - startsWith(BACKEND_URL)  -> sudah mencakup query string
+     *   (mis. "https://pos.pitujaya.my.id/?api=http://192.168.1.5:8000"),
+     * - atau origin (skema+host+port) sama dengan BACKEND_URL, supaya varian
+     *   tanpa garis miring ("https://pos.pitujaya.my.id?api=...") juga internal
+     *   dan tidak kebuka di browser luar.
+     * Host yang mirip (mis. pos.pitujaya.my.id.evil.com) tetap ditolak karena
+     * dibandingkan per komponen, bukan prefix mentah.
+     */
+    private fun isBackendUrl(url: String?): Boolean {
+        if (url.isNullOrEmpty()) return false
+        if (url.startsWith(BACKEND_URL)) return true
+        return try {
+            val u = Uri.parse(url)
+            val b = Uri.parse(BACKEND_URL)
+            if (u.scheme.isNullOrEmpty() || !u.scheme.equals(b.scheme, ignoreCase = true)) return false
+            if (u.host.isNullOrEmpty() || !u.host.equals(b.host, ignoreCase = true)) return false
+            val up = if (u.port != -1) u.port else defaultPort(u.scheme)
+            val bp = if (b.port != -1) b.port else defaultPort(b.scheme)
+            up == bp
+        } catch (_: Exception) { false }
+    }
+
     /**
      * true = URL sudah dibuka via Intent eksternal (WebView jangan load).
      * - Skema khusus (whatsapp://, tel:, mailto:, sms:, intent://) selalu eksternal.
      * - Host WA (wa.me, whatsapp.com) selalu eksternal (biar dibuka aplikasi WA / browser).
      * - Navigasi http(s) BUKAN backend juga eksternal (mencegah WebView nyangkut di situs luar).
-     * - URL backend (BACKEND_URL) selalu internal (return false).
+     * - URL backend (BACKEND_URL) selalu internal (return false), termasuk yang
+     *   punya query string (?api=...).
      */
     private fun handleExternalUrl(url: String?): Boolean {
         if (url.isNullOrEmpty()) return false
         return try {
             val low = url.lowercase()
-            if (url.startsWith(BACKEND_URL)) return false
+            if (isBackendUrl(url)) return false
             val special = low.startsWith("whatsapp://") || low.startsWith("tel:") ||
                 low.startsWith("mailto:") || low.startsWith("sms:") ||
                 low.startsWith("intent://") || low.startsWith("intent:")
             val isHttp = low.startsWith("http://") || low.startsWith("https://")
             // Satu-satunya situs internal = backend. Navigasi http(s) lain (wa.me, dsb.) -> eksternal.
             // (Resource seperti fonts difilter via isForMainFrame pada overload modern.)
-            if (special || (isHttp && !url.startsWith(BACKEND_URL))) {
+            if (special || (isHttp && !isBackendUrl(url))) {
                 try {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -819,7 +849,7 @@ class MainActivity : AppCompatActivity() {
                 description: String?,
                 failingUrl: String?
             ) {
-                if (failingUrl != null && failingUrl.startsWith(BACKEND_URL)) {
+                if (isBackendUrl(failingUrl)) {
                     showOffline()
                 } else {
                     super.onReceivedError(view, errorCode, description, failingUrl)
@@ -831,7 +861,7 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest,
                 error: WebResourceError
             ) {
-                if (request.url.toString().startsWith(BACKEND_URL)) {
+                if (isBackendUrl(request.url.toString())) {
                     showOffline()
                 } else {
                     super.onReceivedError(view, request, error)
@@ -841,7 +871,7 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
                 // Kalau halaman backend berhasil dibuka & masih online, sembunyikan blokir
-                if (url.startsWith(BACKEND_URL) && isOnline()) {
+                if (isBackendUrl(url) && isOnline()) {
                     showOnline()
                     // Auto login: coba inject token sebelum script.js init() membaca localStorage.
                     if (!firstScreenResolved) tryAutoLogin() else resolveFirstScreen()

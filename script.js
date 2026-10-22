@@ -58,7 +58,14 @@ async function refreshFromBackend(){ await pullServices(); await pullSettings();
 async function pullSlides(){
   if(!useBackend()) return false;
   try{
-    const list = await window.API.listSlides();
+    // Ambil SEMUA slide (aktif + nonaktif) supaya slide yang dimatikan tetap
+    // terlihat di Kelola Slide dan bisa diaktifkan lagi. Endpoint /slides/all
+    // khusus admin; kasir cukup dapat slide aktif saja.
+    let list = null;
+    if(isAdminUp() && window.API.listAllSlides){
+      try{ list = await window.API.listAllSlides(); }catch(e){ list = null; }
+    }
+    if(!list) list = await window.API.listSlides();
     SLIDES = Array.isArray(list) ? list : [];
     saveSlidesLocal(); renderHeadbar(); renderSlideManager();
     return true;
@@ -87,6 +94,10 @@ function setSession(userId, remember){
 function clearSession(){
   localStorage.removeItem(LS_SESSION); sessionStorage.removeItem(LS_SESSION);
   try{ if(window.API) window.API.clearToken(); }catch{}
+  // Beri tahu shell Android (APK) supaya token native ikut dihapus.
+  // Tanpa ini, token tetap tersimpan di SharedPreferences dan user
+  // otomatis login lagi saat aplikasi dibuka berikutnya -> logout tidak efek.
+  try{ if(window.AndroidAuth && typeof window.AndroidAuth.onLogout==='function') window.AndroidAuth.onLogout(); }catch{}
   ME_CACHE=null; BACKEND_OK=BACKEND_OK; // token dihapus, status koneksi tetap
 }
 function currentUser(){
@@ -253,8 +264,30 @@ document.addEventListener('focusin', function(e){
     setTimeout(()=>{ try{ t.scrollIntoView({block:'center', behavior:'smooth'}); }catch{ try{ t.scrollIntoView(); }catch{} } }, 350);
   }catch{}
 });
-function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; $('toastWrap').appendChild(t); setTimeout(()=>t.remove(),2500); }
+function toast(msg, ms){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; $('toastWrap').appendChild(t); setTimeout(()=>t.remove(), ms||2500); }
 function esc(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Sanitasi URL untuk dipakai di href/src. Skema javascript:/data:/vbscript: bisa
+// menjalankan skrip di origin aplikasi (XSS) -> dibuang jadi string kosong.
+// Parameter allowDataImage mengizinkan data:image/... (dipakai slide offline).
+function safeUrl(u, allowDataImage){
+  const v=String(u??'').trim();
+  if(!v) return '';
+  const low=v.toLowerCase().replace(/[\u0000-\u0020]/g,'');
+  if(low.startsWith('javascript:')||low.startsWith('vbscript:')||low.startsWith('file:')) return '';
+  if(low.startsWith('data:') && !(allowDataImage && /^data:image\//i.test(v))) return '';
+  return v;
+}
+// Escape URL untuk dipakai di dalam context CSS (url("...")).
+function cssUrl(u){ return String(u??'').replace(/["'()\\;]/g, ch=>'\\'+ch); }
+// Escape untuk NILAI string di dalam konteks JavaScript yang disisipkan ke
+// atribut HTML (onclick="fn('...')"). esc() tidak cukup: ia mengubah ' jadi
+// &#39; yang lalu di-decode lagi oleh parser HTML sebelum JS-nya dieksekusi,
+// sehingga string literal bisa pecah. Fungsi ini aman untuk kedua konteks.
+function jsStr(v){
+  return JSON.stringify(String(v??'')).slice(1,-1)
+    .replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026')
+    .replace(/'/g,'\\u0027').replace(/"/g,'\\u0022');
+}
 function badge(st){ st = normStatus(st || 'Dikerjakan'); return `<span class="badge b-${String(st).replace(/ /g,'-')}">${esc(st)}</span>`; }
 
 // ===== SESI KASIR (buka / tutup shift) =====
@@ -706,8 +739,12 @@ try{ window.openSidebar=openSidebar; window.closeSidebar=closeSidebar; window.is
 // ===== NOMOR SERVICE =====
 function genNoService(){
   const d=new Date(); const y=d.getFullYear();
-  const count=DB.filter(x=>String(x.noService).includes(String(y))).length+1;
-  return `SVC-${y}-${String(count).padStart(4,'0')}`;
+  // Nomor harus UNIK. Versi lama cuma menghitung record yang nomornya
+  // mengandung tahun -> penghapusan record bisa menghasilkan nomor kembar.
+  const used=new Set(DB.map(x=>String(x.noService||'')));
+  let n=1, candidate=`SVC-${y}-${String(n).padStart(4,'0')}`;
+  while(used.has(candidate)){ n++; candidate=`SVC-${y}-${String(n).padStart(4,'0')}`; }
+  return candidate;
 }
 function refreshPreview(){ $('previewNoService').textContent = genNoService(); }
 
@@ -1037,10 +1074,10 @@ function renderData(){
       <td><b>${fmtRp(x.biaya)}</b></td>
       <td>${badge(x.status)}</td>
       <td><div class="act-btns">
-        <button class="icon-btn" onclick="detail(${x.id})" title="Detail">👁</button>
-        <button class="icon-btn" onclick="cetak(${x.id})" title="Nota">🖨</button>
-        ${isAdminUp() ? `<button class="icon-btn" onclick="edit(${x.id})" title="Edit">✏️</button>
-        <button class="icon-btn" onclick="hapus(${x.id})" title="Hapus">🗑</button>` : ``}
+        <button class="icon-btn" onclick="detail(${jsStr(x.id)})" title="Detail">👁</button>
+        <button class="icon-btn" onclick="cetak(${jsStr(x.id)})" title="Nota">🖨</button>
+        ${isAdminUp() ? `<button class="icon-btn" onclick="edit(${jsStr(x.id)})" title="Edit">✏️</button>
+        <button class="icon-btn" onclick="hapus(${jsStr(x.id)})" title="Hapus">🗑</button>` : ``}
         ${wa ? `<a class="icon-btn wa-btn" href="${wa}" target="_blank" rel="noopener" title="Chat WhatsApp ${esc(x.nama)}">💬</a>` : ``}
       </div></td></tr>`;
   }).join('');
@@ -1068,12 +1105,12 @@ function renderGlobalResults(){
   }
   let h='';
   if(svc.length){
-    h+=`<div class="gr-group">📲 Service & Lacak (${svc.length})</div>`+svc.map(x=>`<button type="button" class="gr-item" onclick="gGoDetail(${x.id})"><span><b>${esc(x.noService)}</b> • ${esc(x.nama)}<br><small class="muted">${esc(x.merk)} ${esc(x.tipe)} • ${esc(x.telp)}</small></span>${badge(x.status)}</button>`).join('')
+    h+=`<div class="gr-group">📲 Service & Lacak (${svc.length})</div>`+svc.map(x=>`<button type="button" class="gr-item" onclick="gGoDetail(${jsStr(x.id)})"><span><b>${esc(x.noService)}</b> • ${esc(x.nama)}<br><small class="muted">${esc(x.merk)} ${esc(x.tipe)} • ${esc(x.telp)}</small></span>${badge(x.status)}</button>`).join('')
       +`<button type="button" class="gr-more" onclick="gAllService()">Lihat semua di Data Service →</button>`
       +`<button type="button" class="gr-more" onclick="gOpenLacak()">Lacak di halaman Lacak →</button>`;
   }
   if(spr.length){
-    h+=`<div class="gr-group">📦 Produk (${spr.length})</div>`+spr.map(x=>`<button type="button" class="gr-item" onclick="gGoSpare('${esc(String(x.id))}')"><span><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.sku)} • stok ${esc(x.stok)} • ${fmtRp(x.harga_jual)}</small></span></button>`).join('')
+    h+=`<div class="gr-group">📦 Produk (${spr.length})</div>`+spr.map(x=>`<button type="button" class="gr-item" onclick="gGoSpare('${jsStr(x.id)}')"><span><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.sku)} • stok ${esc(x.stok)} • ${fmtRp(x.harga_jual)}</small></span></button>`).join('')
       +`<button type="button" class="gr-more" onclick="gAllSpare()">Lihat semua di Data Sparepart →</button>`;
   }
   box.innerHTML=h; box.classList.remove('hidden');
@@ -1146,9 +1183,9 @@ window.detail=function(id){
     <h4 style="margin:10px 0 6px">Riwayat</h4>
     <small class="muted">${(x.riwayat||[]).map(r=>`• ${new Date(r.t).toLocaleString('id-ID')} — <b>${esc(r.s)}</b>`).join('<br>')||'-'}</small>`;
   $('detailFoot').innerHTML=`
-    <button class="btn ghost" onclick="cetak(${x.id})">🖨 Cetak Nota</button>
-    ${isAdminUp() ? `<button class="btn ghost" onclick="edit(${x.id})">✏️ Edit</button>` : ``}
-    <button class="btn primary" onclick="saveStatus(${x.id})">Simpan Status</button>`;
+    <button class="btn ghost" onclick="cetak(${jsStr(x.id)})">🖨 Cetak Nota</button>
+    ${isAdminUp() ? `<button class="btn ghost" onclick="edit(${jsStr(x.id)})">✏️ Edit</button>` : ``}
+    <button class="btn primary" onclick="saveStatus(${jsStr(x.id)})">Simpan Status</button>`;
   $('modalDetail').classList.remove('hidden');
 };
 window.saveStatus=async function(id){
@@ -1254,7 +1291,7 @@ function doLacak(){
       ${timelineHTML(x.status)}
       <div class="kv"><b>Keluhan</b><span>${esc(x.keluhan)}</span></div>
       <div class="kv"><b>Biaya</b><span><b>${fmtRp(x.biaya)}</b></span></div>
-      <div class="btn-row"><button class="btn small" onclick="cetak(${x.id})">🖨 Nota</button><button class="btn small" onclick="detail(${x.id})">👁 Detail</button></div>
+      <div class="btn-row"><button class="btn small" onclick="cetak(${jsStr(x.id)})">🖨 Nota</button><button class="btn small" onclick="detail(${jsStr(x.id)})">👁 Detail</button></div>
     </div>`;
   }).join('');
 }
@@ -1335,8 +1372,17 @@ if($('btnCetakPreview')) $('btnCetakPreview').onclick=()=>{
 // ===== CSV / BACKUP =====
 function toCSV(){
   const h=['NoService','Tanggal','Nama','Telp','Merk','Tipe','Keluhan','Biaya','Status','Teknisi'];
-  const rows=DB.map(x=>[x.noService,x.tanggal,x.nama,x.telp,x.merk,x.tipe,'"'+String(x.keluhan||'').replace(/"/g,'""')+'"',x.biaya,x.status,x.teknisi].join(','));
-  return h.join(',')+'\n'+rows.join('\n');
+  // Semua kolom harus di-escape: hanya kolom keluhan yang dulunya di-quote,
+  // sehingga koma di kolom lain menggeser seluruh kolom. Nilai yang diawali
+  // = + - @ juga dieksekusi sebagai formula oleh Excel -> prefix apostrof.
+  const cell=(v)=>{
+    let s=String(v??'');
+    if(/^[=+\-@\t\r]/.test(s)) s="'"+s;
+    return '"'+s.replace(/"/g,'""')+'"';
+  };
+  const rows=DB.map(x=>[x.noService,x.tanggal,x.nama,x.telp,x.merk,x.tipe,x.keluhan,x.biaya,x.status,x.teknisi].map(cell).join(','));
+  // BOM UTF-8 supaya karakter Indonesia tidak jadi berantakan di Excel.
+  return '\uFEFF'+h.map(cell).join(',')+'\n'+rows.join('\n');
 }
 function download(name, content, type='text/plain'){
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type})); a.download=name; a.click();
@@ -1353,25 +1399,46 @@ $('restoreFile').addEventListener('change',(e)=>{
 });
 
 // ===== PENGATURAN =====
-function fillTeknisi(sel, val){ sel.innerHTML=(SET.teknisi||[]).map(t=>`<option ${t===val?'selected':''}>${esc(t)}</option>`).join(''); }
+let SETTINGS_DIRTY = false;
+function fillTeknisi(sel, val){
+  if(!sel) return;
+  // Pertahankan pilihan yang sedang aktif supaya tidak reset ke "Andi"
+  // setiap kali halaman di-render ulang di tengah user mengisi form.
+  const keep = (val!==undefined && val!==null && val!=='') ? val : (sel.value||'');
+  const list = SET.teknisi||[];
+  sel.innerHTML = list.map(t=>`<option ${String(t)===String(keep)?'selected':''}>${esc(t)}</option>`).join('');
+  if(keep && !list.some(t=>String(t)===String(keep))){
+    // pilihan lama tidak ada di daftar -> tampilkan sebagai opsi tambahan
+    sel.insertAdjacentHTML('beforeend', `<option selected>${esc(keep)}</option>`);
+  }
+}
 function renderSettingUI(){
-  $('brandName').textContent=SET.nama.split('-')[0].trim()||'ServisHP Pro';
+  $('brandName').textContent=String(SET.nama||'').trim()||'ServisHP Pro';
   $('sideKonter').textContent=SET.nama; $('sideKonterAlamat').textContent=SET.alamat;
-  $('s_nama').value=SET.nama; $('s_alamat').value=SET.alamat; $('s_telp').value=SET.telp; $('s_nota').value=SET.nota;
+  // Jangan menimpa isian form yang sedang diedit user (renderAll() dipanggil
+  // setiap kali ada sync dari server -> ketikan user hilang).
+  if(!SETTINGS_DIRTY){
+    $('s_nama').value=SET.nama; $('s_alamat').value=SET.alamat; $('s_telp').value=SET.telp; $('s_nota').value=SET.nota;
+  }
   fillTeknisi($('f_teknisi')); fillTeknisi($('e_teknisi'));
   $('listMerk').innerHTML=(SET.merk||[]).map(m=>`<option value="${esc(m)}">`).join('');
   $('teknisiList').innerHTML=(SET.teknisi||[]).map((t,i)=>`<span class="pill">${esc(t)}<button onclick="delTeknisi(${i})">✕</button></span>`).join('');
   $('merkList').innerHTML=(SET.merk||[]).map((m,i)=>`<span class="pill">${esc(m)}<button onclick="delMerk(${i})">✕</button></span>`).join('');
 }
+// Tandai form pengaturan "berubah" saat user mengetik, supaya render tidak menimpa.
+['s_nama','s_alamat','s_telp','s_nota'].forEach(function(id){
+  const el=$(id); if(!el) return;
+  el.addEventListener('input', ()=>{ SETTINGS_DIRTY=true; });
+});
 $('btnSaveSetting').onclick=async ()=>{
   if(!needAdmin()) return;
   const payload={ nama:$('s_nama').value||SET.nama, alamat:$('s_alamat').value, telp:$('s_telp').value, nota:$('s_nota').value };
   if(useBackend()){
-    try{ await window.API.updateSettings(payload); await pullSettings(); renderSettingUI(); toast('Pengaturan disimpan ✅'); return; }
+    try{ await window.API.updateSettings(payload); SETTINGS_DIRTY=false; await pullSettings(); renderSettingUI(); toast('Pengaturan disimpan ✅'); return; }
     catch(err){ toast('Backend gagal: '+err.message); return; }
   }
   Object.assign(SET, payload);
-  saveSetting(); renderSettingUI(); toast('Pengaturan disimpan ✅');
+  SETTINGS_DIRTY=false; saveSetting(); renderSettingUI(); toast('Pengaturan disimpan ✅');
 };
 $('btnAddTeknisi').onclick=async ()=>{ if(!needAdmin()) return; const v=$('newTeknisi').value.trim(); if(!v) return;
   if(useBackend()){ try{ await window.API.addTeknisi(v); $('newTeknisi').value=''; await pullSettings(); renderSettingUI(); return; }catch(err){ toast('Backend gagal: '+err.message); return; } }
@@ -1409,11 +1476,14 @@ function renderHeadbar(){
   }
   if(headIdx>=list.length) headIdx=0;
   track.innerHTML=list.map(s=>{
-    const img=fullImageUrl(s.image_url);
-    const bg=img?`background-image:url('${esc(img)}')`:`background:linear-gradient(135deg,#2563eb,#7c3aed)`;
+    const img=safeUrl(fullImageUrl(s.image_url), true);
+    // URL gambar masuk ke context CSS -> escape dulu supaya tidak bisa
+    // keluar dari url("...") dan menyuntik properti CSS lain.
+    const bg=img?`background-image:url("${cssUrl(img)}")`:'background:linear-gradient(135deg,#2563eb,#7c3aed)';
     const inner=`<div class="shade"></div><div class="cap"><h2>${esc(s.judul||'Promo')}</h2><p>${esc(s.subjudul||'')}</p></div>`;
-    return s.link
-      ? `<a class="headbar-slide" style="${bg}" href="${esc(s.link)}" target="_blank" rel="noopener">${inner}</a>`
+    const href=safeUrl(s.link);
+    return href
+      ? `<a class="headbar-slide" style="${bg}" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
       : `<div class="headbar-slide" style="${bg}">${inner}</div>`;
   }).join('');
   goHead(headIdx); restartHeadAuto();
@@ -1444,22 +1514,28 @@ function renderSlideManager(){
   const box=$('slideList'); if(!box) return;
   const canEdit=isAdminUp();
   box.innerHTML=(SLIDES||[]).map((s,i)=>`<span class="pill">${s.aktif===false?'🚫 ':''}${esc(s.judul||('Slide '+(i+1)))}${s.image_url?' 🖼':''}
-    ${canEdit?`<button onclick="toggleSlide(${s.id!==undefined?s.id:i},${i})" title="Aktif/Nonaktif">👁</button><button onclick="delSlide(${s.id!==undefined?s.id:i},${i})">✕</button>`:''}</span>`).join('')
+    ${canEdit?`<button onclick="toggleSlide(${jsStr(s.id!==undefined?s.id:i)},${i})" title="Aktif/Nonaktif">👁</button><button onclick="delSlide(${jsStr(s.id!==undefined?s.id:i)},${i})">✕</button>`:''}</span>`).join('')
     || '<small class="muted">Belum ada slide.</small>';
 }
+// Slide lokal (dibuat saat offline) ditandai _local. Tanpa penanda ini, id
+// lokal yang berupa angka ikut dikirim ke server -> 404 dan slide tidak
+// bisa dihapus / dimatikan.
+const isLocalSlide=(s)=> !!(s && (s._local===true || s._local===1));
 window.toggleSlide=async (id, idx)=>{
   if(!needAdmin()) return;
-  if(useBackend() && typeof id==='number'){
-    try{ const cur=(SLIDES||[])[idx]; await window.API.updateSlide(id,{aktif:!(cur&&cur.aktif!==false)}); await refreshSlideManager(); return; }
+  const s=(SLIDES||[])[idx];
+  if(useBackend() && s && !isLocalSlide(s) && typeof s.id==='number'){
+    try{ await window.API.updateSlide(s.id,{aktif:!(s.aktif!==false)}); await refreshSlideManager(); return; }
     catch(err){ toast('Backend gagal: '+err.message); return; }
   }
-  const s=SLIDES[idx]; if(!s) return; s.aktif=!(s.aktif!==false); saveSlidesLocal(); renderHeadbar(); renderSlideManager();
+  if(!s) return; s.aktif=!(s.aktif!==false); saveSlidesLocal(); renderHeadbar(); renderSlideManager();
 };
 window.delSlide=async (id, idx)=>{
   if(!needAdmin()) return;
   if(!confirm('Hapus slide ini?')) return;
-  if(useBackend() && typeof id==='number'){
-    try{ await window.API.deleteSlide(id); await refreshSlideManager(); toast('Slide dihapus'); return; }
+  const s=(SLIDES||[])[idx];
+  if(useBackend() && s && !isLocalSlide(s) && typeof s.id==='number'){
+    try{ await window.API.deleteSlide(s.id); await refreshSlideManager(); toast('Slide dihapus'); return; }
     catch(err){ toast('Backend gagal: '+err.message); return; }
   }
   SLIDES.splice(idx,1); saveSlidesLocal(); renderHeadbar(); renderSlideManager(); toast('Slide dihapus');
@@ -1477,7 +1553,7 @@ if($('btnAddSlide')) $('btnAddSlide').onclick=async ()=>{
       await refreshSlideManager(); toast('Slide ditambahkan ✅'); return;
     }catch(err){ toast('Backend gagal: '+err.message); return; }
   }
-  SLIDES.push({id:Date.now(), judul, subjudul, image_url, urutan:SLIDES.length, aktif:true});
+        SLIDES.push({id:Date.now(), _local:true, judul, subjudul, image_url, urutan:SLIDES.length, aktif:true});
   saveSlidesLocal(); $('sl_judul').value=''; $('sl_sub').value=''; $('sl_url').value='';
   renderHeadbar(); renderSlideManager(); toast('Slide ditambahkan ✅');
 };
@@ -1501,8 +1577,33 @@ if($('sl_file')) $('sl_file').addEventListener('change', async (e)=>{
   }
   e.target.value='';
 });
-$('btnHapusSelesai').onclick=()=>{ if(!needAdmin()) return; if(!confirm('Hapus semua data berstatus Diambil?')) return; DB=DB.filter(x=>normStatus(x.status)!=='Diambil'); saveData(); renderAll(); toast('Data selesai dihapus'); };
-$('btnHapusSemua').onclick=()=>{ if(!needSuperAdmin()) return; if(!confirm('HAPUS SEMUA DATA? Tindakan ini tidak bisa dibatalkan!')) return; if(!confirm('Yakin 100%? Ketik OK untuk lanjut.') ) return; DB=[]; saveData(); renderAll(); toast('Semua data dihapus'); };
+$('btnHapusSelesai').onclick=async ()=>{
+  if(!needAdmin()) return;
+  if(!confirm('Hapus semua data berstatus Diambil?')) return;
+  if(useBackend() && window.API.purgeServices){
+    try{
+      const r = await window.API.purgeServices('diambil');
+      await pullServices(); renderAll();
+      toast((r && r.deleted ? r.deleted : 0)+' data selesai dihapus dari server ✅');
+      return;
+    }catch(err){ toast('Gagal hapus: '+err.message); return; }
+  }
+  DB=DB.filter(x=>normStatus(x.status)!=='Diambil'); saveData(); renderAll(); toast('Data selesai dihapus');
+};
+$('btnHapusSemua').onclick=async ()=>{
+  if(!needSuperAdmin()) return;
+  if(!confirm('HAPUS SEMUA DATA? Tindakan ini tidak bisa dibatalkan!')) return;
+  if(!confirm('Yakin 100%? Ketik OK untuk lanjut.') ) return;
+  if(useBackend() && window.API.purgeServices){
+    try{
+      const r = await window.API.purgeServices('all');
+      await pullServices(); renderAll();
+      toast((r && r.deleted ? r.deleted : 0)+' data dihapus dari server ✅');
+      return;
+    }catch(err){ toast('Gagal hapus: '+err.message); return; }
+  }
+  DB=[]; saveData(); renderAll(); toast('Semua data dihapus');
+};
 
 // ===== SEED CONTOH (pertama kali) =====
 if(!localStorage.getItem('servishp_seeded')){
@@ -1529,13 +1630,17 @@ document.querySelectorAll('.pw-eye').forEach(b=>b.onclick=()=>{
 $('btnForgot').onclick=async ()=>{
   const id=$('l_id').value.trim();
   if(!id){ toast('Isi email / No. HP dulu untuk reset'); return; }
-  const np=prompt('Reset password.\nMasukkan password baru (min. 6):');
+  if(BACKEND_OK && window.API){
+    // Reset password lewat endpoint publik sudah dinonaktifkan di backend
+    // (bisa dipakai siapa pun untuk membajak akun). Jadi di mode server,
+    // arahkan pengguna ke Super Admin.
+    toast('Reset password dilakukan oleh Super Admin. Hubungi Super Admin konter untuk reset password Anda.', 6000);
+    return;
+  }
+  // Mode offline (LocalStorage) — masih bisa reset lokal.
+  const np=prompt('Reset password (mode offline/lokal).\nMasukkan password baru (min. 6):');
   if(!np) return;
   if(np.length<6){ toast('Password minimal 6 karakter'); return; }
-  if(BACKEND_OK && window.API){
-    try{ await window.API.req('/auth/forgot?identifier='+encodeURIComponent(id)+'&new_password='+encodeURIComponent(np), {method:'POST'}); toast('Password berhasil direset ✅ Silakan login'); return; }
-    catch(err){ toast('Reset gagal: '+err.message); return; }
-  }
   const users=loadUsers();
   const u=users.find(x=>normEmail(x.email)===normEmail(id)||normPhone(x.hp)===normPhone(id));
   if(!u){ toast('Akun tidak ditemukan'); return; }
@@ -1570,8 +1675,10 @@ $('loginForm').addEventListener('submit', async (e)=>{
 $('registerForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const nama=$('r_nama').value.trim(), email=normEmail($('r_email').value), hp=normPhone($('r_hp').value),
-        pw=$('r_pw').value, pw2=$('r_pw2').value, role=$('r_role').value||'kasir';
-  if(!['kasir','admin','superadmin'].includes(role)){ toast('Role tidak valid'); return; }
+        pw=$('r_pw').value, pw2=$('r_pw2').value;
+  // Pendaftaran PUBLIK selalu jadi role kasir. Meminta role lain dari form
+  // publik berarti siapa pun bisa daftar jadi Super Admin.
+  const role='kasir';
   if(!nama){ toast('Nama wajib diisi'); return; }
   if(!email && !hp){ toast('Isi minimal email ATAU nomor HP'); return; }
   if(email && !isEmail(email)){ toast('Format email tidak valid'); return; }
@@ -1622,11 +1729,14 @@ function renderUsers(){
           <select class="role-select" onchange="changeRole(${u.id},this.value)" ${me&&u.id===me.id?'disabled title="Tidak bisa ubah role sendiri"':''}>
             ${['kasir','admin','superadmin'].map(r=>`<option value="${r}" ${(u.role||'kasir')===r?'selected':''}>${ROLES[r].icon} ${ROLES[r].label}</option>`).join('')}
           </select>
-          <button class="icon-btn" onclick="resetUserPw(${u.id})" title="Reset password">🔑</button>
-          <button class="icon-btn" onclick="deleteUser(${u.id})" title="Hapus">🗑</button>
+          <button class="icon-btn" onclick="resetUserPw(${jsStr(u.id)})" title="Reset password">🔑</button>
+          <button class="icon-btn" onclick="deleteUser(${jsStr(u.id)})" title="Hapus">🗑</button>
         </div></td></tr>`).join('')||'<tr><td colspan="4">Belum ada pengguna</td></tr>');
   };
-  if(useBackend()){
+  // Endpoint /api/users hanya boleh diakses Super Admin. Memanggilnya untuk
+  // semua role bikin satu request sia-sia (403) tiap render + tabel menampilkan
+  // data lokal palsu. Jadi hanya superadmin yang menarik dari server.
+  if(useBackend() && isSuperAdmin()){
     window.API.listUsers().then(paint).catch(()=>paint(loadUsers()));
   } else {
     paint(loadUsers());
@@ -1855,10 +1965,10 @@ function renderSpareparts(){
       <td><b>${fmtRp(x.harga_jual)}</b></td>
       <td><b>${esc(x.stok)}</b><small class="muted"> / min ${esc(x.stok_min)}</small><br>${isLow?'<span class="badge b-Batal">Menipis</span>':'<span class="badge b-Selesai">Aman</span>'}</td>
       <td><div class="act-btns">
-        <button class="icon-btn" onclick="spStock('${sid}',-1)" title="Kurangi 1">−</button>
-        <button class="icon-btn" onclick="spStock('${sid}',1)" title="Tambah 1">+</button>
-        ${admin?`<button class="icon-btn" onclick="spEdit('${sid}')" title="Edit">✏️</button>
-        <button class="icon-btn" onclick="spHapus('${sid}')" title="Hapus">🗑</button>`:''}
+        <button class="icon-btn" onclick="spStock('${jsStr(sid)}',-1)" title="Kurangi 1">−</button>
+        <button class="icon-btn" onclick="spStock('${jsStr(sid)}',1)" title="Tambah 1">+</button>
+        ${admin?`<button class="icon-btn" onclick="spEdit('${jsStr(sid)}')" title="Edit">✏️</button>
+        <button class="icon-btn" onclick="spHapus('${jsStr(sid)}')" title="Hapus">🗑</button>`:''}
       </div></td></tr>`;
   }).join('');
 }
@@ -2142,7 +2252,14 @@ function updKembalian(){
   const t=cartTotal();
   if($('j_total')) $('j_total').textContent=fmtRp(t);
   const bayar=Number(($('j_bayar')||{}).value||0);
-  if($('j_kembali')) $('j_kembali').value=fmtRp(Math.max(bayar-t,0));
+  const el=$('j_kembali');
+  if(el){
+    // Kalau kurang bayar, jangan disembunyikan sebagai "Rp 0" — tampilkan
+    // selisihnya supaya kasir melihat semua uang yang kurang.
+    const kurang=bayar-t;
+    el.value = kurang>=0 ? fmtRp(kurang) : ('KURANG '+fmtRp(-kurang));
+    el.classList.toggle('danger-text', kurang<0);
+  }
 }
 function renderSales(){
   if(!$('j_cart')) return;
@@ -2174,7 +2291,7 @@ function renderSales(){
     <td><b>${esc(x.no_nota)}</b><br><small class="muted">${fmtTgl(x.tanggal)} • ${esc(x.metode||'Tunai')}</small></td>
     <td>${esc(x.pelanggan||'Umum')}<br><small class="muted">${esc((x.items||[]).map(i=>i.nama+' ×'+i.qty).join(', ').slice(0,60))}</small></td>
     <td><b>${fmtRp(x.total)}</b><br><small class="muted">laba ${fmtRp(x.laba)}</small></td>
-    <td><div class="act-btns"><button class="icon-btn" onclick="cetakJual(${x.id})" title="Nota">🖨</button><button class="icon-btn" onclick="detailJual(${x.id})" title="Detail">👁</button>${isAdminUp()?`<button class="icon-btn" onclick="hapusJual(${x.id})" title="Hapus">🗑</button>`:''}</div></td></tr>`).join('');
+    <td><div class="act-btns"><button class="icon-btn" onclick="cetakJual(${jsStr(x.id)})" title="Nota">🖨</button><button class="icon-btn" onclick="detailJual(${jsStr(x.id)})" title="Detail">👁</button>${isAdminUp()?`<button class="icon-btn" onclick="hapusJual(${jsStr(x.id)})" title="Hapus">🗑</button>`:''}</div></td></tr>`).join('');
 }
 window.cartQty=function(i,d){
   const c=CART[i]; if(!c) return;
@@ -2231,7 +2348,10 @@ async function simpanJual(){
     items: CART.map(c=>({sparepart_id:Number(c.id), sku:c.sku, qty:Number(c.qty)})),
   };
   const bayar=Number(($('j_bayar')||{}).value||0);
-  if(bayar<cartTotal()){ if(!confirm('Uang diterima kurang dari total ('+fmtRp(cartTotal())+'). Tetap simpan?')) return; }
+  if(bayar<cartTotal()){
+    const kurang=cartTotal()-bayar;
+    if(!confirm('Uang diterima KURANG dari total.\nTotal: '+fmtRp(cartTotal())+'\nDiterima: '+fmtRp(bayar)+'\nKurang: '+fmtRp(kurang)+'\n\nTetap simpan?')) return;
+  }
   if(useBackend()){
     try{
       const s=await window.API.createSale(payload);
@@ -2297,7 +2417,7 @@ window.detailJual=function(id){
     <div class="kv"><b>Item</b><span>${(x.items||[]).map(i=>esc(i.nama)+' ×'+esc(i.qty)+' = '+fmtRp(i.subtotal)).join('<br>')||'-'}</span></div>
     <div class="kv"><b>Total</b><span><b>${fmtRp(x.total)}</b> (laba ${fmtRp(x.laba)})</span></div>
     <div class="kv"><b>Catatan</b><span>${esc(x.catatan||'-')}</span></div>`;
-  $('detailFoot').innerHTML=`<button class="btn ghost" onclick="cetakJual(${x.id})">🖨 Cetak Nota</button>${isAdminUp()?`<button class="btn ghost" onclick="hapusJual(${x.id})">🗑 Hapus</button>`:''}<button class="btn primary" data-close>Tutup</button>`;
+  $('detailFoot').innerHTML=`<button class="btn ghost" onclick="cetakJual(${jsStr(x.id)})">🖨 Cetak Nota</button>${isAdminUp()?`<button class="btn ghost" onclick="hapusJual(${jsStr(x.id)})">🗑 Hapus</button>`:''}<button class="btn primary" data-close>Tutup</button>`;
   $('modalDetail').classList.remove('hidden');
 };
 window.hapusJual=async function(id){
@@ -2365,7 +2485,7 @@ function renderExpenses(){
     <td><b>${fmtTgl(x.tanggal)}</b><br><small class="muted">${esc(x.kategori||'Lainnya')}</small></td>
     <td>${esc(x.keterangan||'-')}<br><small class="muted">👤 ${esc(x.dicatat_oleh||'-')}</small></td>
     <td style="text-align:right"><b>−${fmtRp(x.jumlah)}</b></td>
-    <td><div class="act-btns">${admin?`<button class="icon-btn" onclick="exEdit(${x.id})" title="Edit">✏️</button><button class="icon-btn" onclick="exHapus(${x.id})" title="Hapus">🗑</button>`:'<small class="muted">—</small>'}</div></td></tr>`).join('');
+    <td><div class="act-btns">${admin?`<button class="icon-btn" onclick="exEdit(${jsStr(x.id)})" title="Edit">✏️</button><button class="icon-btn" onclick="exHapus(${jsStr(x.id)})" title="Hapus">🗑</button>`:'<small class="muted">—</small>'}</div></td></tr>`).join('');
 }
 async function simpanExpense(){
   if(!requireSesi()) return;
@@ -2826,6 +2946,19 @@ function omzetGeser(k){
 // init (dengan guard login + auto backend)
 (async function init(){
   await checkBackend(true);
+  // Hint akun demo hanya relevan untuk pemakaian lokal. Di server publik
+  // menampilkan kredensial default itu berbahaya (kredensial sudah diubah
+  // owner, tapi tetap membocorkan username admin).
+  if(BACKEND_OK){ const dh=$('demoHint'); if(dh) dh.classList.add('hidden'); }
+  // Token kedaluwarsa / dicabut -> api.js sudah menghapus tokennya (event 401).
+  // Tanpa ini user tersangkut di error 401 terus-menerus tanpa diminta login.
+  try{
+    window.addEventListener('servishp:401', ()=>{
+      ME_CACHE=null; KAS=null;
+      try{ showAuth(); }catch{}
+      toast('Sesi berakhir. Silakan login kembali.', 4000);
+    });
+  }catch(e){}
   // coba pakai token tersimpan
   if(BACKEND_OK && backendToken()){
     try{

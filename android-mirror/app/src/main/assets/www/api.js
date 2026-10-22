@@ -1,7 +1,7 @@
 /* ServisHP Pro — API client untuk backend FastAPI (Ubuntu-ready).
  *
  * Prioritas base URL (dari paling kuat):
- *   1. ?api=https://... di URL (sekali pakai, otomatis disimpan)
+ *   1. ?api=https://... di URL (SEKALI PAKAI, tidak disimpan permanen)
  *   2. localStorage 'servishp_api_base' (diatur via Pengaturan > Backend Server)
  *   3. window.SERVISHP_SERVER dari config.js (diisi IP/domain Ubuntu sekali di server)
  *   4. origin yang sama + '/api' (saat frontend dibuka dari http://SERVER/ via nginx/docker)
@@ -22,7 +22,11 @@
     u = String(u).trim().replace(/\/+$/, "");
     if (!u) return "";
     // izinkan input "103.0.0.1:8000" tanpa skema -> tambah http://
-    if (!/^https?:\/\//i.test(u) && /^[0-9a-z.\-:]+$/i.test(u)) u = "http://" + u;
+    // Catatan: kelas karakter TIDAK boleh memuat '/', supaya "192.168.1.5/api"
+    // (ada path tapi tanpa skema) juga tertangani di bawah.
+    if (!/^https?:\/\//i.test(u)) {
+      if (/^[0-9a-z.\-]+(:\d+)?(\/.*)?$/i.test(u)) u = "http://" + u;
+    }
     // bila user isi origin tanpa /api, tambahkan
     if (/^https?:\/\/[^/]+$/i.test(u)) u = u + "/api";
     return u;
@@ -34,6 +38,18 @@
       if (m && m[1]) return clean(decodeURIComponent(m[1]));
     } catch (e) {}
     return "";
+  }
+
+  // Buang ?api= dari address bar supaya tidak jadi permanen.
+  // Tanpa ini, link lama yang di-bookmark selalu menimpa server yang
+  // sudah dikonfigurasi user di Pengaturan > Backend Server.
+  function stripApiParam() {
+    try {
+      if (!/[?&]api=/.test(location.search || "")) return;
+      var url = new URL(location.href);
+      url.searchParams.delete("api");
+      history.replaceState(null, "", url.pathname + url.search + url.hash);
+    } catch (e) {}
   }
 
   function savedBase() {
@@ -117,6 +133,26 @@
     }
   }
 
+  // FastAPI balas 422 dengan `detail` berupa ARRAY objek, bukan string.
+  // Kalau ditampilkan mentah, user lihat JSON panjang yang tidak berguna.
+  function _errMsg(data, status) {
+    var d = data && (data.detail || data.message);
+    if (typeof d === "string" && d) return d;
+    if (Array.isArray(d) && d.length) {
+      var parts = d.map(function (x) {
+        if (!x) return "";
+        var loc = Array.isArray(x.loc) ? x.loc.filter(function (l) { return l !== "body"; }).join(".") : "";
+        var msg = x.msg || x.detail || "";
+        return (loc ? loc + ": " : "") + String(msg).replace(/^Value error, /, "");
+      }).filter(Boolean);
+      if (parts.length) return parts.join(" | ");
+    }
+    if (d && typeof d === "object") {
+      try { return JSON.stringify(d); } catch (e) {}
+    }
+    return "HTTP " + status;
+  }
+
   const API = {
     base: detectBase(),
     TOKEN_KEY: "servishp_token_v1",
@@ -155,23 +191,34 @@
     // Coba tiap kandidat, pakai yang pertama yang /health-nya OK.
     // Dipanggil saat aplikasi start agar otomatis nempel ke server Ubuntu.
     async autoConnect(timeoutMs) {
-      // ?api= selalu menang & langsung disimpan
+      // ?api= dipakai SEKALI untuk sesi ini saja: dicoba paling dulu, lalu
+      // dibuang dari URL dan TIDAK disimpan ke localStorage. Kalau disimpan,
+      // satu link lama bisa mengunci konfigurasi server user selamanya.
       const q = queryApi();
-      if (q) this.setBase(q);
-      const ordered = [this.base].concat(candidates().filter((x) => x !== this.base));
+      stripApiParam();
+      const ordered = [];
+      if (q) ordered.push(q);
+      candidates().forEach(function (x) { if (ordered.indexOf(x) === -1) ordered.push(x); });
       for (const base of ordered) {
         const h = await ping(base, timeoutMs || 4000);
         if (h) {
           this.base = base;
-          try { localStorage.setItem(LS_KEY, base); } catch {}
-          return { base, health: h };
+          if (base !== q) {
+            try { localStorage.setItem(LS_KEY, base); } catch {}
+          }
+          return { base: base, health: h, temporary: base === q };
         }
       }
       return null;
     },
 
     async req(path, opts = {}) {
-      const headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+      const method = (opts.method || "GET").toUpperCase();
+      const hasBody = !!opts.body;
+      const headers = Object.assign({}, opts.headers || {});
+      // Jangan kirim Content-Type untuk request tanpa body: memicu CORS
+      // preflight extra di setiap request GET saat origin beda.
+      if (hasBody && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
       const tok = this.getToken();
       if (tok) headers["Authorization"] = "Bearer " + tok;
       let ctl, timer;
@@ -181,9 +228,9 @@
           timer = setTimeout(() => { try { ctl.abort(); } catch {} }, opts.timeout || this.TIMEOUT_MS);
         }
         const res = await fetch(this.base + path, {
-          method: opts.method || "GET",
-          headers,
-          body: opts.body ? JSON.stringify(opts.body) : undefined,
+          method: method,
+          headers: headers,
+          body: hasBody ? JSON.stringify(opts.body) : undefined,
           signal: ctl ? ctl.signal : undefined,
         });
         if (timer) clearTimeout(timer);
@@ -191,8 +238,19 @@
         let data = null;
         try { data = text ? JSON.parse(text) : null; } catch { data = { detail: text }; }
         if (!res.ok) {
-          const msg = (data && (data.detail || data.message)) || ("HTTP " + res.status);
-          throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+          const msg = _errMsg(data, res.status);
+          if (res.status === 401) {
+            // Token kedaluwarsa / tidak valid: bersihkan supaya user diminta
+            // login lagi. Kalau tidak, app tersangkut di error 401 terus.
+            this.clearToken();
+            try {
+              window.dispatchEvent(new CustomEvent("servishp:401"));
+            } catch (e) {}
+          }
+          const err = new Error(msg);
+          err.status = res.status;
+          err.data = data;
+          throw err;
         }
         return data;
       } catch (e) {
@@ -232,6 +290,7 @@
     updateService(id, payload) { return this.req("/services/" + id, { method: "PUT", body: payload }); },
     setStatus(id, status) { return this.req("/services/" + id + "/status", { method: "PATCH", body: { status } }); },
     deleteService(id) { return this.req("/services/" + id, { method: "DELETE" }); },
+    purgeServices(scope) { return this.req("/services/purge", { method: "POST", body: { scope: scope } }); },
     dashboard() { return this.req("/stats/dashboard"); },
 
     getSettings() { return this.req("/settings"); },
@@ -269,6 +328,7 @@
     listSales(params = {}) {
       const qs = new URLSearchParams({
         q: params.q || "", dari: params.dari || "", sampai: params.sampai || "",
+        kasir: params.kasir || "",
         skip: String(params.skip || 0), limit: String(params.limit || 1000),
       }).toString();
       return this.req("/sales?" + qs);
@@ -298,24 +358,44 @@
     createExpense(payload) { return this.req("/expenses", { method: "POST", body: payload }); },
     updateExpense(id, payload) { return this.req("/expenses/" + id, { method: "PUT", body: payload }); },
     deleteExpense(id) { return this.req("/expenses/" + id, { method: "DELETE" }); },
-    report(dari = "", sampai = "") {
-      const qs = new URLSearchParams({ dari: dari || "", sampai: sampai || "" }).toString();
+    report(dari = "", sampai = "", kasir = "") {
+      const qs = new URLSearchParams({
+        dari: dari || "", sampai: sampai || "", kasir: kasir || "",
+      }).toString();
       return this.req("/stats/report?" + qs);
     },
     async uploadSlide(file) {
       const tok = this.getToken();
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch(this.base + "/slides/upload", {
-        method: "POST",
-        headers: tok ? { "Authorization": "Bearer " + tok } : {},
-        body: fd,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
+      const ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+      const timer = ctl ? setTimeout(function () { try { ctl.abort(); } catch (e) {} }, 60000) : null;
+      let res;
+      try {
+        res = await fetch(this.base + "/slides/upload", {
+          method: "POST",
+          headers: tok ? { "Authorization": "Bearer " + tok } : {},
+          body: fd,
+          signal: ctl ? ctl.signal : undefined,
+        });
+      } catch (e) {
+        if (timer) clearTimeout(timer);
+        throw new Error("Upload gagal: server tidak merespon / koneksi putus.");
+      }
+      if (timer) clearTimeout(timer);
+      const text = await res.text();
+      let data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { detail: text }; }
+      if (!res.ok) throw new Error(_errMsg(data, res.status));
       return data;
     },
   };
+
+  // Buang ?api= dari address bar SEDANG PAGINA dimuat (nilai base sudah
+  // diambil oleh detectBase di atas). Kalau tidak dibuang, reload berikutnya
+  // akan memakai lagi parameter itu -> bukan "sekali pakai" dan bisa
+  // mengunci konfigurasi server yang sudah diset user.
+  stripApiParam();
 
   window.API = API;
 })();

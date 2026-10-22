@@ -8,6 +8,8 @@
 # Secret / env lokal
 .env
 backend/.env
+# Kunci tanda tangan JWT yang dibuat lokal di server (JANGAN di-push)
+backend/.secret_key
 
 # Python
 __pycache__/

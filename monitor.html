@@ -1,4 +1,13 @@
 <!DOCTYPE html>
+<!--
+  CATATAN PENTING:
+  Halaman ini (NEXORA Monitor AI) TIDAK punya layar login.
+  Halaman ini hanya mengambil token dari localStorage['servishp_token_v1']
+  (diisi oleh index.html setelah login di POS). Kalau token tidak ada/expired,
+  monitor tidak bisa login otomatis — buka POS dulu (index.html) untuk login.
+  Query ?v= pada config.js / api.js disamakan dengan index.html agar cache
+  browser konsisten (config.js?v=1.2.0, api.js?v=1.3.1).
+-->
 <html lang="id">
 <head>
 <meta charset="UTF-8" />
@@ -59,8 +68,8 @@ button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--b
     <div class="row"><select id="tProv"></select><input id="tMsg" style="flex:1;min-width:220px" placeholder="cth: halo, siapa kamu?" value="halo, jawab singkat saja" /><button class="primary" id="btnChat">Kirim</button></div>
     <pre id="chatOut" class="mut" style="white-space:pre-wrap"></pre></div>
 </div>
-<script src="config.js"></script>
-<script src="api.js"></script>
+<script src="config.js?v=1.2.0"></script>
+<script src="api.js?v=1.3.2"></script>
 <script>
 const $=id=>document.getElementById(id);
 async function jget(p){const r=await API.req(p);return r;}

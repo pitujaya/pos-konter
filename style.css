@@ -226,6 +226,8 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
 .sku-row{display:flex;gap:8px}
 .sku-row input{flex:1;min-width:0}
 .danger{color:var(--red)}
+/* Tanda kekurangan pembayaran (kembalian minus) harus kelihatan jelas */
+.danger-text{color:var(--red) !important;font-weight:800}
 .nota-preview{background:#f8fafc;border:1px dashed var(--line);border-radius:10px;padding:12px;font-size:12.5px;margin-top:10px;white-space:pre-line}
 /* MODAL */
 .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.55);display:grid;place-items:center;z-index:50;padding:16px}
