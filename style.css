@@ -92,6 +92,10 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--i
 .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
 .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
 .card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+/* Filter kecil di dalam card-head (mis. filter jenis stok di Laporan) */
+.lp-filter{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap}
+.lp-filter select{border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-family:inherit;background:#fff;min-height:36px}
+@media(max-width:760px){.card-head{flex-wrap:wrap;gap:8px}.lp-filter{width:100%}.lp-filter select{flex:1;min-height:40px}}
 .link{background:none;border:0;color:var(--blue);font-weight:700;cursor:pointer;font-size:13.5px}
 .sep{border:0;border-top:1px solid var(--line);margin:14px 0}
 .muted{color:var(--muted);font-size:13.5px;margin-bottom:10px}

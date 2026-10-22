@@ -731,7 +731,7 @@ function goto(page, filter){
   if(page==='produk'){ try{ renderSpareparts(); }catch{} if(useBackend()){ pullSpareparts().then(()=>{ renderAll(); }).catch(()=>{}); } }
   if(page==='penjualan'){ try{ renderSales(); }catch{} if(useBackend()){ pullSales().then(()=>{ try{renderSales();}catch{} }).catch(()=>{}); } }
   if(page==='pengeluaran'){ try{ renderExpenses(); }catch{} if(useBackend()){ pullExpenses().then(()=>{ try{renderExpenses();}catch{} try{renderLaporan();}catch{} }).catch(()=>{}); } }
-  if(page==='laporan'){ try{ syncLpKasirOptions(); }catch{} try{ renderLaporan(); }catch{} }
+  if(page==='laporan'){ try{ syncLpKasirOptions(); }catch{} try{ renderLaporan(); }catch{} if(useBackend()){ pullSpareparts().then(()=>{ try{ renderLaporan(); }catch{} }).catch(()=>{}); } }
   // Kas belum dibuka + kasir klik menu transaksi -> langsung munculkan menu Buka Sesi
   if(PAGES_TRANSAKSI.includes(page) && !kasSesiAktif()){ showKasBuka(); }
   window.scrollTo({top:0});
@@ -2633,6 +2633,16 @@ function lpRange(){
   let dari=val('lp_dari'), sampai=val('lp_sampai');
   return {dari:(dari||'').slice(0,10), sampai:(sampai||'').slice(0,10), kasir:($('lp_kasir')?($('lp_kasir').value||''):'').trim()};
 }
+// Filter jenis stok di Laporan > Stok Produk (Sparepart/Accessories/Handphone).
+// Disimpan di localStorage supaya pilihan user tetap sama setelah reload.
+const LS_LP_JENIS='servishp_lp_jenis_v1';
+function lpJenis(){
+  try{ return String(localStorage.getItem(LS_LP_JENIS)||'').trim(); }catch{ return ''; }
+}
+function lpSetJenis(v){
+  try{ localStorage.setItem(LS_LP_JENIS, String(v||'')); }catch{}
+  const el=$('lp_jenis'); if(el) el.value=String(v||'');
+}
 // ===== FILTER PER KASIR =====
 const normKasir = (s)=>String(s||'').trim().split(/\s+/).join(' ').toLowerCase();
 function matchKasir(nama, kasir){
@@ -2727,10 +2737,9 @@ async function renderLaporan(){
   if($('lpJlNota')) $('lpJlNota').textContent=r.penjualan_count;
   if($('lpJlOmzet')) $('lpJlOmzet').textContent=fmtRp(r.penjualan_omzet);
   if($('lpJlLaba')) $('lpJlLaba').textContent=fmtRp(r.penjualan_laba);
-  if($('lpStItem')) $('lpStItem').textContent=r.stok_item;
-  if($('lpStHpp')) $('lpStHpp').textContent=fmtRp(r.stok_nilai_hpp);
-  if($('lpStJual')) $('lpStJual').textContent=fmtRp(r.stok_nilai_jual);
-  if($('lpStLow')) $('lpStLow').textContent=r.stok_menipis;
+  // Catatan: kartu statistik stok (lpStItem/lpStHpp/lpStJual/lpStLow)
+  // dihitung ulang di bawah dari data SPARE + filter jenis, supaya kartu
+  // selalu sama dengan isi tabel.
   if($('lpLabaBody')) $('lpLabaBody').innerHTML=`
     <tr><td>Pendapatan service (${esc(r.service_selesai)} Diambil, hanya Diambil masuk omzet)</td><td style="text-align:right"><b>${fmtRp(r.service_omzet)}</b></td></tr>
     <tr><td>Pendapatan penjualan barang (${esc(r.penjualan_count)} nota)</td><td style="text-align:right"><b>${fmtRp(r.penjualan_omzet)}</b></td></tr>
@@ -2759,7 +2768,24 @@ async function renderLaporan(){
   const jl=r._jualList||[];
   if($('lpJualCount')) $('lpJualCount').textContent=r.penjualan_count;
   if($('lpJualBody')) $('lpJualBody').innerHTML=jl.map(x=>`<tr><td><b>${esc(x.no_nota||x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.pelanggan||x.nama||'Umum')}</td><td>${esc(x.kasir||'-')}</td><td style="text-align:right"><b>${fmtRp(x.total||x.biaya||0)}</b></td></tr>`).join('')||'<tr><td colspan="4">Belum ada penjualan pada periode ini.</td></tr>';
-  const sp=[...(typeof SPARE!=='undefined'?SPARE:[])].sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
+  const sp=renderStokLaporan();
+  renderRekapKasir(dari, sampai);
+  renderRekapHarian(dari, sampai, kasir);
+}
+// Tabel + kartu statistik Laporan > Stok Produk, dengan filter jenis.
+// Filter: '' (semua) | 'Sparepart' | 'Accessories' | 'Handphone'
+function renderStokLaporan(){
+  const spAll=[...(typeof SPARE!=='undefined'?SPARE:[])].sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
+  const jenisF=lpJenis();
+  const sp=jenisF ? spAll.filter(x=>spJenis(x)===jenisF) : spAll;
+  const stokHpp=sp.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0);
+  const stokJual=sp.reduce((a,b)=>a+Number(b.harga_jual||0)*Number(b.stok||0),0);
+  const stokLow=sp.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).length;
+  // Kartu statistik ikut filter supaya cocok dengan isi tabel.
+  if($('lpStItem')) $('lpStItem').textContent=sp.length;
+  if($('lpStHpp')) $('lpStHpp').textContent=fmtRp(stokHpp);
+  if($('lpStJual')) $('lpStJual').textContent=fmtRp(stokJual);
+  if($('lpStLow')) $('lpStLow').textContent=stokLow;
   if($('lpStokCount')) $('lpStokCount').textContent=sp.length;
   if($('lpStokBody')) $('lpStokBody').innerHTML=sp.map(x=>{ const low=Number(x.stok||0)<=Number(x.stok_min||0); return `<tr>
     <td><b>${esc(x.sku)}</b></td><td><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.merk||'')} • ${esc(((x&&x.kategori)||'Lainnya'))}</small></td>
@@ -2767,9 +2793,8 @@ async function renderLaporan(){
     <td>${fmtRp(x.hpp)}</td><td><b>${fmtRp(x.harga_jual)}</b></td>
     <td><b>${esc(x.stok)}</b><br>${low?'<span class="badge b-Batal">Menipis</span>':'<span class="badge b-Selesai">Aman</span>'}</td>
     <td style="text-align:right"><b>${fmtRp(Number(x.hpp||0)*Number(x.stok||0))}</b></td></tr>`; }).join('')
-    + `<tr><td colspan="6"><b>Total nilai stok (HPP)</b> • ${esc(r.stok_menipis)} menipis</td><td style="text-align:right"><b>${fmtRp(r.stok_nilai_hpp)}</b></td></tr>`;
-  renderRekapKasir(dari, sampai);
-  renderRekapHarian(dari, sampai, kasir);
+    + `<tr><td colspan="6"><b>Total nilai stok (HPP)${jenisF?(' • '+esc(jenisF)):''}</b> • ${esc(stokLow)} menipis</td><td style="text-align:right"><b>${fmtRp(stokHpp)}</b></td></tr>`;
+  return sp;
 }
 // Rekap gabungan per kasir (dihitung dari data lokal yg sudah sync dari backend)
 function renderRekapKasir(dari, sampai){
@@ -2911,6 +2936,11 @@ function bindLaporan(){
   if($('lp_sampai')) $('lp_sampai').onchange=renderLaporan;
   if($('lp_kasir')) $('lp_kasir').onchange=()=>renderLaporan();
   if($('lpResetKasir')) $('lpResetKasir').onclick=()=>{ if($('lp_kasir'))$('lp_kasir').value=''; renderLaporan(); toast('Filter kasir direset ↺'); };
+  // Filter jenis stok (Laporan > Stok Produk)
+  if($('lp_jenis')){
+    $('lp_jenis').value=lpJenis();
+    $('lp_jenis').onchange=()=>{ lpSetJenis($('lp_jenis').value); renderLaporan(); };
+  }
   if($('btnLpCSV')) $('btnLpCSV').onclick=exportLaporanCSV;
   if($('btnLpPrint')) $('btnLpPrint').onclick=printLaporan;
   syncLpKasirOptions();
@@ -2966,15 +2996,26 @@ function exportLaporanCSV(){
     L.push(['TOTAL','',rk.svc_masuk||0,rk.svc_diambil||0,rk.svc_omzet||0,rk.nota||0,rk.jual_omzet||0,rk.exp||0,rk.total_laba||0,rk.wa_terkirim||0].join(','));
   }catch{}
   L.push('');
-  L.push('STOK');
-  L.push('SKU,Nama,Merk,Kategori,HPP,Jual,Stok,Nilai HPP');
-  (typeof SPARE!=='undefined'?SPARE:[]).forEach(x=>L.push([x.sku,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.merk,'"'+String(((x&&x.kategori)||'Lainnya')).replace(/"/g,'""')+'"',x.hpp,x.harga_jual,x.stok,Number(x.hpp||0)*Number(x.stok||0)].join(',')));
+  L.push('STOK'+(lpJenis()?(' • '+lpJenis()):''));
+  L.push('SKU,Nama,Merk,Kategori,Jenis,HPP,Jual,Stok,Nilai HPP');
+  {
+    const spAll=[...(typeof SPARE!=='undefined'?SPARE:[])].sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
+    const jf=lpJenis();
+    const spF=jf ? spAll.filter(x=>spJenis(x)===jf) : spAll;
+    spF.forEach(x=>L.push([x.sku,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.merk,'"'+String(((x&&x.kategori)||'Lainnya')).replace(/"/g,'""')+'"',spJenis(x),x.hpp,x.harga_jual,x.stok,Number(x.hpp||0)*Number(x.stok||0)].join(',')));
+    L.push(['TOTAL','','','','','','',spF.length,spF.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0)].join(','));
+  }
   download('laporan-'+(r.dari||'semua')+'-sd-'+(r.sampai||'semua')+'.csv','\uFEFF'+L.join('\n'),'text/csv');
   toast('CSV laporan diunduh ⬇');
 }
 function printLaporan(){
   const r=LAPORAN_CACHE||computeReportLocal(...Object.values(lpRange()));
-  const sp=(typeof SPARE!=='undefined'?SPARE:[]);
+  const spAll=[...(typeof SPARE!=='undefined'?SPARE:[])].sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
+  const jenisF=lpJenis();
+  const sp=jenisF ? spAll.filter(x=>spJenis(x)===jenisF) : spAll;
+  const stokHpp=sp.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0);
+  const stokJual=sp.reduce((a,b)=>a+Number(b.harga_jual||0)*Number(b.stok||0),0);
+  const stokLow=sp.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).length;
   let harianHtml='';
   try{
     const h=HARIAN_CACHE||computeHarianLocal(...Object.values(lpRange()));
@@ -3000,7 +3041,7 @@ function printLaporan(){
     <p><b>Service per status:</b><br>${STATUS.map(s=>esc(s)+': '+esc((r.service_per_status||{})[s]||0)).join('<br>')}</p>
     ${harianHtml}
     <hr>
-    <p><b>Stok:</b> ${esc(r.stok_item)} item • Nilai HPP ${fmtRp(r.stok_nilai_hpp)} • ${esc(r.stok_menipis)} menipis<br>
+    <p><b>Stok${jenisF?(' — '+esc(jenisF)):''}:</b> ${esc(sp.length)} item • Nilai HPP ${fmtRp(stokHpp)} • Nilai Jual ${fmtRp(stokJual)} • ${esc(stokLow)} menipis<br>
     ${sp.slice(0,60).map(x=>esc(x.sku)+' '+esc(x.nama)+' — stok '+esc(x.stok)).join('<br>')}${sp.length>60?'<br>... +'+(sp.length-60)+' item lain':''}</p>
   </div>`;
   window.print();
