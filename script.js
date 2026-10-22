@@ -1058,13 +1058,16 @@ function filtered(){
 function renderAll(){ renderStats(); renderOmzetChart(); renderRecent(); renderData(); renderQueue(); renderSettingUI(); refreshPreview(); renderUsers(); renderHeadbar(); renderSlideManager(); renderSpareparts(); try{ renderSales(); }catch{} try{ renderExpenses(); }catch{} try{ renderLaporan(); }catch{} try{ renderKasUI(); }catch{} }
 
 function renderStats(){
-  const c=(s)=>DB.filter(x=>normStatus(x.status)===s).length;
-  $('stTotal').textContent=DB.length;
+  // Dashboard = ringkasan HARI INI (per tanggal), bukan akumulasi semua waktu.
+  const today=new Date().toISOString().slice(0,10);
+  const day=DB.filter(x=>String(x.tanggal||'').slice(0,10)===today);
+  const c=(s)=>day.filter(x=>normStatus(x.status)===s).length;
+  $('stTotal').textContent=day.length;
   $('stAntri').textContent=c('Dikerjakan');
   $('stProses').textContent=c('Selesai');
   $('stSelesai').textContent=c('Diambil');
-  // Omzet hanya dari service yang SUDAH DIAMBIL
-  $('stOmzet').textContent=fmtRp(DB.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
+  // Omzet hanya dari service yang SUDAH DIAMBIL (hari ini)
+  $('stOmzet').textContent=fmtRp(day.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
   // Link status di dashboard -> ketuk untuk buka Data Service terfilter
   if($('statusLinks')){ try { $('statusLinks').innerHTML=''; } catch(e){} }
   if($('statusChart')){ try { $('statusChart').innerHTML=''; $('statusChart').style.display='none'; } catch(e){} }
@@ -2941,6 +2944,9 @@ function bindLaporan(){
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.onclick=()=>gotoLtab(b.dataset.ltab));
   const setD=(d,s)=>{ if($('lp_dari'))$('lp_dari').value=d; if($('lp_sampai'))$('lp_sampai').value=s; renderLaporan(); };
   const today=new Date().toISOString().slice(0,10);
+  // Default laporan = HARI INI (per tanggal), bukan akumulasi semua periode.
+  if($('lp_dari') && !$('lp_dari').value) $('lp_dari').value=today;
+  if($('lp_sampai') && !$('lp_sampai').value) $('lp_sampai').value=today;
   if($('lpToday')) $('lpToday').onclick=()=>setD(today,today);
   if($('lp7')) $('lp7').onclick=()=>setD(new Date(Date.now()-6*864e5).toISOString().slice(0,10),today);
   if($('lp30')) $('lp30').onclick=()=>setD(new Date(Date.now()-29*864e5).toISOString().slice(0,10),today);
