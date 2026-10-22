@@ -549,17 +549,21 @@ try{ bindKas(); }catch(e){ console.warn('bindKas:', e); }
 
 // ===== NAVIGASI =====
 let curLtab='laba';
+// tab aktif per grup menu (laporan & produk punya tab sendiri)
+const NAVLTAB = { laporan:'laba', produk:'sparepart' };
 function navSetGroup(grp, open){
   if(!grp) return;
   grp.classList.toggle('open', !!open);
   const h=grp.querySelector('.nav-head');
   if(h) h.setAttribute('aria-expanded', open?'true':'false');
 }
-function navSyncActive(page, ltab){
-  curLtab = ltab || curLtab || 'laba';
+function navSyncActive(page, ltab, group){
+  if(ltab && group) NAVLTAB[group]=ltab;
   document.querySelectorAll('.nav-group').forEach(grp=>{
     const kids=[].slice.call(grp.querySelectorAll('.nav-sub-btn'));
     const head=grp.querySelector('.nav-head');
+    const gkey=grp.dataset.group||'';
+    const tab = gkey ? (NAVLTAB[gkey]||'') : '';
     const onPage=kids.some(k=>k.dataset.page===page) || !!(head && head.dataset.page && head.dataset.page===page);
     if(head) head.classList.toggle('active', onPage);
     if(onPage && kids.length){
@@ -568,7 +572,7 @@ function navSyncActive(page, ltab){
     }
     kids.forEach(k=>{
       const samePage=k.dataset.page===page;
-      const sameTab=!k.dataset.ltab || k.dataset.ltab===curLtab;
+      const sameTab=!k.dataset.ltab || !tab || k.dataset.ltab===tab;
       k.classList.toggle('active', samePage && sameTab);
     });
   });
@@ -631,15 +635,21 @@ document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',
   e.preventDefault();
   const page=b.dataset.page||'';
   const ltab=b.dataset.ltab||'';
-  if(ltab && typeof gotoLtab==='function'){ try{ gotoLtab(ltab); }catch{} }
+  const grp=b.closest('.nav-group');
+  const gkey=grp ? (grp.dataset.group||'') : '';
+  if(gkey==='produk'){
+    if(ltab){ try{ gotoProdukTab(ltab); }catch{} }
+  } else if(ltab && typeof gotoLtab==='function'){
+    try{ gotoLtab(ltab); }catch{}
+  }
   goto(page);
-  if(ltab){ try{ fokusLaporanTab(ltab); }catch{} }
+  if(ltab && gkey!=='produk'){ try{ fokusLaporanTab(ltab); }catch{} }
   if(b.dataset.show){ try{ focusSection('page-'+page, b.dataset.show); }catch{} }
   else if(b.dataset.anchor){
     const el=$(b.dataset.anchor);
     if(el) setTimeout(()=>{ try{ el.scrollIntoView({behavior:'smooth', block:'start'}); }catch{} },160);
   }
-  navSyncActive(page, ltab||undefined);
+  navSyncActive(page, ltab||undefined, gkey);
 }));
 document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.goto)));
 function goto(page, filter){
@@ -668,7 +678,7 @@ function goto(page, filter){
     if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); }
   }
   if(page==='dashboard'){ try{ renderOmzetChart(); }catch{} if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); } }
-  if(page==='sparepart'){ try{ renderSpareparts(); }catch{} if(useBackend()){ pullSpareparts().then(()=>{ renderAll(); }).catch(()=>{}); } }
+  if(page==='produk'){ try{ renderSpareparts(); }catch{} if(useBackend()){ pullSpareparts().then(()=>{ renderAll(); }).catch(()=>{}); } }
   if(page==='penjualan'){ try{ renderSales(); }catch{} if(useBackend()){ pullSales().then(()=>{ try{renderSales();}catch{} }).catch(()=>{}); } }
   if(page==='pengeluaran'){ try{ renderExpenses(); }catch{} if(useBackend()){ pullExpenses().then(()=>{ try{renderExpenses();}catch{} try{renderLaporan();}catch{} }).catch(()=>{}); } }
   if(page==='laporan'){ try{ syncLpKasirOptions(); }catch{} try{ renderLaporan(); }catch{} }
@@ -1063,7 +1073,7 @@ function renderGlobalResults(){
       +`<button type="button" class="gr-more" onclick="gOpenLacak()">Lacak di halaman Lacak →</button>`;
   }
   if(spr.length){
-    h+=`<div class="gr-group">🔧 Produk / Sparepart (${spr.length})</div>`+spr.map(x=>`<button type="button" class="gr-item" onclick="gGoSpare('${esc(String(x.id))}')"><span><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.sku)} • stok ${esc(x.stok)} • ${fmtRp(x.harga_jual)}</small></span></button>`).join('')
+    h+=`<div class="gr-group">📦 Produk (${spr.length})</div>`+spr.map(x=>`<button type="button" class="gr-item" onclick="gGoSpare('${esc(String(x.id))}')"><span><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.sku)} • stok ${esc(x.stok)} • ${fmtRp(x.harga_jual)}</small></span></button>`).join('')
       +`<button type="button" class="gr-more" onclick="gAllSpare()">Lihat semua di Data Sparepart →</button>`;
   }
   box.innerHTML=h; box.classList.remove('hidden');
@@ -1072,7 +1082,13 @@ window.gGoDetail=function(id){ hideGlobalResults(); if(typeof detail==='function
 window.gGoSpare=function(id){
   hideGlobalResults();
   const x=(typeof findSpare==='function')?findSpare(id):null;
-  goto('sparepart');
+  // buka tab produk sesuai jenis barangnya
+  if(x){
+    const j=spJenis(x);
+    const tab=Object.keys(PR_TABS).find(k=>PR_TABS[k]===j) || 'sparepart';
+    try{ gotoProdukTab(tab); navSyncActive('produk', tab, 'produk'); }catch{}
+  }
+  goto('produk');
   if($('spSearch')) $('spSearch').value=x?String(x.sku||''):'';
   try{ renderSpareparts(); }catch{}
 };
@@ -1090,7 +1106,7 @@ window.gAllService=function(){
 };
 window.gAllSpare=function(){
   const q=($('globalSearch')||{}).value||'';
-  hideGlobalResults(); goto('sparepart');
+  hideGlobalResults(); goto('produk');
   if($('spSearch')) $('spSearch').value=q;
   try{ renderSpareparts(); }catch{}
 };
@@ -1715,9 +1731,22 @@ if(!localStorage.getItem(LS_SPARE)){
   saveSpareLocal();
 }
 function spKat(x){ return ((x && x.kategori) || 'Lainnya').toString().trim() || 'Lainnya'; }
-function spKategoriList(){
+// ===== JENIS PRODUK (Sparepart / Accessories / Handphone) =====
+const JENIS_PRODUK = ['Sparepart','Accessories','Handphone'];
+const PR_TABS = { sparepart:'Sparepart', accessories:'Accessories', handphone:'Handphone' };
+let prTab='sparepart';
+function spJenis(x){ return ((x && x.jenis) || 'Sparepart').toString().trim() || 'Sparepart'; }
+function spJenisAktif(){ return PR_TABS[prTab] || 'Sparepart'; }
+function gotoProdukTab(name){
+  prTab = PR_TABS[name] ? name : 'sparepart';
+  NAVLTAB.produk = prTab;
+  document.querySelectorAll('#prTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.prtab===prTab));
+  try{ renderSpareparts(); }catch{}
+}
+function spKategoriList(jenis){
+  const j = jenis || spJenisAktif();
   const seen={};
-  (SPARE||[]).forEach(x=>{ const k=spKat(x); if(!seen[k]) seen[k]=1; });
+  (SPARE||[]).forEach(x=>{ if(spJenis(x)!==j) return; const k=spKat(x); if(!seen[k]) seen[k]=1; });
   return Object.keys(seen).sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
 }
 function refreshSpKategoriUI(){
@@ -1748,7 +1777,10 @@ function renderSpareparts(){
   refreshSpKategoriUI();
   const q=(($('spSearch') && $('spSearch').value)||'').toLowerCase().trim();
   const fk=(($('spKategori') && $('spKategori').value)||'').trim();
-  let r=[...SPARE];
+  const jenis=spJenisAktif();
+  // produk di tab aktif (jenis), sisanya untuk stat
+  const pool=SPARE.filter(x=>spJenis(x)===jenis);
+  let r=[...pool];
   if(fk) r=r.filter(x=>spKat(x).toLowerCase()===fk.toLowerCase());
   if(spLowOnly) r=r.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0));
   if(q) r=r.filter(x=>[(x.nama||''),(x.sku||''),(x.merk||''),spKat(x)].join(' ').toLowerCase().includes(q));
@@ -1756,12 +1788,12 @@ function renderSpareparts(){
   if(s==='sku') r.sort((a,b)=>String(a.sku||'').localeCompare(String(b.sku||'')));
   else if(s==='stok') r.sort((a,b)=>Number(a.stok||0)-Number(b.stok||0));
   else r.sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
-  const low=SPARE.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).length;
-  const nilai=SPARE.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0);
-  if($('spTotal')) $('spTotal').textContent=SPARE.length;
+  const low=pool.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).length;
+  const nilai=pool.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0);
+  if($('spTotal')) $('spTotal').textContent=pool.length;
   if($('spNilai')) $('spNilai').textContent=fmtRp(nilai);
   if($('spLow')) $('spLow').textContent=low;
-  if($('spCount')) $('spCount').textContent=SPARE.length+' item';
+  if($('spCount')) $('spCount').textContent=pool.length+' item';
   if($('spInfo')) $('spInfo').textContent = spLowOnly ? `• menampilkan ${r.length} stok menipis` : (low?`• ${low} stok menipis`:'' );
   $('emptySpare').classList.toggle('hidden', r.length>0);
   // Kasir boleh lihat + ubah stok, tapi TIDAK boleh tambah/edit/hapus sparepart
@@ -1818,9 +1850,9 @@ function fillSpareSelect(sel, list, current, placeholder){
   sel.insertBefore(o, sel.querySelector('option[value="__baru"]'));
   sel.value=cur;
 }
-function refreshSpareModalLists(curMerk, curKat){
+function refreshSpareModalLists(curMerk, curKat, jenis){
   fillSpareSelect($('sp_merk'), spMerkList(), curMerk||'', '— Tanpa Merk —');
-  fillSpareSelect($('sp_kategori'), spKategoriList(), curKat||'', '— Pilih Kategori —');
+  fillSpareSelect($('sp_kategori'), spKategoriList(jenis||spJenisAktif()), curKat||'', '— Pilih Kategori —');
 }
 function bindSpareBaru(){
   [['sp_merk','merk'],['sp_kategori','kategori']].forEach(([id,kind])=>{
@@ -1837,13 +1869,31 @@ function bindSpareBaru(){
   });
 }
 try{ bindSpareBaru(); }catch{}
+// isi dropdown Jenis Produk + tab di halaman Produk
+try{
+  if($('sp_jenis') && !$('sp_jenis').options.length){
+    $('sp_jenis').innerHTML=JENIS_PRODUK.map(j=>'<option value="'+j+'">'+j+'</option>').join('');
+  }
+  document.querySelectorAll('#prTabs .ltab').forEach(b=>b.addEventListener('click',()=>{
+    gotoProdukTab(b.dataset.prtab);
+    navSyncActive('produk', b.dataset.prtab, 'produk');
+  }));
+  // ganti jenis produk -> daftar kategori ikut menyesuaikan
+  if($('sp_jenis') && !$('sp_jenis').dataset.bound){
+    $('sp_jenis').dataset.bound='1';
+    $('sp_jenis').addEventListener('change',()=>{
+      refreshSpareModalLists($('sp_merk')?$('sp_merk').value:'', '', $('sp_jenis').value);
+    });
+  }
+}catch{}
 function openSpareModal(){
   if(!needAdmin()) return;
   spEditId=null;
-  $('spareTitle').textContent='Tambah Sparepart';
+  $('spareTitle').textContent='Tambah Produk';
   $('sp_nama').value=''; $('sp_sku').value='';
   refreshSpareModalLists('', '');
   $('sp_hpp').value=0; $('sp_jual').value=0; $('sp_stok').value=0; $('sp_min').value=0;
+  if($('sp_jenis')) $('sp_jenis').value=spJenisAktif();
   updSpMargin();
   $('modalSpare').classList.remove('hidden');
   setTimeout(()=>{ const el=$('sp_nama'); if(el) el.focus(); },50);
@@ -1859,9 +1909,10 @@ if($('sp_jual')) $('sp_jual').addEventListener('input',updSpMargin);
 window.spEdit=function(id){
   if(!needAdmin()) return;
   const x=findSpare(id); if(!x){ toast('Data tidak ditemukan'); return; } spEditId=x.id;
-  $('spareTitle').textContent='Edit Sparepart';
+  $('spareTitle').textContent='Edit Produk';
   $('sp_nama').value=x.nama; $('sp_sku').value=x.sku;
-  refreshSpareModalLists(x.merk||'', (x.kategori||'').trim());
+  if($('sp_jenis')) $('sp_jenis').value=spJenis(x);
+  refreshSpareModalLists(x.merk||'', (x.kategori||'').trim(), spJenis(x));
   $('sp_hpp').value=x.hpp||0; $('sp_jual').value=x.harga_jual||0; $('sp_stok').value=x.stok||0; $('sp_min').value=x.stok_min||0;
   updSpMargin();
   $('modalSpare').classList.remove('hidden');
@@ -1871,6 +1922,7 @@ if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
   const nama=$('sp_nama').value.trim(), sku=$('sp_sku').value.trim();
   let merk=(($('sp_merk')||{}).value||'').trim(); if(merk==='__baru') merk='';
   const kategori=(($('sp_kategori')||{}).value||'').trim();
+  const jenis=(($('sp_jenis')||{}).value||'').trim() || 'Sparepart';
   const hpp=Number($('sp_hpp').value||0), jual=Number($('sp_jual').value||0);
   const stok=Number($('sp_stok').value||0), smin=Number($('sp_min').value||0);
   if(!nama||!sku){ toast('Nama + SKU wajib diisi'); return; }
@@ -1878,20 +1930,20 @@ if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
   const isEdit=(spEditId!==null && spEditId!==undefined);
   if(useBackend()){
     try{
-      if(isEdit) await window.API.updateSparepart(spEditId,{nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
-      else await window.API.createSparepart({nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
+      if(isEdit) await window.API.updateSparepart(spEditId,{nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
+      else await window.API.createSparepart({nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
       $('modalSpare').classList.add('hidden');
       await pullSpareparts(); renderAll();
-      toast('Sparepart tersimpan ✅'); return;
+      toast('Produk tersimpan ✅'); return;
     }catch(err){ toast(err.message); return; }
   }
   if(spEditId!==null && spEditId!==undefined){
     const x=findSpare(spEditId); if(!x){ toast('Data tidak ditemukan'); return; }
     if(SPARE.some(d=>String(d.id)!==String(spEditId)&&String(d.sku).toLowerCase()===sku.toLowerCase())){ toast('SKU sudah dipakai'); return; }
-    Object.assign(x,{nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
+    Object.assign(x,{nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
   } else {
     if(SPARE.some(d=>String(d.sku).toLowerCase()===sku.toLowerCase())){ toast('SKU sudah dipakai'); return; }
-    SPARE.push({id:Date.now(),nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
+    SPARE.push({id:Date.now(),nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
   }
   saveSpareLocal();
   $('modalSpare').classList.add('hidden');
@@ -1902,7 +1954,7 @@ window.spHapus=async function(id){
   const x=findSpare(id); if(!x){ toast('Data tidak ditemukan'); return; }
   if(!confirm('Hapus '+x.nama+' ('+x.sku+')?')) return;
   if(useBackend()){
-    try{ await window.API.deleteSparepart(x.id); await pullSpareparts(); renderAll(); toast('Sparepart dihapus'); return; }
+    try{ await window.API.deleteSparepart(x.id); await pullSpareparts(); renderAll(); toast('Produk dihapus'); return; }
     catch(err){ toast(err.message); return; }
   }
   SPARE=SPARE.filter(d=>String(d.id)!==String(x.id)); saveSpareLocal(); renderAll(); toast('Sparepart dihapus');
@@ -2470,10 +2522,11 @@ async function renderLaporan(){
   if($('lpStokCount')) $('lpStokCount').textContent=sp.length;
   if($('lpStokBody')) $('lpStokBody').innerHTML=sp.map(x=>{ const low=Number(x.stok||0)<=Number(x.stok_min||0); return `<tr>
     <td><b>${esc(x.sku)}</b></td><td><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.merk||'')} • ${esc(((x&&x.kategori)||'Lainnya'))}</small></td>
+    <td><span class="badge b-Dikerjakan">${esc(spJenis(x))}</span></td>
     <td>${fmtRp(x.hpp)}</td><td><b>${fmtRp(x.harga_jual)}</b></td>
     <td><b>${esc(x.stok)}</b><br>${low?'<span class="badge b-Batal">Menipis</span>':'<span class="badge b-Selesai">Aman</span>'}</td>
     <td style="text-align:right"><b>${fmtRp(Number(x.hpp||0)*Number(x.stok||0))}</b></td></tr>`; }).join('')
-    + `<tr><td colspan="5"><b>Total nilai stok (HPP)</b> • ${esc(r.stok_menipis)} menipis</td><td style="text-align:right"><b>${fmtRp(r.stok_nilai_hpp)}</b></td></tr>`;
+    + `<tr><td colspan="6"><b>Total nilai stok (HPP)</b> • ${esc(r.stok_menipis)} menipis</td><td style="text-align:right"><b>${fmtRp(r.stok_nilai_hpp)}</b></td></tr>`;
   renderRekapKasir(dari, sampai);
 }
 // Rekap gabungan per kasir (dihitung dari data lokal yg sudah sync dari backend)
@@ -2545,7 +2598,8 @@ window.gotoLtab=function(name){
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.ltab===name));
   document.querySelectorAll('.ltab-pane').forEach(p=>p.classList.toggle('active', p.id==='ltab-'+name));
   curLtab=name;
-  try{ navSyncActive('laporan', name); }catch{}
+  NAVLTAB.laporan=name;
+  try{ navSyncActive('laporan', name, 'laporan'); }catch{}
 };
 function exportLaporanCSV(){
   const r=LAPORAN_CACHE||computeReportLocal(...Object.values(lpRange()));

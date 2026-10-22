@@ -13,6 +13,7 @@ def to_out(s: models.Sparepart) -> dict:
     return {
         "id": s.id, "nama": s.nama, "sku": s.sku, "merk": s.merk or "",
         "kategori": (getattr(s, "kategori", None) or "Lainnya"),
+        "jenis": _norm_jenis(getattr(s, "jenis", None)),
         "hpp": s.hpp or 0, "harga_jual": s.harga_jual or 0,
         "stok": s.stok or 0, "stok_min": s.stok_min or 0,
     }
@@ -21,6 +22,17 @@ def to_out(s: models.Sparepart) -> dict:
 def _norm_kat(v: str | None) -> str:
     v = (v or "").strip()
     return v or "Lainnya"
+
+
+JENIS_PRODUK = ("Sparepart", "Accessories", "Handphone")
+
+
+def _norm_jenis(v: str | None) -> str:
+    v = (v or "").strip()
+    for j in JENIS_PRODUK:
+        if v.lower() == j.lower():
+            return j
+    return "Sparepart"
 
 
 @router.get("/kategoris", response_model=list[str])
@@ -38,6 +50,7 @@ def list_kategoris(db: Session = Depends(get_db), _: models.User = Depends(get_c
 def list_spareparts(
     q: str = Query("", description="cari nama / sku / merk / kategori"),
     kategori: str = Query("", description="filter kategori persis, kosong = semua"),
+    jenis: str = Query("", description="filter jenis produk: Sparepart|Accessories|Handphone"),
     sort: str = Query("nama", description="nama|sku|stok"),
     low: bool = Query(False, description="hanya stok menipis"),
     skip: int = 0, limit: int = 1000,
@@ -47,6 +60,9 @@ def list_spareparts(
     if kategori and kategori != "Semua":
         kl = kategori.strip().lower()
         rows = [r for r in rows if _norm_kat(getattr(r, "kategori", None)).lower() == kl]
+    if jenis and jenis != "Semua":
+        jl = _norm_jenis(jenis).lower()
+        rows = [r for r in rows if _norm_jenis(getattr(r, "jenis", None)).lower() == jl]
     if q:
         ql = q.lower()
         rows = [r for r in rows if ql in " ".join([r.nama or "", r.sku or "", r.merk or "", _norm_kat(getattr(r, "kategori", None))]).lower()]
@@ -74,6 +90,7 @@ def create_sparepart(body: schemas.SparepartIn, db: Session = Depends(get_db), _
     s = models.Sparepart(
         nama=nama, sku=sku, merk=(body.merk or "").strip(),
         kategori=_norm_kat(body.kategori),
+        jenis=_norm_jenis(body.jenis),
         hpp=int(body.hpp or 0), harga_jual=int(body.harga_jual or 0),
         stok=int(body.stok or 0), stok_min=int(body.stok_min or 0),
     )
@@ -118,6 +135,8 @@ def update_sparepart(sp_id: int, body: schemas.SparepartUpdateIn,
         data["nama"] = data["nama"].strip()
     if "kategori" in data:
         data["kategori"] = _norm_kat(data["kategori"])
+    if "jenis" in data:
+        data["jenis"] = _norm_jenis(data["jenis"])
     if "merk" in data and data["merk"] is not None:
         data["merk"] = data["merk"].strip()
     for k, v in data.items():

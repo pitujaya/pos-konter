@@ -112,10 +112,12 @@
         </div>
       </div>
 
-      <div class="nav-group" data-group="sparepart">
-        <button type="button" class="nav-btn nav-head" data-page="sparepart" aria-expanded="false">🔧 <span>Data Sparepart</span><i class="nav-chev">▸</i></button>
+      <div class="nav-group" data-group="produk">
+        <button type="button" class="nav-btn nav-head" data-page="produk" aria-expanded="false">📦 <span>Produk</span><i class="nav-chev">▸</i></button>
         <div class="nav-sub">
-          <button type="button" class="nav-sub-btn" data-page="sparepart">Stok Sparepart</button>
+          <button type="button" class="nav-sub-btn" data-page="produk" data-ltab="sparepart">🔧 Stok Sparepart</button>
+          <button type="button" class="nav-sub-btn" data-page="produk" data-ltab="accessories">🎧 Stok Accessories</button>
+          <button type="button" class="nav-sub-btn" data-page="produk" data-ltab="handphone">📱 Stok Handphone</button>
         </div>
       </div>
 
@@ -125,7 +127,7 @@
           <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="laba">💰 Laba Rugi</button>
           <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="service">📲 Service</button>
           <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="jual">🛒 Penjualan</button>
-          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="stok">📦 Stok Sparepart</button>
+          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="stok">📦 Stok Produk</button>
           <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="kasir">👥 Rekap Kasir</button>
         </div>
       </div>
@@ -393,10 +395,15 @@
       </div>
     </section>
 
-    <!-- DATA SPAREPART -->
-    <section class="page" id="page-sparepart">
-      <h1 class="page-title">Data Sparepart</h1>
-      <p class="page-sub">Stok barang service • <b id="spCount">0 item</b> <span id="spInfo" class="muted"></span></p>
+    <!-- PRODUK (SPAREPART / ACCESSORIES / HANDPHONE) -->
+    <section class="page" id="page-produk">
+      <h1 class="page-title">Produk</h1>
+      <p class="page-sub">Stok barang: sparepart, aksesoris & handphone • <b id="spCount">0 item</b> <span id="spInfo" class="muted"></span></p>
+      <div class="ltabs" id="prTabs">
+        <button class="ltab active" data-prtab="sparepart">🔧 Stok Sparepart</button>
+        <button class="ltab" data-prtab="accessories">🎧 Stok Accessories</button>
+        <button class="ltab" data-prtab="handphone">📱 Stok Handphone</button>
+      </div>
       <div class="stats lp-stats lp-stats-3">
         <div class="stat"><div class="stat-icon blue">📦</div><div><small>Total Item</small><h3 id="spTotal">0</h3></div></div>
         <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Nilai Stok (HPP)</small><h3 id="spNilai">Rp 0</h3></div></div>
@@ -427,10 +434,10 @@
           </tr></thead>
           <tbody id="spTable"></tbody>
         </table>
-        <div id="emptySpare" class="empty hidden">Belum ada sparepart.</div>
+        <div id="emptySpare" class="empty hidden">Belum ada produk di kategori ini.</div>
       </div>
       <div class="bottom-cta">
-        <button class="btn primary big full" id="btnAddSpareBottom">+ Input Sparepart Baru</button>
+        <button class="btn primary big full" id="btnAddSpareBottom">+ Input Produk Baru</button>
       </div>
     </section>
 
@@ -549,6 +556,10 @@
           <label>Dari<input id="lp_dari" type="date" /></label>
           <label>Sampai<input id="lp_sampai" type="date" /></label>
         </div>
+        <div class="row2">
+          <label>Kasir<select id="lp_kasir"></select></label>
+          <label>&nbsp;<button class="btn ghost" id="lpResetKasir" style="width:100%;justify-content:center">↺ Reset filter kasir</button></label>
+        </div>
         <div class="btn-row">
           <button class="btn small ghost" id="lpToday">Hari ini</button>
           <button class="btn small ghost" id="lp7">7 hari</button>
@@ -563,7 +574,8 @@
         <button class="ltab active" data-ltab="laba">💹 <span>Laba Rugi</span></button>
         <button class="ltab" data-ltab="service">📲 <span>Service</span></button>
         <button class="ltab" data-ltab="jual">🛒 <span>Penjualan</span></button>
-        <button class="ltab" data-ltab="stok">📦 <span>Stok Sparepart</span></button>
+        <button class="ltab" data-ltab="stok">📦 <span>Stok Produk</span></button>
+        <button class="ltab" data-ltab="kasir">👥 <span>Rekap Kasir</span></button>
       </div>
 
       <!-- SUB: LAPORAN LABA RUGI -->
@@ -605,7 +617,7 @@
       <div class="card">
         <div class="card-head"><h3>✅ Service Sudah Diambil (<span id="lpDiambilCount">0</span>) — masuk omzet</h3></div>
         <div class="table-wrap"><table style="min-width:0">
-          <thead><tr><th>No. Service</th><th>Pelanggan</th><th style="text-align:right">Biaya</th></tr></thead>
+          <thead><tr><th>No. Service</th><th>Pelanggan</th><th>Kasir</th><th style="text-align:right">Biaya</th></tr></thead>
           <tbody id="lpDiambilBody"></tbody>
         </table></div>
       </div>
@@ -621,7 +633,7 @@
       <div class="card">
         <div class="card-head"><h3>🛒 Laporan Penjualan (<span id="lpJualCount">0</span> nota)</h3></div>
         <div class="table-wrap"><table style="min-width:0">
-          <thead><tr><th>Nota</th><th>Pembeli</th><th style="text-align:right">Total</th></tr></thead>
+          <thead><tr><th>Nota</th><th>Pembeli</th><th>Kasir</th><th style="text-align:right">Total</th></tr></thead>
           <tbody id="lpJualBody"></tbody>
         </table></div>
       </div>
@@ -636,11 +648,24 @@
         <div class="stat"><div class="stat-icon yellow">⚠️</div><div><small>Stok Menipis</small><h3 id="lpStLow">0</h3></div></div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>📦 Laporan Stok Sparepart (<span id="lpStokCount">0</span> item)</h3></div>
+        <div class="card-head"><h3>📦 Laporan Stok Produk (<span id="lpStokCount">0</span> item)</h3></div>
         <div class="table-wrap"><table>
-          <thead><tr><th>SKU</th><th>Barang</th><th>HPP</th><th>Jual</th><th>Stok</th><th style="text-align:right">Nilai (HPP)</th></tr></thead>
+          <thead><tr><th>SKU</th><th>Barang</th><th>Jenis</th><th>HPP</th><th>Jual</th><th>Stok</th><th style="text-align:right">Nilai (HPP)</th></tr></thead>
           <tbody id="lpStokBody"></tbody>
         </table></div>
+      </div>
+      </div>
+
+      <!-- SUB: REKAP PER KASIR -->
+      <div class="ltab-pane" id="ltab-kasir">
+      <div class="card">
+        <div class="card-head"><h3>👥 Rekap Laporan per Kasir (<span id="lpKasirCount">0</span> kasir)</h3><small class="muted" id="lpKasirPeriode">-</small></div>
+        <p class="muted" style="margin:0 0 10px">Omzet service (status Diambil) + penjualan + laba penjualan − pengeluaran yang dicatat kasir tersebut.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Kasir</th><th style="text-align:right">Service</th><th style="text-align:right">Omzet Service</th><th style="text-align:right">Nota</th><th style="text-align:right">Omzet Jual</th><th style="text-align:right">Laba Jual</th><th style="text-align:right">Pengeluaran</th><th style="text-align:right">Laba Bersih</th></tr></thead>
+          <tbody id="lpKasirBody"></tbody>
+        </table></div>
+        <p class="muted" style="margin-top:8px">* Service & penjualan lama (sebelum ada kolom kasir) tidak terhitung ke kasir mana pun.</p>
       </div>
       </div>
     </section>
@@ -726,7 +751,6 @@
           <button class="btn small" id="btnTestPrint">Lihat Contoh Nota</button>
           <div class="nota-preview" id="notaPreview"></div>
         </div>
-        <div class="card">
         <div class="card" id="setSlide">
           <h3>🖼️ Headbar Slide</h3>
           <p class="muted">Gambar banner berjalan di Dashboard. Bisa isi URL gambar atau upload dari HP/laptop (maks 3MB).</p>
@@ -741,7 +765,6 @@
           <hr class="sep"/>
           <div id="slideList" class="pill-list"></div>
         </div>
-        <div class="card">
         <div class="card" id="setPrinter">
           <h3>🖨️ Printer Bluetooth Thermal</h3>
           <p class="muted">Cetak struk 58mm langsung ke printer (XPrinter / RPP02 / sejenis) via <b>APK Android</b>. Pairing dulu di <b>Settings HP → Bluetooth</b>, lalu Scan di sini.</p>
@@ -842,13 +865,13 @@
 <!-- MODAL SPAREPART -->
 <div class="modal-bg hidden" id="modalSpare">
   <div class="modal">
-    <div class="modal-head"><h3 id="spareTitle">Tambah Sparepart</h3><button type="button" class="x" id="btnCloseSpareX" data-close>✕</button></div>
+    <div class="modal-head"><h3 id="spareTitle">Tambah Produk</h3><button type="button" class="x" id="btnCloseSpareX" data-close>✕</button></div>
     <div class="modal-body">
       <label>Nama Barang *<input id="sp_nama" placeholder="cth: LCD Samsung A12" /></label>
       <label>Nomor SKU *<span class="sku-row"><input id="sp_sku" placeholder="ketik manual atau scan" /><button type="button" class="btn small primary" id="btnScanSku">📷 Scan</button></span></label>
-      <div class="row2"><label>Merk<select id="sp_merk"></select></label><label>Kategori *<select id="sp_kategori"></select></label></div>
+      <div class="row2"><label>Jenis Produk *<select id="sp_jenis"></select></label><label>Merk<select id="sp_merk"></select></label></div>
+      <div class="row2"><label>Kategori *<select id="sp_kategori"></select></label><label>Stok Minimum<input id="sp_min" type="number" min="0" value="0" /></label></div>
       <datalist id="spKategoriList"></datalist>
-      <label>Stok Minimum<input id="sp_min" type="number" min="0" value="0" /></label>
       <div class="row3"><label>HPP (Rp)<input id="sp_hpp" type="number" min="0" value="0" /></label><label>Harga Jual (Rp)<input id="sp_jual" type="number" min="0" value="0" /></label><label>Jumlah Stok<input id="sp_stok" type="number" min="0" value="0" /></label></div>
       <p class="muted" id="spMargin"></p>
     </div>

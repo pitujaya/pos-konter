@@ -99,6 +99,7 @@ class Sparepart(Base):
     sku: Mapped[str] = mapped_column(String(80), unique=True, index=True, nullable=False)
     merk: Mapped[str] = mapped_column(String(80), default="")
     kategori: Mapped[str] = mapped_column(String(80), default="Lainnya", index=True)
+    jenis: Mapped[str] = mapped_column(String(40), default="Sparepart", index=True)
     hpp: Mapped[int] = mapped_column(Integer, default=0)
     harga_jual: Mapped[int] = mapped_column(Integer, default=0)
     stok: Mapped[int] = mapped_column(Integer, default=0)

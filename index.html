@@ -112,10 +112,12 @@
         </div>
       </div>
 
-      <div class="nav-group" data-group="sparepart">
-        <button type="button" class="nav-btn nav-head" data-page="sparepart" aria-expanded="false">🔧 <span>Data Sparepart</span><i class="nav-chev">▸</i></button>
+      <div class="nav-group" data-group="produk">
+        <button type="button" class="nav-btn nav-head" data-page="produk" aria-expanded="false">📦 <span>Produk</span><i class="nav-chev">▸</i></button>
         <div class="nav-sub">
-          <button type="button" class="nav-sub-btn" data-page="sparepart">Stok Sparepart</button>
+          <button type="button" class="nav-sub-btn" data-page="produk" data-ltab="sparepart">🔧 Stok Sparepart</button>
+          <button type="button" class="nav-sub-btn" data-page="produk" data-ltab="accessories">🎧 Stok Accessories</button>
+          <button type="button" class="nav-sub-btn" data-page="produk" data-ltab="handphone">📱 Stok Handphone</button>
         </div>
       </div>
 
@@ -125,7 +127,7 @@
           <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="laba">💰 Laba Rugi</button>
           <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="service">📲 Service</button>
           <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="jual">🛒 Penjualan</button>
-          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="stok">📦 Stok Sparepart</button>
+          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="stok">📦 Stok Produk</button>
           <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="kasir">👥 Rekap Kasir</button>
         </div>
       </div>
@@ -393,10 +395,15 @@
       </div>
     </section>
 
-    <!-- DATA SPAREPART -->
-    <section class="page" id="page-sparepart">
-      <h1 class="page-title">Data Sparepart</h1>
-      <p class="page-sub">Stok barang service • <b id="spCount">0 item</b> <span id="spInfo" class="muted"></span></p>
+    <!-- PRODUK (SPAREPART / ACCESSORIES / HANDPHONE) -->
+    <section class="page" id="page-produk">
+      <h1 class="page-title">Produk</h1>
+      <p class="page-sub">Stok barang: sparepart, aksesoris & handphone • <b id="spCount">0 item</b> <span id="spInfo" class="muted"></span></p>
+      <div class="ltabs" id="prTabs">
+        <button class="ltab active" data-prtab="sparepart">🔧 Stok Sparepart</button>
+        <button class="ltab" data-prtab="accessories">🎧 Stok Accessories</button>
+        <button class="ltab" data-prtab="handphone">📱 Stok Handphone</button>
+      </div>
       <div class="stats lp-stats lp-stats-3">
         <div class="stat"><div class="stat-icon blue">📦</div><div><small>Total Item</small><h3 id="spTotal">0</h3></div></div>
         <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Nilai Stok (HPP)</small><h3 id="spNilai">Rp 0</h3></div></div>
@@ -427,10 +434,10 @@
           </tr></thead>
           <tbody id="spTable"></tbody>
         </table>
-        <div id="emptySpare" class="empty hidden">Belum ada sparepart.</div>
+        <div id="emptySpare" class="empty hidden">Belum ada produk di kategori ini.</div>
       </div>
       <div class="bottom-cta">
-        <button class="btn primary big full" id="btnAddSpareBottom">+ Input Sparepart Baru</button>
+        <button class="btn primary big full" id="btnAddSpareBottom">+ Input Produk Baru</button>
       </div>
     </section>
 
@@ -567,7 +574,7 @@
         <button class="ltab active" data-ltab="laba">💹 <span>Laba Rugi</span></button>
         <button class="ltab" data-ltab="service">📲 <span>Service</span></button>
         <button class="ltab" data-ltab="jual">🛒 <span>Penjualan</span></button>
-        <button class="ltab" data-ltab="stok">📦 <span>Stok Sparepart</span></button>
+        <button class="ltab" data-ltab="stok">📦 <span>Stok Produk</span></button>
         <button class="ltab" data-ltab="kasir">👥 <span>Rekap Kasir</span></button>
       </div>
 
@@ -641,9 +648,9 @@
         <div class="stat"><div class="stat-icon yellow">⚠️</div><div><small>Stok Menipis</small><h3 id="lpStLow">0</h3></div></div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>📦 Laporan Stok Sparepart (<span id="lpStokCount">0</span> item)</h3></div>
+        <div class="card-head"><h3>📦 Laporan Stok Produk (<span id="lpStokCount">0</span> item)</h3></div>
         <div class="table-wrap"><table>
-          <thead><tr><th>SKU</th><th>Barang</th><th>HPP</th><th>Jual</th><th>Stok</th><th style="text-align:right">Nilai (HPP)</th></tr></thead>
+          <thead><tr><th>SKU</th><th>Barang</th><th>Jenis</th><th>HPP</th><th>Jual</th><th>Stok</th><th style="text-align:right">Nilai (HPP)</th></tr></thead>
           <tbody id="lpStokBody"></tbody>
         </table></div>
       </div>
@@ -858,13 +865,13 @@
 <!-- MODAL SPAREPART -->
 <div class="modal-bg hidden" id="modalSpare">
   <div class="modal">
-    <div class="modal-head"><h3 id="spareTitle">Tambah Sparepart</h3><button type="button" class="x" id="btnCloseSpareX" data-close>✕</button></div>
+    <div class="modal-head"><h3 id="spareTitle">Tambah Produk</h3><button type="button" class="x" id="btnCloseSpareX" data-close>✕</button></div>
     <div class="modal-body">
       <label>Nama Barang *<input id="sp_nama" placeholder="cth: LCD Samsung A12" /></label>
       <label>Nomor SKU *<span class="sku-row"><input id="sp_sku" placeholder="ketik manual atau scan" /><button type="button" class="btn small primary" id="btnScanSku">📷 Scan</button></span></label>
-      <div class="row2"><label>Merk<select id="sp_merk"></select></label><label>Kategori *<select id="sp_kategori"></select></label></div>
+      <div class="row2"><label>Jenis Produk *<select id="sp_jenis"></select></label><label>Merk<select id="sp_merk"></select></label></div>
+      <div class="row2"><label>Kategori *<select id="sp_kategori"></select></label><label>Stok Minimum<input id="sp_min" type="number" min="0" value="0" /></label></div>
       <datalist id="spKategoriList"></datalist>
-      <label>Stok Minimum<input id="sp_min" type="number" min="0" value="0" /></label>
       <div class="row3"><label>HPP (Rp)<input id="sp_hpp" type="number" min="0" value="0" /></label><label>Harga Jual (Rp)<input id="sp_jual" type="number" min="0" value="0" /></label><label>Jumlah Stok<input id="sp_stok" type="number" min="0" value="0" /></label></div>
       <p class="muted" id="spMargin"></p>
     </div>

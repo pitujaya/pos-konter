@@ -551,17 +551,21 @@ try{ bindKas(); }catch(e){ console.warn('bindKas:', e); }
 
 // ===== NAVIGASI =====
 let curLtab='laba';
+// tab aktif per grup menu (laporan & produk punya tab sendiri)
+const NAVLTAB = { laporan:'laba', produk:'sparepart' };
 function navSetGroup(grp, open){
   if(!grp) return;
   grp.classList.toggle('open', !!open);
   const h=grp.querySelector('.nav-head');
   if(h) h.setAttribute('aria-expanded', open?'true':'false');
 }
-function navSyncActive(page, ltab){
-  curLtab = ltab || curLtab || 'laba';
+function navSyncActive(page, ltab, group){
+  if(ltab && group) NAVLTAB[group]=ltab;
   document.querySelectorAll('.nav-group').forEach(grp=>{
     const kids=[].slice.call(grp.querySelectorAll('.nav-sub-btn'));
     const head=grp.querySelector('.nav-head');
+    const gkey=grp.dataset.group||'';
+    const tab = gkey ? (NAVLTAB[gkey]||'') : '';
     const onPage=kids.some(k=>k.dataset.page===page) || !!(head && head.dataset.page && head.dataset.page===page);
     if(head) head.classList.toggle('active', onPage);
     if(onPage && kids.length){
@@ -570,7 +574,7 @@ function navSyncActive(page, ltab){
     }
     kids.forEach(k=>{
       const samePage=k.dataset.page===page;
-      const sameTab=!k.dataset.ltab || k.dataset.ltab===curLtab;
+      const sameTab=!k.dataset.ltab || !tab || k.dataset.ltab===tab;
       k.classList.toggle('active', samePage && sameTab);
     });
   });
@@ -594,38 +598,38 @@ let focusCard=null;
 function clearFocus(){
   document.querySelectorAll('[data-focus-hidden]').forEach(c=>{ c.classList.remove('hidden'); c.removeAttribute('data-focus-hidden'); });
   focusCard=null;
-  const btn=document.getElementById('btnSettingAll'); if(btn) btn.classList.add('hidden');
+  const btn=$('btnSettingAll'); if(btn) btn.classList.add('hidden');
 }
 function focusSection(pageId, cardId){
   clearFocus();
-  const pg=document.getElementById(pageId); const target=document.getElementById(cardId);
+  const pg=$(pageId); const target=$(cardId);
   if(!pg || !target) return;
   pg.querySelectorAll('.card').forEach(c=>{
     if(c===target) return;
-    if(c.classList.contains('hidden') && !c.hasAttribute('data-focus-hidden')) return;
+    if(c.classList.contains('hidden') && !c.hasAttribute('data-focus-hidden')) return; // yg memang hidden (khusus role) dibiarkan
     c.setAttribute('data-focus-hidden','1');
     c.classList.add('hidden');
   });
   focusCard=cardId;
-  const btn=document.getElementById('btnSettingAll'); if(btn) btn.classList.remove('hidden');
+  const btn=$('btnSettingAll'); if(btn) btn.classList.remove('hidden');
   try{ target.scrollIntoView({behavior:'smooth', block:'start'}); }catch{}
 }
 window.settingAll=function(){ clearFocus(); };
 // ===== FOKUS LAPORAN: hanya laporan yg diklik yang tampil =====
 function clearFokusLaporan(){
-  const tabs=document.getElementById('lpTabs'); if(tabs) tabs.classList.remove('hidden');
+  const tabs=$('lpTabs'); if(tabs) tabs.classList.remove('hidden');
   document.querySelectorAll('#page-laporan .ltab-pane').forEach(p=>{
     if(p.hasAttribute('data-lap-hidden')){ p.classList.remove('hidden'); p.removeAttribute('data-lap-hidden'); }
   });
-  const b=document.getElementById('btnLaporanAll'); if(b) b.classList.add('hidden');
+  const b=$('btnLaporanAll'); if(b) b.classList.add('hidden');
 }
 function fokusLaporanTab(ltab){
   clearFokusLaporan();
-  const tabs=document.getElementById('lpTabs'); if(tabs) tabs.classList.add('hidden');
+  const tabs=$('lpTabs'); if(tabs) tabs.classList.add('hidden');
   document.querySelectorAll('#page-laporan .ltab-pane').forEach(p=>{
     if(p.id!=='ltab-'+ltab){ p.setAttribute('data-lap-hidden','1'); p.classList.add('hidden'); }
   });
-  const b=document.getElementById('btnLaporanAll'); if(b) b.classList.remove('hidden');
+  const b=$('btnLaporanAll'); if(b) b.classList.remove('hidden');
 }
 window.laporanSemua=function(){ clearFokusLaporan(); };
 // Klik sub-menu -> baru pindah halaman / tab
@@ -633,15 +637,21 @@ document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',
   e.preventDefault();
   const page=b.dataset.page||'';
   const ltab=b.dataset.ltab||'';
-  if(ltab && typeof gotoLtab==='function'){ try{ gotoLtab(ltab); }catch{} }
+  const grp=b.closest('.nav-group');
+  const gkey=grp ? (grp.dataset.group||'') : '';
+  if(gkey==='produk'){
+    if(ltab){ try{ gotoProdukTab(ltab); }catch{} }
+  } else if(ltab && typeof gotoLtab==='function'){
+    try{ gotoLtab(ltab); }catch{}
+  }
   goto(page);
-  if(ltab){ try{ fokusLaporanTab(ltab); }catch{} }
+  if(ltab && gkey!=='produk'){ try{ fokusLaporanTab(ltab); }catch{} }
   if(b.dataset.show){ try{ focusSection('page-'+page, b.dataset.show); }catch{} }
   else if(b.dataset.anchor){
-    const el=document.getElementById(b.dataset.anchor);
+    const el=$(b.dataset.anchor);
     if(el) setTimeout(()=>{ try{ el.scrollIntoView({behavior:'smooth', block:'start'}); }catch{} },160);
   }
-  navSyncActive(page, ltab||undefined);
+  navSyncActive(page, ltab||undefined, gkey);
 }));
 document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.goto)));
 function goto(page, filter){
@@ -670,10 +680,10 @@ function goto(page, filter){
     if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); }
   }
   if(page==='dashboard'){ try{ renderOmzetChart(); }catch{} if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); } }
-  if(page==='sparepart'){ try{ renderSpareparts(); }catch{} if(useBackend()){ pullSpareparts().then(()=>{ renderAll(); }).catch(()=>{}); } }
+  if(page==='produk'){ try{ renderSpareparts(); }catch{} if(useBackend()){ pullSpareparts().then(()=>{ renderAll(); }).catch(()=>{}); } }
   if(page==='penjualan'){ try{ renderSales(); }catch{} if(useBackend()){ pullSales().then(()=>{ try{renderSales();}catch{} }).catch(()=>{}); } }
   if(page==='pengeluaran'){ try{ renderExpenses(); }catch{} if(useBackend()){ pullExpenses().then(()=>{ try{renderExpenses();}catch{} try{renderLaporan();}catch{} }).catch(()=>{}); } }
-  if(page==='laporan'){ try{ renderLaporan(); }catch{} }
+  if(page==='laporan'){ try{ syncLpKasirOptions(); }catch{} try{ renderLaporan(); }catch{} }
   // Kas belum dibuka + kasir klik menu transaksi -> langsung munculkan menu Buka Sesi
   if(PAGES_TRANSAKSI.includes(page) && !kasSesiAktif()){ showKasBuka(); }
   window.scrollTo({top:0});
@@ -935,7 +945,8 @@ $('serviceForm').addEventListener('submit', async (e)=>{
     kelengkapan:getKelengkapan(), keluhan, kondisi:val('f_kondisi').trim(),
     teknisi:val('f_teknisi'), biaya:Number(val('f_biaya',0)||0), dp:0,
     estimasi:val('f_estimasi'), catatan:val('f_catatan').trim(),
-    status:normStatus(val('f_status','Dikerjakan'))
+    status:normStatus(val('f_status','Dikerjakan')),
+    kasir:(currentUser()&&currentUser().nama)||''
   };
   let savedNo = '';
   if(useBackend()){
@@ -1064,7 +1075,7 @@ function renderGlobalResults(){
       +`<button type="button" class="gr-more" onclick="gOpenLacak()">Lacak di halaman Lacak →</button>`;
   }
   if(spr.length){
-    h+=`<div class="gr-group">🔧 Produk / Sparepart (${spr.length})</div>`+spr.map(x=>`<button type="button" class="gr-item" onclick="gGoSpare('${esc(String(x.id))}')"><span><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.sku)} • stok ${esc(x.stok)} • ${fmtRp(x.harga_jual)}</small></span></button>`).join('')
+    h+=`<div class="gr-group">📦 Produk (${spr.length})</div>`+spr.map(x=>`<button type="button" class="gr-item" onclick="gGoSpare('${esc(String(x.id))}')"><span><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.sku)} • stok ${esc(x.stok)} • ${fmtRp(x.harga_jual)}</small></span></button>`).join('')
       +`<button type="button" class="gr-more" onclick="gAllSpare()">Lihat semua di Data Sparepart →</button>`;
   }
   box.innerHTML=h; box.classList.remove('hidden');
@@ -1073,7 +1084,13 @@ window.gGoDetail=function(id){ hideGlobalResults(); if(typeof detail==='function
 window.gGoSpare=function(id){
   hideGlobalResults();
   const x=(typeof findSpare==='function')?findSpare(id):null;
-  goto('sparepart');
+  // buka tab produk sesuai jenis barangnya
+  if(x){
+    const j=spJenis(x);
+    const tab=Object.keys(PR_TABS).find(k=>PR_TABS[k]===j) || 'sparepart';
+    try{ gotoProdukTab(tab); navSyncActive('produk', tab, 'produk'); }catch{}
+  }
+  goto('produk');
   if($('spSearch')) $('spSearch').value=x?String(x.sku||''):'';
   try{ renderSpareparts(); }catch{}
 };
@@ -1091,7 +1108,7 @@ window.gAllService=function(){
 };
 window.gAllSpare=function(){
   const q=($('globalSearch')||{}).value||'';
-  hideGlobalResults(); goto('sparepart');
+  hideGlobalResults(); goto('produk');
   if($('spSearch')) $('spSearch').value=q;
   try{ renderSpareparts(); }catch{}
 };
@@ -1716,9 +1733,22 @@ if(!localStorage.getItem(LS_SPARE)){
   saveSpareLocal();
 }
 function spKat(x){ return ((x && x.kategori) || 'Lainnya').toString().trim() || 'Lainnya'; }
-function spKategoriList(){
+// ===== JENIS PRODUK (Sparepart / Accessories / Handphone) =====
+const JENIS_PRODUK = ['Sparepart','Accessories','Handphone'];
+const PR_TABS = { sparepart:'Sparepart', accessories:'Accessories', handphone:'Handphone' };
+let prTab='sparepart';
+function spJenis(x){ return ((x && x.jenis) || 'Sparepart').toString().trim() || 'Sparepart'; }
+function spJenisAktif(){ return PR_TABS[prTab] || 'Sparepart'; }
+function gotoProdukTab(name){
+  prTab = PR_TABS[name] ? name : 'sparepart';
+  NAVLTAB.produk = prTab;
+  document.querySelectorAll('#prTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.prtab===prTab));
+  try{ renderSpareparts(); }catch{}
+}
+function spKategoriList(jenis){
+  const j = jenis || spJenisAktif();
   const seen={};
-  (SPARE||[]).forEach(x=>{ const k=spKat(x); if(!seen[k]) seen[k]=1; });
+  (SPARE||[]).forEach(x=>{ if(spJenis(x)!==j) return; const k=spKat(x); if(!seen[k]) seen[k]=1; });
   return Object.keys(seen).sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
 }
 function refreshSpKategoriUI(){
@@ -1749,7 +1779,10 @@ function renderSpareparts(){
   refreshSpKategoriUI();
   const q=(($('spSearch') && $('spSearch').value)||'').toLowerCase().trim();
   const fk=(($('spKategori') && $('spKategori').value)||'').trim();
-  let r=[...SPARE];
+  const jenis=spJenisAktif();
+  // produk di tab aktif (jenis), sisanya untuk stat
+  const pool=SPARE.filter(x=>spJenis(x)===jenis);
+  let r=[...pool];
   if(fk) r=r.filter(x=>spKat(x).toLowerCase()===fk.toLowerCase());
   if(spLowOnly) r=r.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0));
   if(q) r=r.filter(x=>[(x.nama||''),(x.sku||''),(x.merk||''),spKat(x)].join(' ').toLowerCase().includes(q));
@@ -1757,12 +1790,12 @@ function renderSpareparts(){
   if(s==='sku') r.sort((a,b)=>String(a.sku||'').localeCompare(String(b.sku||'')));
   else if(s==='stok') r.sort((a,b)=>Number(a.stok||0)-Number(b.stok||0));
   else r.sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
-  const low=SPARE.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).length;
-  const nilai=SPARE.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0);
-  if($('spTotal')) $('spTotal').textContent=SPARE.length;
+  const low=pool.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).length;
+  const nilai=pool.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0);
+  if($('spTotal')) $('spTotal').textContent=pool.length;
   if($('spNilai')) $('spNilai').textContent=fmtRp(nilai);
   if($('spLow')) $('spLow').textContent=low;
-  if($('spCount')) $('spCount').textContent=SPARE.length+' item';
+  if($('spCount')) $('spCount').textContent=pool.length+' item';
   if($('spInfo')) $('spInfo').textContent = spLowOnly ? `• menampilkan ${r.length} stok menipis` : (low?`• ${low} stok menipis`:'' );
   $('emptySpare').classList.toggle('hidden', r.length>0);
   // Kasir boleh lihat + ubah stok, tapi TIDAK boleh tambah/edit/hapus sparepart
@@ -1819,9 +1852,9 @@ function fillSpareSelect(sel, list, current, placeholder){
   sel.insertBefore(o, sel.querySelector('option[value="__baru"]'));
   sel.value=cur;
 }
-function refreshSpareModalLists(curMerk, curKat){
+function refreshSpareModalLists(curMerk, curKat, jenis){
   fillSpareSelect($('sp_merk'), spMerkList(), curMerk||'', '— Tanpa Merk —');
-  fillSpareSelect($('sp_kategori'), spKategoriList(), curKat||'', '— Pilih Kategori —');
+  fillSpareSelect($('sp_kategori'), spKategoriList(jenis||spJenisAktif()), curKat||'', '— Pilih Kategori —');
 }
 function bindSpareBaru(){
   [['sp_merk','merk'],['sp_kategori','kategori']].forEach(([id,kind])=>{
@@ -1838,13 +1871,31 @@ function bindSpareBaru(){
   });
 }
 try{ bindSpareBaru(); }catch{}
+// isi dropdown Jenis Produk + tab di halaman Produk
+try{
+  if($('sp_jenis') && !$('sp_jenis').options.length){
+    $('sp_jenis').innerHTML=JENIS_PRODUK.map(j=>'<option value="'+j+'">'+j+'</option>').join('');
+  }
+  document.querySelectorAll('#prTabs .ltab').forEach(b=>b.addEventListener('click',()=>{
+    gotoProdukTab(b.dataset.prtab);
+    navSyncActive('produk', b.dataset.prtab, 'produk');
+  }));
+  // ganti jenis produk -> daftar kategori ikut menyesuaikan
+  if($('sp_jenis') && !$('sp_jenis').dataset.bound){
+    $('sp_jenis').dataset.bound='1';
+    $('sp_jenis').addEventListener('change',()=>{
+      refreshSpareModalLists($('sp_merk')?$('sp_merk').value:'', '', $('sp_jenis').value);
+    });
+  }
+}catch{}
 function openSpareModal(){
   if(!needAdmin()) return;
   spEditId=null;
-  $('spareTitle').textContent='Tambah Sparepart';
+  $('spareTitle').textContent='Tambah Produk';
   $('sp_nama').value=''; $('sp_sku').value='';
   refreshSpareModalLists('', '');
   $('sp_hpp').value=0; $('sp_jual').value=0; $('sp_stok').value=0; $('sp_min').value=0;
+  if($('sp_jenis')) $('sp_jenis').value=spJenisAktif();
   updSpMargin();
   $('modalSpare').classList.remove('hidden');
   setTimeout(()=>{ const el=$('sp_nama'); if(el) el.focus(); },50);
@@ -1860,9 +1911,10 @@ if($('sp_jual')) $('sp_jual').addEventListener('input',updSpMargin);
 window.spEdit=function(id){
   if(!needAdmin()) return;
   const x=findSpare(id); if(!x){ toast('Data tidak ditemukan'); return; } spEditId=x.id;
-  $('spareTitle').textContent='Edit Sparepart';
+  $('spareTitle').textContent='Edit Produk';
   $('sp_nama').value=x.nama; $('sp_sku').value=x.sku;
-  refreshSpareModalLists(x.merk||'', (x.kategori||'').trim());
+  if($('sp_jenis')) $('sp_jenis').value=spJenis(x);
+  refreshSpareModalLists(x.merk||'', (x.kategori||'').trim(), spJenis(x));
   $('sp_hpp').value=x.hpp||0; $('sp_jual').value=x.harga_jual||0; $('sp_stok').value=x.stok||0; $('sp_min').value=x.stok_min||0;
   updSpMargin();
   $('modalSpare').classList.remove('hidden');
@@ -1872,6 +1924,7 @@ if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
   const nama=$('sp_nama').value.trim(), sku=$('sp_sku').value.trim();
   let merk=(($('sp_merk')||{}).value||'').trim(); if(merk==='__baru') merk='';
   const kategori=(($('sp_kategori')||{}).value||'').trim();
+  const jenis=(($('sp_jenis')||{}).value||'').trim() || 'Sparepart';
   const hpp=Number($('sp_hpp').value||0), jual=Number($('sp_jual').value||0);
   const stok=Number($('sp_stok').value||0), smin=Number($('sp_min').value||0);
   if(!nama||!sku){ toast('Nama + SKU wajib diisi'); return; }
@@ -1879,20 +1932,20 @@ if($('btnSaveSpare')) $('btnSaveSpare').onclick=async ()=>{
   const isEdit=(spEditId!==null && spEditId!==undefined);
   if(useBackend()){
     try{
-      if(isEdit) await window.API.updateSparepart(spEditId,{nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
-      else await window.API.createSparepart({nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
+      if(isEdit) await window.API.updateSparepart(spEditId,{nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
+      else await window.API.createSparepart({nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
       $('modalSpare').classList.add('hidden');
       await pullSpareparts(); renderAll();
-      toast('Sparepart tersimpan ✅'); return;
+      toast('Produk tersimpan ✅'); return;
     }catch(err){ toast(err.message); return; }
   }
   if(spEditId!==null && spEditId!==undefined){
     const x=findSpare(spEditId); if(!x){ toast('Data tidak ditemukan'); return; }
     if(SPARE.some(d=>String(d.id)!==String(spEditId)&&String(d.sku).toLowerCase()===sku.toLowerCase())){ toast('SKU sudah dipakai'); return; }
-    Object.assign(x,{nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
+    Object.assign(x,{nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
   } else {
     if(SPARE.some(d=>String(d.sku).toLowerCase()===sku.toLowerCase())){ toast('SKU sudah dipakai'); return; }
-    SPARE.push({id:Date.now(),nama,sku,merk,kategori,hpp,harga_jual:jual,stok,stok_min:smin});
+    SPARE.push({id:Date.now(),nama,sku,merk,kategori,jenis,hpp,harga_jual:jual,stok,stok_min:smin});
   }
   saveSpareLocal();
   $('modalSpare').classList.add('hidden');
@@ -1903,7 +1956,7 @@ window.spHapus=async function(id){
   const x=findSpare(id); if(!x){ toast('Data tidak ditemukan'); return; }
   if(!confirm('Hapus '+x.nama+' ('+x.sku+')?')) return;
   if(useBackend()){
-    try{ await window.API.deleteSparepart(x.id); await pullSpareparts(); renderAll(); toast('Sparepart dihapus'); return; }
+    try{ await window.API.deleteSparepart(x.id); await pullSpareparts(); renderAll(); toast('Produk dihapus'); return; }
     catch(err){ toast(err.message); return; }
   }
   SPARE=SPARE.filter(d=>String(d.id)!==String(x.id)); saveSpareLocal(); renderAll(); toast('Sparepart dihapus');
@@ -2339,7 +2392,23 @@ try{ bindExpenses(); }catch{}
 // ===== LAPORAN (stok + service masuk + penjualan + laba rugi) =====
 function lpRange(){
   let dari=val('lp_dari'), sampai=val('lp_sampai');
-  return {dari:(dari||'').slice(0,10), sampai:(sampai||'').slice(0,10)};
+  return {dari:(dari||'').slice(0,10), sampai:(sampai||'').slice(0,10), kasir:($('lp_kasir')?($('lp_kasir').value||''):'').trim()};
+}
+// ===== FILTER PER KASIR =====
+const normKasir = (s)=>' '.join(String(s||'').split()).toLowerCase();
+function matchKasir(nama, kasir){
+  if(!kasir) return true;
+  return normKasir(nama)===normKasir(kasir);
+}
+// daftar kasir unik yang punya transaksi (service / penjualan / pengeluaran)
+function kasirList(){
+  const set=new Map();
+  const add=(n)=>{ const k=normKasir(n); if(k) set.set(k, String(n).trim()); };
+  (typeof DB!=='undefined'?DB:[]).forEach(x=>add(x.kasir));
+  (typeof SALES!=='undefined'?SALES:[]).forEach(x=>add(x.kasir));
+  (typeof EXPENSES!=='undefined'?EXPENSES:[]).forEach(x=>add(x.dicatat_oleh));
+  loadUsers().forEach(u=>{ if(u && (u.role||'kasir')!=='superadmin') add(u.nama); });
+  return [...set.values()].sort((a,b)=>a.localeCompare(b));
 }
 function inPeriode(tgl, dari, sampai){
   const t=String(tgl||'').slice(0,10);
@@ -2347,9 +2416,10 @@ function inPeriode(tgl, dari, sampai){
   if(sampai && t>sampai) return false;
   return true;
 }
-function computeReportLocal(dari, sampai){
-  const svc=(typeof DB!=='undefined'?DB:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai));
-  const jual=SALES.filter(x=>inPeriode(x.tanggal||'',dari,sampai));
+function computeReportLocal(dari, sampai, kasir){
+  kasir=String(kasir||'').trim();
+  const svc=(typeof DB!=='undefined'?DB:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.kasir,kasir));
+  const jual=SALES.filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.kasir,kasir));
   const sp=(typeof SPARE!=='undefined'?SPARE:[]);
   // Omzet service HANYA dari status Diambil
   const diambil=svc.filter(x=>normStatus(x.status)==='Diambil');
@@ -2358,14 +2428,14 @@ function computeReportLocal(dari, sampai){
   const jOm=jual.reduce((a,b)=>a+Number(b.total||0),0);
   const jHpp=jual.reduce((a,b)=>a+Number(b.hpp_total||0),0);
   const jLb=jOm-jHpp;
-  const exList=(typeof EXPENSES!=='undefined'?EXPENSES:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai));
+  const exList=(typeof EXPENSES!=='undefined'?EXPENSES:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.dicatat_oleh,kasir));
   const exTot=exList.reduce((a,b)=>a+Number(b.jumlah||0),0);
   return {
-    dari: dari||'', sampai: sampai||'',
+    dari: dari||'', sampai: sampai||'', kasir: kasir,
     service_masuk: svc.length,
     service_selesai: diambil.length,
     service_omzet: sOm, service_per_status: per,
-    service_diambil: [...diambil].sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,50).map(x=>({noService:x.noService,tanggal:x.tanggal,nama:x.nama,telp:x.telp,merk:x.merk,tipe:x.tipe,biaya:x.biaya,teknisi:x.teknisi})),
+    service_diambil: [...diambil].sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,50).map(x=>({noService:x.noService,tanggal:x.tanggal,nama:x.nama,telp:x.telp,merk:x.merk,tipe:x.tipe,biaya:x.biaya,teknisi:x.teknisi,kasir:x.kasir})),
     penjualan_count: jual.length, penjualan_omzet: jOm, penjualan_hpp: jHpp, penjualan_laba: jLb,
     expense_count: exList.length, expense_total: exTot,
     total_pendapatan: sOm+jOm, total_laba: sOm+jLb-exTot,
@@ -2379,23 +2449,23 @@ function computeReportLocal(dari, sampai){
 let LAPORAN_CACHE=null;
 async function renderLaporan(){
   if(!$('lpLabaBody')) return;
-  const {dari, sampai}=lpRange();
+  const {dari, sampai, kasir}=lpRange();
   let r=null;
   if(useBackend()){
-    try{ r=await window.API.report(dari, sampai); }catch{ r=null; }
+    try{ r=await window.API.report(dari, sampai, kasir); }catch{ r=null; }
   }
   if(!r){
-    r=computeReportLocal(dari, sampai);
+    r=computeReportLocal(dari, sampai, kasir);
   }
   if(!(r._jualList||[]).length){
     try{
-      if(useBackend()){ const ls=await window.API.listSales({dari, sampai, limit:50}); if(ls&&ls.length) r._jualList=ls; }
+      if(useBackend()){ const ls=await window.API.listSales({dari, sampai, kasir, limit:50}); if(ls&&ls.length) r._jualList=ls; }
     }catch{}
   }
   // Backend mungkin belum punya kolom expense (server lama) -> hitung dari lokal agar tetap konsisten
   try{
     if((r.expense_total===undefined||r.expense_count===undefined) && (typeof EXPENSES!=='undefined')){
-      const exL=EXPENSES.filter(x=>inPeriode(x.tanggal||'',dari,sampai));
+      const exL=EXPENSES.filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.dicatat_oleh,kasir));
       r.expense_count=exL.length;
       r.expense_total=exL.reduce((a,b)=>a+Number(b.jumlah||0),0);
       r.total_laba=Number(r.service_omzet||0)+Number(r.penjualan_laba||0)-Number(r.expense_total||0);
@@ -2403,8 +2473,9 @@ async function renderLaporan(){
   }catch{}
   LAPORAN_CACHE=r;
   const periode=(r.dari||r.sampai)?`Periode: ${r.dari||'…'} s/d ${r.sampai||'…'}`:'Semua periode';
-  if($('lpInfo')) $('lpInfo').textContent=periode+` • ${r.service_masuk} service • ${r.penjualan_count} nota • ${r.expense_count||0} biaya`;
-  if($('lpPeriode')) $('lpPeriode').textContent=periode;
+  const kasirTag=(r.kasir||kasir)?` • Kasir: ${r.kasir||kasir}`:'';
+  if($('lpInfo')) $('lpInfo').textContent=periode+kasirTag+` • ${r.service_masuk} service • ${r.penjualan_count} nota • ${r.expense_count||0} biaya`;
+  if($('lpPeriode')) $('lpPeriode').textContent=periode+(r.kasir||kasir?(' • '+r.kasir):'');
   if($('lpPendapatan')) $('lpPendapatan').textContent=fmtRp(r.total_pendapatan);
   if($('lpLaba')) $('lpLaba').textContent=fmtRp(r.total_laba);
   if($('lpService')) $('lpService').textContent=fmtRp(r.service_omzet);
@@ -2438,25 +2509,75 @@ async function renderLaporan(){
   let diambilList=r.service_diambil||[];
   if(!diambilList.length){
     try{
-      const {dari:dd, sampai:ss}=lpRange();
-      diambilList=(typeof DB!=='undefined'?DB:[]).filter(x=>normStatus(x.status)==='Diambil'&&inPeriode(x.tanggal||'',dd,ss))
+      const {dari:dd, sampai:ss, kasir:kk}=lpRange();
+      diambilList=(typeof DB!=='undefined'?DB:[]).filter(x=>normStatus(x.status)==='Diambil'&&inPeriode(x.tanggal||'',dd,ss)&&matchKasir(x.kasir,kk))
         .sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,50)
-        .map(x=>({noService:x.noService,tanggal:x.tanggal,nama:x.nama,telp:x.telp,merk:x.merk,tipe:x.tipe,biaya:x.biaya,teknisi:x.teknisi}));
+        .map(x=>({noService:x.noService,tanggal:x.tanggal,nama:x.nama,telp:x.telp,merk:x.merk,tipe:x.tipe,biaya:x.biaya,teknisi:x.teknisi,kasir:x.kasir}));
     }catch{}
   }
   if($('lpDiambilCount')) $('lpDiambilCount').textContent=diambilList.length;
-  if($('lpDiambilBody')) $('lpDiambilBody').innerHTML=diambilList.map(x=>`<tr><td><b>${esc(x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.nama||'-')}<br><small class="muted">${esc(x.merk||'')} ${esc(x.tipe||'')}</small></td><td style="text-align:right"><b>${fmtRp(x.biaya)}</b></td></tr>`).join('')||'<tr><td colspan="3">Belum ada service Diambil pada periode ini.</td></tr>';
+  if($('lpDiambilBody')) $('lpDiambilBody').innerHTML=diambilList.map(x=>`<tr><td><b>${esc(x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.nama||'-')}<br><small class="muted">${esc(x.merk||'')} ${esc(x.tipe||'')}</small></td><td>${esc(x.kasir||'-')}</td><td style="text-align:right"><b>${fmtRp(x.biaya)}</b></td></tr>`).join('')||'<tr><td colspan="4">Belum ada service Diambil pada periode ini.</td></tr>';
   const jl=r._jualList||[];
   if($('lpJualCount')) $('lpJualCount').textContent=r.penjualan_count;
-  if($('lpJualBody')) $('lpJualBody').innerHTML=jl.map(x=>`<tr><td><b>${esc(x.no_nota||x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.pelanggan||x.nama||'Umum')}</td><td style="text-align:right"><b>${fmtRp(x.total||x.biaya||0)}</b></td></tr>`).join('')||'<tr><td colspan="3">Belum ada penjualan pada periode ini.</td></tr>';
+  if($('lpJualBody')) $('lpJualBody').innerHTML=jl.map(x=>`<tr><td><b>${esc(x.no_nota||x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.pelanggan||x.nama||'Umum')}</td><td>${esc(x.kasir||'-')}</td><td style="text-align:right"><b>${fmtRp(x.total||x.biaya||0)}</b></td></tr>`).join('')||'<tr><td colspan="4">Belum ada penjualan pada periode ini.</td></tr>';
   const sp=[...(typeof SPARE!=='undefined'?SPARE:[])].sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
   if($('lpStokCount')) $('lpStokCount').textContent=sp.length;
   if($('lpStokBody')) $('lpStokBody').innerHTML=sp.map(x=>{ const low=Number(x.stok||0)<=Number(x.stok_min||0); return `<tr>
     <td><b>${esc(x.sku)}</b></td><td><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.merk||'')} • ${esc(((x&&x.kategori)||'Lainnya'))}</small></td>
+    <td><span class="badge b-Dikerjakan">${esc(spJenis(x))}</span></td>
     <td>${fmtRp(x.hpp)}</td><td><b>${fmtRp(x.harga_jual)}</b></td>
     <td><b>${esc(x.stok)}</b><br>${low?'<span class="badge b-Batal">Menipis</span>':'<span class="badge b-Selesai">Aman</span>'}</td>
     <td style="text-align:right"><b>${fmtRp(Number(x.hpp||0)*Number(x.stok||0))}</b></td></tr>`; }).join('')
-    + `<tr><td colspan="5"><b>Total nilai stok (HPP)</b> • ${esc(r.stok_menipis)} menipis</td><td style="text-align:right"><b>${fmtRp(r.stok_nilai_hpp)}</b></td></tr>`;
+    + `<tr><td colspan="6"><b>Total nilai stok (HPP)</b> • ${esc(r.stok_menipis)} menipis</td><td style="text-align:right"><b>${fmtRp(r.stok_nilai_hpp)}</b></td></tr>`;
+  renderRekapKasir(dari, sampai);
+}
+// Rekap gabungan per kasir (dihitung dari data lokal yg sudah sync dari backend)
+function renderRekapKasir(dari, sampai){
+  if(!$('lpKasirBody')) return;
+  const rows=new Map();
+  const get=(n)=>{
+    const k=normKasir(n); if(!k) return null;
+    if(!rows.has(k)) rows.set(k,{nama:String(n).trim(),svc:0,svcOm:0,nota:0,jual:0,labaJual:0,exp:0,expN:0});
+    return rows.get(k);
+  };
+  (typeof DB!=='undefined'?DB:[]).forEach(x=>{
+    if(!inPeriode(x.tanggal||'',dari,sampai)) return;
+    const r=get(x.kasir); if(!r) return;
+    if(normStatus(x.status)==='Diambil'){ r.svc++; r.svcOm+=Number(x.biaya||0); }
+  });
+  (typeof SALES!=='undefined'?SALES:[]).forEach(x=>{
+    if(!inPeriode(x.tanggal||'',dari,sampai)) return;
+    const r=get(x.kasir); if(!r) return;
+    r.nota++; r.jual+=Number(x.total||0); r.labaJual+=Number(x.laba!=null?x.laba:(Number(x.total||0)-Number(x.hpp_total||0)));
+  });
+  (typeof EXPENSES!=='undefined'?EXPENSES:[]).forEach(x=>{
+    if(!inPeriode(x.tanggal||'',dari,sampai)) return;
+    const r=get(x.dicatat_oleh); if(!r) return;
+    r.exp+=Number(x.jumlah||0); r.expN++;
+  });
+  const list=[...rows.values()].sort((a,b)=>(b.svcOm+b.jual)-(a.svcOm+a.jual));
+  const t=list.reduce((o,r)=>({svc:o.svc+r.svc, svcOm:o.svcOm+r.svcOm, nota:o.nota+r.nota, jual:o.jual+r.jual, labaJual:o.labaJual+r.labaJual, exp:o.exp+r.exp}),{svc:0,svcOm:0,nota:0,jual:0,labaJual:0,exp:0});
+  const laba=(r)=>r.svcOm+r.labaJual-r.exp;
+  if($('lpKasirCount')) $('lpKasirCount').textContent=list.length;
+  if($('lpKasirPeriode')) $('lpKasirPeriode').textContent=(dari||sampai)?`${dari||'…'} s/d ${sampai||'…'}`:'Semua periode';
+  if($('lpKasirBody')) $('lpKasirBody').innerHTML=list.map(r=>`<tr>
+    <td><b>${esc(r.nama)}</b>${r.expN?`<br><small class="muted">${esc(r.expN)} pengeluaran</small>`:''}</td>
+    <td style="text-align:right">${esc(r.svc)}</td>
+    <td style="text-align:right"><b>${fmtRp(r.svcOm)}</b></td>
+    <td style="text-align:right">${esc(r.nota)}</td>
+    <td style="text-align:right"><b>${fmtRp(r.jual)}</b></td>
+    <td style="text-align:right">${fmtRp(r.labaJual)}</td>
+    <td style="text-align:right">(${fmtRp(r.exp)})</td>
+    <td style="text-align:right"><b>${fmtRp(laba(r))}</b></td></tr>`).join('')
+    + `<tr><td><b>TOTAL</b></td><td style="text-align:right"><b>${esc(t.svc)}</b></td><td style="text-align:right"><b>${fmtRp(t.svcOm)}</b></td><td style="text-align:right"><b>${esc(t.nota)}</b></td><td style="text-align:right"><b>${fmtRp(t.jual)}</b></td><td style="text-align:right"><b>${fmtRp(t.labaJual)}</b></td><td style="text-align:right"><b>(${fmtRp(t.exp)})</b></td><td style="text-align:right"><b>${fmtRp(t.svcOm+t.labaJual-t.exp)}</b></td></tr>`
+    || '<tr><td colspan="8">Belum ada transaksi pada periode ini.</td></tr>';
+}
+function syncLpKasirOptions(){
+  const el=$('lp_kasir'); if(!el) return;
+  const cur=el.value||'';
+  const list=kasirList();
+  el.innerHTML='<option value="">Semua kasir</option>'+list.map(n=>`<option value="${esc(n)}" ${normKasir(n)===normKasir(cur)?'selected':''}>${esc(n)}</option>`).join('');
+  if(cur && !list.some(n=>normKasir(n)===normKasir(cur))) el.value='';
 }
 function bindLaporan(){
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.onclick=()=>gotoLtab(b.dataset.ltab));
@@ -2466,21 +2587,28 @@ function bindLaporan(){
   if($('lp7')) $('lp7').onclick=()=>setD(new Date(Date.now()-6*864e5).toISOString().slice(0,10),today);
   if($('lp30')) $('lp30').onclick=()=>setD(new Date(Date.now()-29*864e5).toISOString().slice(0,10),today);
   if($('lpAll')) $('lpAll').onclick=()=>setD('','');
-  if($('btnLpTampil')) $('btnLpTampil').onclick=()=>{ renderLaporan(); toast('Laporan diperbarui 📊'); };
+  if($('btnLpTampil')) $('btnLpTampil').onclick=()=>{ syncLpKasirOptions(); renderLaporan(); toast('Laporan diperbarui 📊'); };
   if($('lp_dari')) $('lp_dari').onchange=renderLaporan;
   if($('lp_sampai')) $('lp_sampai').onchange=renderLaporan;
+  if($('lp_kasir')) $('lp_kasir').onchange=()=>renderLaporan();
+  if($('lpResetKasir')) $('lpResetKasir').onclick=()=>{ if($('lp_kasir'))$('lp_kasir').value=''; renderLaporan(); toast('Filter kasir direset ↺'); };
   if($('btnLpCSV')) $('btnLpCSV').onclick=exportLaporanCSV;
   if($('btnLpPrint')) $('btnLpPrint').onclick=printLaporan;
+  syncLpKasirOptions();
 }
 window.gotoLtab=function(name){
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.ltab===name));
   document.querySelectorAll('.ltab-pane').forEach(p=>p.classList.toggle('active', p.id==='ltab-'+name));
+  curLtab=name;
+  NAVLTAB.laporan=name;
+  try{ navSyncActive('laporan', name, 'laporan'); }catch{}
 };
 function exportLaporanCSV(){
   const r=LAPORAN_CACHE||computeReportLocal(...Object.values(lpRange()));
   const L=[];
   L.push('LAPORAN POS KONTER');
   L.push('Periode,'+(r.dari||'…')+' s/d '+(r.sampai||'…'));
+  L.push('Kasir,'+(r.kasir||'Semua kasir'));
   L.push('');
   L.push('LABA RUGI');
   L.push('Keterangan,Nilai');
@@ -2500,6 +2628,16 @@ function exportLaporanCSV(){
   L.push('NoService,Tanggal,Nama,HP,Biaya');
   (r.service_diambil||[]).forEach(x=>L.push([x.noService,x.tanggal,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.telp,x.biaya].join(',')));
   L.push('');
+  L.push('REKAP PER KASIR');
+  L.push('Kasir,Service Diambil,Omzet Service,Nota,Omzet Jual,Laba Jual,Pengeluaran,Laba Bersih');
+  try{
+    const f=$('lpKasirBody');
+    if(f) [...f.querySelectorAll('tr')].forEach(tr=>{
+      const c=[...tr.children].map(td=>(td.textContent||'').replace(/\s+/g,' ').trim());
+      L.push(c.map((v,i)=>i===0?('"'+v.replace(/"/g,'""')+'"'):v).join(','));
+    });
+  }catch{}
+  L.push('');
   L.push('STOK');
   L.push('SKU,Nama,Merk,Kategori,HPP,Jual,Stok,Nilai HPP');
   (typeof SPARE!=='undefined'?SPARE:[]).forEach(x=>L.push([x.sku,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.merk,'"'+String(((x&&x.kategori)||'Lainnya')).replace(/"/g,'""')+'"',x.hpp,x.harga_jual,x.stok,Number(x.hpp||0)*Number(x.stok||0)].join(',')));
@@ -2513,7 +2651,7 @@ function printLaporan(){
     <h2>${esc(SET.nama)}</h2>
     <p style="text-align:center">${esc(SET.alamat)}<br>Telp: ${esc(SET.telp)}</p>
     <hr>
-    <p><b>LAPORAN</b><br>Periode: ${esc(r.dari||'…')} s/d ${esc(r.sampai||'…')}</p>
+    <p><b>LAPORAN</b><br>Periode: ${esc(r.dari||'…')} s/d ${esc(r.sampai||'…')}${r.kasir?('<br>Kasir: '+esc(r.kasir)):''}</p>
     <hr>
     <p><b>Laba Rugi</b><br>
     Pendapatan service (hanya Diambil): ${fmtRp(r.service_omzet)} (${esc(r.service_selesai)} unit)<br>

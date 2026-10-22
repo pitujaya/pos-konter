@@ -36,6 +36,10 @@ def seed(db: Session):
             models.Sparepart(nama="LCD Samsung A12", sku="LCD-SSA12", merk="Samsung", hpp=180000, harga_jual=250000, stok=8, stok_min=3),
             models.Sparepart(nama="Baterai Redmi 12C", sku="BAT-R12C", merk="Xiaomi", hpp=65000, harga_jual=95000, stok=2, stok_min=5),
             models.Sparepart(nama="Charger 25W USB-C", sku="CHR-25WC", merk="Samsung", hpp=45000, harga_jual=75000, stok=15, stok_min=5),
+            models.Sparepart(nama="Tempered Glass A12", sku="ACC-TG12", merk="Generic", kategori="Aksesoris", jenis="Accessories", hpp=8000, harga_jual=20000, stok=40, stok_min=10),
+            models.Sparepart(nama="Case Silikon A12", sku="ACC-CS12", merk="Generic", kategori="Aksesoris", jenis="Accessories", hpp=12000, harga_jual=30000, stok=25, stok_min=8),
+            models.Sparepart(nama="Nokia 105 2G", sku="HP-NK105", merk="Nokia", kategori="Handphone", jenis="Handphone", hpp=550000, harga_jual=650000, stok=6, stok_min=2),
+            models.Sparepart(nama="Infinix Hot 30", sku="HP-IH30", merk="Infinix", kategori="Handphone", jenis="Handphone", hpp=1350000, harga_jual=1550000, stok=4, stok_min=2),
         ])
         db.commit()
     # --- contoh service ---

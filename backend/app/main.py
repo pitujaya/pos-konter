@@ -95,6 +95,16 @@ try:
                 _conn.exec_driver_sql("UPDATE spareparts SET kategori='Lainnya' WHERE kategori IS NULL OR kategori=''")
     except Exception as _me:
         print(f"[WARN] migrasi kategori sparepart: {_me}")
+    # Migrasi ringan SQLite: tambah kolom jenis (Sparepart/Accessories/Handphone).
+    try:
+        with engine.begin() as _conn:
+            _cols = [r[1] for r in _conn.exec_driver_sql("PRAGMA table_info(spareparts)").fetchall()]
+            if _cols and "jenis" not in _cols:
+                _conn.exec_driver_sql("ALTER TABLE spareparts ADD COLUMN jenis VARCHAR(40) DEFAULT 'Sparepart'")
+                _conn.exec_driver_sql("UPDATE spareparts SET jenis='Sparepart' WHERE jenis IS NULL OR jenis=''")
+                _conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_spareparts_jenis ON spareparts (jenis)")
+    except Exception as _me:
+        print(f"[WARN] migrasi jenis sparepart: {_me}")
     # Migrasi ringan SQLite: tambah kolom kasir pada services (filter laporan per kasir).
     try:
         with engine.begin() as _conn:

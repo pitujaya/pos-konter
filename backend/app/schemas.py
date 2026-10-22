@@ -188,6 +188,7 @@ class SparepartIn(BaseModel):
     sku: str
     merk: str | None = ""
     kategori: str | None = "Lainnya"
+    jenis: str | None = "Sparepart"
     hpp: int = 0
     harga_jual: int = 0
     stok: int = 0
@@ -199,6 +200,7 @@ class SparepartUpdateIn(BaseModel):
     sku: str | None = None
     merk: str | None = None
     kategori: str | None = None
+    jenis: str | None = None
     hpp: int | None = None
     harga_jual: int | None = None
     stok: int | None = None
@@ -215,6 +217,7 @@ class SparepartOut(BaseModel):
     sku: str
     merk: str = ""
     kategori: str = "Lainnya"
+    jenis: str = "Sparepart"
     hpp: int = 0
     harga_jual: int = 0
     stok: int = 0
