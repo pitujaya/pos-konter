@@ -32,6 +32,7 @@ android-mirror/local.properties
 .idea/
 .vscode/
 *.apk
+!landing/download/*.apk
 node_modules/
 dist/
 Thumbs.db

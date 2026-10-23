@@ -55,6 +55,7 @@ from .routers import sales as sales_router
 from .routers import expenses as expenses_router
 from .routers import kas_sessions as kas_router
 from .routers import ai_monitor as ai_monitor_router
+from .routers import leads as leads_router
 from .seed import seed
 
 app = FastAPI(
@@ -170,6 +171,7 @@ app.include_router(sales_router.router, prefix="/api")
 app.include_router(expenses_router.router, prefix="/api")
 app.include_router(kas_router.router, prefix="/api")
 app.include_router(ai_monitor_router.router, prefix="/api")
+app.include_router(leads_router.router, prefix="/api")
 
 # Folder upload gambar headbar -> serve di /static/uploads.
 # Path diambil dari app.paths supaya PENTING sama dengan folder yang dipakai
@@ -218,6 +220,20 @@ FRONTEND_CANDIDATES = [
 FRONTEND_DIR = next((p for p in FRONTEND_CANDIDATES if p.name != "__EMPTY__" and (p / "index.html").exists()), None)
 LANDING_DIR = Path(os.getenv("LANDING_DIR", "") or (Path(__file__).resolve().parent.parent.parent / "landing"))
 LANDING_HOSTS = {"pitujaya.my.id", "www.pitujaya.my.id"}
+
+
+@app.get("/download/pitujaya-pos.apk", include_in_schema=False)
+def download_pos_apk():
+    apk = LANDING_DIR / "download" / "pitujaya-pos.apk"
+    if not apk.exists():
+        return RedirectResponse("/#pos", status_code=303)
+    return FileResponse(
+        apk,
+        media_type="application/vnd.android.package-archive",
+        filename="Pitujaya-POS.apk",
+    )
+
+
 if FRONTEND_DIR is not None:
     @app.get("/", include_in_schema=False)
     @app.get("/index.html", include_in_schema=False)

@@ -435,3 +435,26 @@ class AiChatIn(BaseModel):
     provider: str = ""  # nama provider spesifik, kosong = auto by priority
     max_tokens: int = 512
     temperature: float = 0.7
+
+
+# ---------- Leads (pendaftaran minat dari landing page) ----------
+class LeadIn(BaseModel):
+    nama: str = Field(min_length=1, max_length=120)
+    hp: str = Field(min_length=9, max_length=30)
+    konter: str | None = Field(default="", max_length=160)
+    email: str | None = Field(default="", max_length=160)
+    pesan: str | None = Field(default="", max_length=1000)
+    website: str | None = Field(default="", max_length=200)
+
+
+class LeadOut(BaseModel):
+    id: int
+    nama: str
+    hp: str
+    konter: str = ""
+    email: str = ""
+    pesan: str = ""
+    sumber: str = "landing"
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}

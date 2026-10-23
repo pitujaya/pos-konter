@@ -12,4 +12,5 @@ uploads/*
 .idea/
 android-mirror/
 *.apk
+!landing/download/*.apk
 doc/

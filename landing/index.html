@@ -94,6 +94,33 @@ section{scroll-margin-top:86px}
 .benefit .emoji{font-size:30px}
 .benefit b{display:block;margin:7px 0 3px}
 .benefit span{color:#5a5a5a;font-size:14px}
+.pos-app{background:radial-gradient(circle at 8% 20%,#4d4110 0,transparent 32%),linear-gradient(145deg,#171717,#2b2b2b);color:#fff;padding:64px 6%}
+.pos-grid{display:grid;grid-template-columns:1.08fr .92fr;gap:38px;align-items:start}
+.pos-app h2{font-size:clamp(29px,4.5vw,46px);line-height:1.08;letter-spacing:-1px;margin:16px 0 12px}
+.pos-app p{color:#d7d7d7;max-width:560px}
+.pos-features{list-style:none;padding:0;margin:22px 0;display:grid;grid-template-columns:1fr 1fr;gap:11px 18px}
+.pos-features li{display:flex;gap:9px;align-items:flex-start;font-size:14px;line-height:1.4}
+.pos-features .emoji{font-size:20px;flex:0 0 auto}
+.pos-features b{display:block;font-size:14px}
+.pos-features small{color:#bdbdbd;display:block;font-size:12px}
+.pos-note{font-size:12px!important;color:#aaa!important;margin-top:14px}
+.lead-card{background:#fff;color:#181818;border-radius:var(--radius);padding:24px;box-shadow:0 20px 44px #0006}
+.lead-card h3{margin:0 0 4px;font-size:23px}
+.lead-card>p{margin:0 0 16px;color:#666;font-size:14px}
+.lead-card form{display:grid;gap:11px}
+.lead-card label{display:grid;gap:5px;font-size:13px;font-weight:800}
+.lead-card .optional{font-weight:600;color:#888}
+.lead-card input,.lead-card textarea{width:100%;padding:11px 12px;border:1px solid #cfcfcf;border-radius:9px;font:inherit;font-size:14px;background:#fff;color:#181818}
+.lead-card input:focus,.lead-card textarea:focus{outline:2px solid var(--yellow);border-color:var(--dark)}
+.lead-card textarea{resize:vertical;min-height:58px}
+.lead-card .btn{width:100%;border:0;cursor:pointer;font-size:15px;margin-top:2px}
+.lead-card .btn:disabled{opacity:.65;cursor:wait;transform:none}
+.form-msg{min-height:19px;margin:0;font-size:13px;font-weight:700;color:#555}
+.form-msg.ok{color:var(--green)}
+.form-msg.err{color:var(--red)}
+.form-msg a{color:var(--green);font-weight:900;text-decoration:underline}
+.privacy{color:#888;font-size:11px;line-height:1.4}
+.hp-field{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0!important}
 .location{padding:58px 6%;text-align:center;background:var(--dark);color:#fff}
 .location .section-title{color:#fff}
 .location p{color:#cfcfcf;max-width:680px;margin:0 auto}
@@ -112,7 +139,9 @@ footer small{display:block;margin-top:6px;color:#8d8d8d}
   .hero-inner{grid-template-columns:1fr}
   .phone-art{min-height:210px;margin-top:8px}
   .phone{width:120px;height:216px;font-size:42px}
-  .cards,.service-grid,.step-grid,.benefit-grid{grid-template-columns:1fr}
+  .cards,.service-grid,.step-grid,.benefit-grid,.pos-grid{grid-template-columns:1fr}
+  .pos-features{grid-template-columns:1fr}
+  .pos-app{padding:48px 6%}
   .hero p{font-size:16px}
   .section-sub{margin-bottom:26px}
   .floating{right:12px;bottom:12px;padding:12px 15px;font-size:14px}
@@ -151,6 +180,7 @@ footer small{display:block;margin-top:6px;color:#8d8d8d}
   </a>
   <nav aria-label="Navigasi utama">
     <a href="#promo">Promo</a>
+    <a href="#pos">Aplikasi POS</a>
     <a href="#layanan">Layanan</a>
     <a href="#lokasi">Lokasi</a>
   </nav>
@@ -239,6 +269,41 @@ footer small{display:block;margin-top:6px;color:#8d8d8d}
     <div class="benefit"><div class="emoji" aria-hidden="true">💬</div><b>Mudah Bertanya</b><span>Hubungi kami untuk info harga dan ketersediaan.</span></div>
   </div>
 </section>
+<section class="pos-app" id="pos">
+  <div class="wrap pos-grid">
+    <div>
+      <span class="eyebrow">APLIKASI POS</span>
+      <h2>Kelola konter lebih rapi, dari mana saja.</h2>
+      <p>POS Pitujaya membantu mencatat servis, penjualan, stok, dan laporan keuangan konter dalam satu aplikasi Android.</p>
+      <ul class="pos-features">
+        <li><span class="emoji" aria-hidden="true">🧾</span><div><b>Servis &amp; penjualan</b><small>Nota dan riwayat transaksi rapi.</small></div></li>
+        <li><span class="emoji" aria-hidden="true">📦</span><div><b>Stok sparepart</b><small>Pantau stok dan harga jual.</small></div></li>
+        <li><span class="emoji" aria-hidden="true">📊</span><div><b>Laporan laba</b><small>Pendapatan dan biaya terlihat jelas.</small></div></li>
+        <li><span class="emoji" aria-hidden="true">👥</span><div><b>Multi pengguna</b><small>Atur akses kasir dan admin.</small></div></li>
+      </ul>
+      <div class="actions">
+        <a class="btn primary" href="/download/pitujaya-pos.apk" download="Pitujaya-POS.apk">⬇️ Download APK</a>
+        <a class="btn secondary" href="#daftar">📝 Daftar Minat</a>
+      </div>
+      <p class="pos-note">APK Android • Gratis dicoba • Butuh akun untuk masuk</p>
+    </div>
+    <div class="lead-card" id="daftar">
+      <h3>Daftar Minat</h3>
+      <p>Isi data di bawah. Tim kami akan menghubungi Anda lewat WhatsApp.</p>
+      <form id="leadForm" novalidate>
+        <label>Nama lengkap *<input name="nama" required maxlength="120" autocomplete="name" placeholder="Nama Anda"></label>
+        <label>No. WhatsApp *<input name="hp" required inputmode="tel" autocomplete="tel" maxlength="20" placeholder="08xxxxxxxxxx"></label>
+        <label>Nama konter <span class="optional">(opsional)</span><input name="konter" maxlength="160" placeholder="cth: Pitujaya Gadget"></label>
+        <label>Email <span class="optional">(opsional)</span><input name="email" type="email" maxlength="160" autocomplete="email" placeholder="nama@email.com"></label>
+        <label>Catatan <span class="optional">(opsional)</span><textarea name="pesan" rows="2" maxlength="1000" placeholder="Butuh demo atau info harga?"></textarea></label>
+        <input class="hp-field" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <button class="btn primary" type="submit">Kirim Pendaftaran</button>
+        <p class="form-msg" id="leadMsg" role="status" aria-live="polite"></p>
+        <small class="privacy">Data hanya digunakan untuk menghubungi Anda tentang aplikasi POS.</small>
+      </form>
+    </div>
+  </div>
+</section>
 <section class="location" id="lokasi">
   <div class="wrap">
     <h2 class="section-title">Kunjungi Pitujaya Gadget</h2>
@@ -268,6 +333,70 @@ document.querySelectorAll(".wa").forEach(function (a) {
 });
 const tahun = document.getElementById("tahun");
 if (tahun) tahun.textContent = new Date().getFullYear();
+
+const leadForm = document.getElementById("leadForm");
+if (leadForm) {
+  leadForm.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const msg = document.getElementById("leadMsg");
+    const btn = leadForm.querySelector("button[type=submit]");
+    const data = Object.fromEntries(new FormData(leadForm).entries());
+    const payload = {
+      nama: String(data.nama || "").trim(),
+      hp: String(data.hp || "").trim(),
+      konter: String(data.konter || "").trim(),
+      email: String(data.email || "").trim(),
+      pesan: String(data.pesan || "").trim(),
+      website: String(data.website || "").trim()
+    };
+    if (payload.website) return;
+    msg.className = "form-msg";
+    msg.textContent = "";
+    if (!payload.nama || !payload.hp) {
+      msg.className = "form-msg err";
+      msg.textContent = "Nama dan nomor WhatsApp wajib diisi.";
+      return;
+    }
+    if (payload.hp.replace(/\D/g, "").length < 9) {
+      msg.className = "form-msg err";
+      msg.textContent = "Nomor WhatsApp belum valid.";
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = "Mengirim...";
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const out = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        const detail = typeof out.detail === "string" ? out.detail : "Pendaftaran gagal dikirim.";
+        throw new Error(detail);
+      }
+      leadForm.reset();
+      msg.className = "form-msg ok";
+      msg.textContent = "Terima kasih! Pendaftaran diterima. Kami akan menghubungi Anda via WhatsApp. ";
+      const waFollow = document.createElement("a");
+      const waText = "Halo Pitujaya Gadget, saya sudah daftar minat aplikasi POS.\n"
+        + "Nama: " + payload.nama + "\n"
+        + "Konter: " + (payload.konter || "-") + "\n"
+        + "No. WhatsApp: " + payload.hp;
+      waFollow.href = "https://wa.me/" + phone + "?text=" + encodeURIComponent(waText);
+      waFollow.target = "_blank";
+      waFollow.rel = "noopener";
+      waFollow.textContent = "Chat sekarang →";
+      msg.appendChild(waFollow);
+    } catch (err) {
+      msg.className = "form-msg err";
+      msg.textContent = err.message || "Pendaftaran gagal dikirim. Coba lagi.";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Kirim Pendaftaran";
+    }
+  });
+}
 </script>
 </body>
 </html>

@@ -281,3 +281,16 @@ class AiRequestLog(Base):
     status: Mapped[str] = mapped_column(String(10), default="ok", index=True)  # ok|error
     error: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class Lead(Base):
+    __tablename__ = "leads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nama: Mapped[str] = mapped_column(String(120), nullable=False)
+    hp: Mapped[str] = mapped_column(String(30), index=True, nullable=False)
+    konter: Mapped[str] = mapped_column(String(160), default="")
+    email: Mapped[str] = mapped_column(String(160), default="")
+    pesan: Mapped[str] = mapped_column(Text, default="")
+    sumber: Mapped[str] = mapped_column(String(40), default="landing", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
