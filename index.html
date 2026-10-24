@@ -434,12 +434,11 @@
           <button class="ltab" data-prtab="accessories">🎧 Stok Accessories</button>
           <button class="ltab" data-prtab="handphone">📱 Stok Handphone</button>
         </div>
-        <div class="row" style="gap:8px;flex-wrap:wrap">
-          <button class="btn ghost" id="btnSpTemplate">⬇️ Template Excel/CSV</button>
-          <button class="btn ghost" id="btnSpImport">📥 Import Produk</button>
-          <button class="btn primary" id="btnAddSpare">+ Input Produk Baru</button>
+        <div class="produk-actions">
+          <button class="btn ghost small" id="btnSpTemplate" title="Download Template Excel/CSV">⬇️ Template</button>
+          <button class="btn ghost small" id="btnSpImport" title="Import Produk Massal">📥 Import</button>
+          <button class="btn primary small" id="btnAddSpare">+ Produk Baru</button>
         </div>
-        <button class="btn ghost small hidden" id="btnProdukAll" onclick="produkSemua()">← Tampilkan Semua Tab</button>
       </div>
       <input type="file" id="fileSpImport" accept=".xlsx,.xlsm,.csv,.txt" style="display:none" />
       <div class="stats lp-stats lp-stats-3">

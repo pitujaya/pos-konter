@@ -2190,6 +2190,9 @@ function renderSpareparts(){
   const admin=isAdminUp(), canChange=bolehAkses('admin_ubah_produk');
   const bAdd=$('btnAddSpare');
   if(bAdd) bAdd.style.display=canChange?'':'none';
+  if($('btnSpTemplate')) $('btnSpTemplate').style.display=canChange?'':'none';
+  if($('btnSpImport')) $('btnSpImport').style.display=canChange?'':'none';
+  if($('fileSpImport')) $('fileSpImport').style.display=canChange?'':'none';
   if(!r.length){ $('spTable').innerHTML=''; return; }
   $('spTable').innerHTML=r.map(x=>{
     const isLow=Number(x.stok||0)<=Number(x.stok_min||0);
