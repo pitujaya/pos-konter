@@ -6,7 +6,13 @@ import time
 from datetime import date, datetime
 from typing import Optional
 
-import httpx
+try:
+    import httpx  # type: ignore
+except Exception:
+    httpx = None
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -17,6 +23,37 @@ from ..auth import get_current_user
 router = APIRouter(prefix="/digital-sales", tags=["digital-sales"])
 
 SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHhhn_hKbTRmkQgt64mf5KN-sm9Jpw00v5cuXCEGI25lCvS0zBAZwDdb944Nt2AKnDkDr3WWlGF8oX/pub?gid=0&single=true&output=csv"
+
+
+def _fetch_csv():
+    bust = int(time.time() * 1000) + random.randint(1, 9999)
+    url = f"{SHEET_CSV_URL}&t={bust}&cb={bust}"
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    }
+    if httpx is not None:
+        try:
+            with httpx.Client(timeout=30.0, follow_redirects=True, headers=headers) as client:
+                resp = client.get(url)
+                resp.raise_for_status()
+                return resp.text
+        except Exception:
+            pass
+    req = Request(url, headers=headers)
+    try:
+        with urlopen(req, timeout=30) as resp:
+            data = resp.read()
+        try:
+            return data.decode("utf-8-sig")
+        except Exception:
+            return data.decode("utf-8", errors="replace")
+    except HTTPError as e:
+        raise Exception(f"HTTP {e.code}: {e.reason}")
+    except URLError as e:
+        raise Exception(str(e))
 
 
 def _num(v) -> int:
@@ -80,21 +117,9 @@ def status(db: Session = Depends(get_db), _: models.User = Depends(get_current_u
 
 
 @router.post("/sync")
-async def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     try:
-        # Add cache-busting to force fresh fetch from Google
-        bust = int(time.time() * 1000) + random.randint(1, 9999)
-        url = f"{SHEET_CSV_URL}&t={bust}&cb={bust}"
-        headers = {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        }
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            text = resp.text
+        text = _fetch_csv()
     except Exception as e:
         raise HTTPException(500, f"Gagal mengambil data spreadsheet: {e}")
 
@@ -196,19 +221,10 @@ async def sync(db: Session = Depends(get_db), _: models.User = Depends(get_curre
 
 
 @router.get("/raw")
-async def raw_csv(_: models.User = Depends(get_current_user)):
+def raw_csv(_: models.User = Depends(get_current_user)):
     try:
-        bust = int(time.time() * 1000) + random.randint(1, 9999)
-        url = f"{SHEET_CSV_URL}&t={bust}&cb={bust}"
-        headers = {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-        }
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            return {"ok": True, "text": resp.text, "count": len(resp.text.splitlines())}
+        text = _fetch_csv()
+        return {"ok": True, "text": text, "count": len(text.splitlines())}
     except Exception as e:
         raise HTTPException(500, f"Gagal: {e}")
 
