@@ -1139,15 +1139,21 @@ function renderStats(){
     if($('stDigOmzet')) $('stDigOmzet').textContent=fmtRp(digOm);
     if($('stDigLaba')) $('stDigLaba').textContent=fmtRp(digLb);
   }catch{}
-  // Ringkasan Produk
+  // Ringkasan Penjualan Barang
   try{
-    const spAll = (typeof SPARE!=='undefined'?SPARE:[]);
-    const unit = spAll.reduce((a,b)=>a+Number(b.stok||0),0);
-    const omJual = spAll.reduce((a,b)=>a+Number(b.harga_jual||0)*Number(b.stok||0),0);
-    const labaPot = spAll.reduce((a,b)=>a+(Number(b.harga_jual||0)-Number(b.hpp||0))*Number(b.stok||0),0);
+    const now=new Date(), pad=n=>String(n).padStart(2,'0');
+    const dari=`${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+    const sampai=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+    const jual = (typeof SALES!=='undefined'?SALES:[]).filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
+    let unit=0;
+    jual.forEach(s=>{
+      (s.items||[]).forEach(it=>{ unit += Number(it.qty||0); });
+    });
+    const omJual = jual.reduce((a,b)=>a+Number(b.total||0),0);
+    const labaJual = jual.reduce((a,b)=>a+Number(b.laba||0),0);
     if($('stProdUnit')) $('stProdUnit').textContent=unit;
     if($('stProdOmzet')) $('stProdOmzet').textContent=fmtRp(omJual);
-    if($('stProdLaba')) $('stProdLaba').textContent=fmtRp(labaPot);
+    if($('stProdLaba')) $('stProdLaba').textContent=fmtRp(labaJual);
   }catch{}
   // Link status di dashboard -> ketuk untuk buka Data Service terfilter
   if($('statusLinks')){ try { $('statusLinks').innerHTML=''; } catch(e){} }
