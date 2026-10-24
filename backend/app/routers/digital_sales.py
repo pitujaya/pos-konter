@@ -203,31 +203,15 @@ def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_use
 
         exists = db.query(models.DigitalSale).filter(models.DigitalSale.nomor_urut == str(no_urut)).first()
         if exists:
-            # Update jika ada perubahan (realtime-ish)
-            changed = False
-            if exists.kode != kode:
-                exists.kode = kode
-                changed = True
-            if exists.no_tujuan != no_tujuan:
-                exists.no_tujuan = no_tujuan
-                changed = True
-            if exists.hpp != hpp:
-                exists.hpp = hpp
-                changed = True
-            if exists.harga_jual != harga_jual:
-                exists.harga_jual = harga_jual
-                changed = True
-            if exists.margin != margin:
-                exists.margin = margin
-                changed = True
-            if not exists.tanggal:
-                exists.tanggal = today
-                changed = True
-            if changed:
-                exists.updated_at = datetime.utcnow()
-                updated += 1
-            else:
-                skipped += 1
+            # Selalu update biar realtime
+            exists.kode = kode
+            exists.no_tujuan = no_tujuan
+            exists.hpp = hpp
+            exists.harga_jual = harga_jual
+            exists.margin = margin if margin != 0 or (harga_jual >= 0 and hpp >= 0) else (harga_jual - hpp)
+            exists.tanggal = today
+            exists.updated_at = datetime.utcnow()
+            updated += 1
             continue
         ds = models.DigitalSale(
             nomor_urut=str(no_urut),
