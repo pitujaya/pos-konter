@@ -2264,6 +2264,22 @@ function openSpareModal(){
   setTimeout(()=>{ const el=$('sp_nama'); if(el) el.focus(); },50);
 }
 if($('btnAddSpare')) $('btnAddSpare').onclick=openSpareModal;
+try{
+  if($('btnSpTemplate')) $('btnSpTemplate').onclick=downloadSpareTemplate;
+  if($('btnSpImport')) $('btnSpImport').onclick=()=>{ const f=$('fileSpImport'); if(f){ f.value=''; f.click(); } };
+  if($('fileSpImport')){
+    $('fileSpImport').onchange=async (e)=>{
+      const file=e.target.files&&e.target.files[0]; if(!file) return;
+      if(!confirm('Import produk dari '+file.name+'?\nSKU yang sudah ada akan diupdate, SKU baru akan ditambahkan.')){ e.target.value=''; return; }
+      if(!useBackend()){ toast('Import hanya bisa lewat mode Backend/API'); e.target.value=''; return; }
+      if(!needAdmin()){ toast('Hanya admin'); e.target.value=''; return; }
+      if(!bolehAkses('admin_ubah_produk')){ toast('⛔ Hak akses: mengubah produk dimatikan'); e.target.value=''; return; }
+      try{ toast('Mengimport...'); const res=await window.API.importSpareparts(file); toast('Import: +'+(res.added||0)+' baru, update '+(res.updated||0)+', dilewati '+(res.skipped||0)); if(typeof pullSpareparts==='function') await pullSpareparts(); renderAll(); }
+      catch(err){ toast(err.message||'Gagal import'); }
+      e.target.value='';
+    };
+  }
+}catch(e){ console.warn('bind import spare:', e); }
 function downloadSpareTemplate(){
   if(!useBackend()){ toast('Template hanya tersedia di mode Backend/API'); return; }
   (async ()=>{

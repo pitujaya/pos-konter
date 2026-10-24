@@ -215,10 +215,10 @@
     async req(path, opts = {}) {
       const method = (opts.method || "GET").toUpperCase();
       const hasBody = !!opts.body;
+      const isForm = !!opts.isForm;
+      const raw = !!opts.raw;
       const headers = Object.assign({}, opts.headers || {});
-      // Jangan kirim Content-Type untuk request tanpa body: memicu CORS
-      // preflight extra di setiap request GET saat origin beda.
-      if (hasBody && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+      if (hasBody && !isForm && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
       const tok = this.getToken();
       if (tok) headers["Authorization"] = "Bearer " + tok;
       let ctl, timer;
@@ -227,13 +227,26 @@
           ctl = new AbortController();
           timer = setTimeout(() => { try { ctl.abort(); } catch {} }, opts.timeout || this.TIMEOUT_MS);
         }
+        let bodyOut = undefined;
+        if (hasBody) {
+          if (isForm && opts.body instanceof FormData) bodyOut = opts.body;
+          else if (typeof opts.body === "string") bodyOut = opts.body;
+          else bodyOut = JSON.stringify(opts.body);
+        }
         const res = await fetch(this.base + path, {
           method: method,
           headers: headers,
-          body: hasBody ? JSON.stringify(opts.body) : undefined,
+          body: bodyOut,
           signal: ctl ? ctl.signal : undefined,
         });
         if (timer) clearTimeout(timer);
+        if (raw) {
+          const blob = await res.blob();
+          if (!res.ok) {
+            throw new Error("HTTP " + res.status);
+          }
+          return blob;
+        }
         const text = await res.text();
         let data = null;
         try { data = text ? JSON.parse(text) : null; } catch { data = { detail: text }; }
