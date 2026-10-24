@@ -1,4 +1,4 @@
-"""Penjualan Digital - sync dari Google Spreadsheet CSV publish."""
+"""Penjualan Digital - sync dari Google Spreadsheet."""
 import csv
 import io
 import random
@@ -22,38 +22,62 @@ from ..auth import get_current_user
 
 router = APIRouter(prefix="/digital-sales", tags=["digital-sales"])
 
-SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHhhn_hKbTRmkQgt64mf5KN-sm9Jpw00v5cuXCEGI25lCvS0zBAZwDdb944Nt2AKnDkDr3WWlGF8oX/pub?gid=0&single=true&output=csv"
+# Prefer direct export from original sheet (faster update)
+SHEET_ID = "1tweMQmM0YKnqHL1SPH_GtU1PV2pRvUVqUz-f9S6Ip6o"
+SHEET_GID = "0"
+SHEET_CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={SHEET_GID}"
+# Fallback
+SHEET_CSV_URL_PUB = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHhhn_hKbTRmkQgt64mf5KN-sm9Jpw00v5cuXCEGI25lCvS0zBAZwDdb944Nt2AKnDkDr3WWlGF8oX/pub?gid=0&single=true&output=csv"
 
 
 def _fetch_csv():
     bust = int(time.time() * 1000) + random.randint(1, 9999)
-    url = f"{SHEET_CSV_URL}&t={bust}&cb={bust}"
     headers = {
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "Pragma": "no-cache",
         "Expires": "0",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     }
-    if httpx is not None:
+    urls = [
+        f"{SHEET_CSV_URL}&t={bust}&r={random.randint(100000,999999)}",
+        f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={SHEET_GID}&t={bust}",
+        f"{SHEET_CSV_URL_PUB}&t={bust}&cb={bust}",
+    ]
+    last_err = None
+    for url in urls:
         try:
-            with httpx.Client(timeout=30.0, follow_redirects=True, headers=headers) as client:
-                resp = client.get(url)
-                resp.raise_for_status()
-                return resp.text
-        except Exception:
-            pass
-    req = Request(url, headers=headers)
-    try:
-        with urlopen(req, timeout=30) as resp:
-            data = resp.read()
-        try:
-            return data.decode("utf-8-sig")
-        except Exception:
-            return data.decode("utf-8", errors="replace")
-    except HTTPError as e:
-        raise Exception(f"HTTP {e.code}: {e.reason}")
-    except URLError as e:
-        raise Exception(str(e))
+            if httpx is not None:
+                try:
+                    with httpx.Client(timeout=30.0, follow_redirects=True, headers=headers) as client:
+                        resp = client.get(url)
+                        resp.raise_for_status()
+                        txt = resp.text
+                        if txt and not txt.strip().startswith("<!DOCTYPE"):
+                            return txt
+                        raise Exception("HTML response")
+                except Exception as e:
+                    last_err = e
+                    continue
+            req = Request(url, headers=headers)
+            try:
+                with urlopen(req, timeout=30) as resp:
+                    data = resp.read()
+                try:
+                    txt = data.decode("utf-8-sig")
+                except Exception:
+                    txt = data.decode("utf-8", errors="replace")
+                if txt and txt.strip().startswith("<!DOCTYPE"):
+                    raise Exception("HTML response")
+                return txt
+            except Exception as e:
+                last_err = e
+                continue
+        except Exception as e:
+            last_err = e
+            continue
+    if last_err:
+        raise Exception(str(last_err))
+    raise Exception("Gagal mengambil CSV")
 
 
 def _num(v) -> int:
