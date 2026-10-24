@@ -267,6 +267,18 @@
     },
 
     health() { return this.req("/health"); },
+    digitalSalesStatus() { return this.req("/digital-sales/status"); },
+    syncDigitalSales() { return this.req("/digital-sales/sync", { method: "POST" }); },
+    listDigitalSales(params = {}) {
+      const qs = new URLSearchParams();
+      if (params.q) qs.set("q", params.q);
+      if (params.dari) qs.set("dari", params.dari);
+      if (params.sampai) qs.set("sampai", params.sampai);
+      if (params.skip != null) qs.set("skip", String(params.skip));
+      if (params.limit != null) qs.set("limit", String(params.limit));
+      const url = "/digital-sales" + (qs.toString() ? "?" + qs.toString() : "");
+      return this.req(url);
+    },
     login(identifier, password, remember = true) {
       return this.req("/auth/login", { method: "POST", body: { identifier, password, remember } });
     },

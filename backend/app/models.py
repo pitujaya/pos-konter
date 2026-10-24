@@ -196,6 +196,23 @@ class Expense(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class DigitalSale(Base):
+    """Penjualan digital yang disinkron dari Google Spreadsheet (CSV publish)."""
+
+    __tablename__ = "digital_sales"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nomor_urut: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    kode: Mapped[str] = mapped_column(String(80), default="", index=True)
+    no_tujuan: Mapped[str] = mapped_column(String(80), default="")
+    hpp: Mapped[int] = mapped_column(Integer, default=0)
+    harga_jual: Mapped[int] = mapped_column(Integer, default=0)
+    margin: Mapped[int] = mapped_column(Integer, default=0)
+    tanggal: Mapped[str] = mapped_column(String(20), default="", index=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class CashSession(Base):
     """Sesi buka/tutup kasir (shift). Satu sesi terbuka per kasir.
 

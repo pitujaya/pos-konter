@@ -2943,6 +2943,51 @@ function computeReportLocal(dari, sampai, kasir){
   };
 }
 let LAPORAN_CACHE=null;
+let DIG_LIST=[];
+let DIG_SYNCED=false;
+
+async function loadDigitalSales(auto=false){
+  if(!useBackend()) return;
+  try{
+    if(auto && DIG_SYNCED) return;
+    const st = await window.API.digitalSalesStatus();
+    if($('digSync')) $('digSync').textContent = st.last_sync ? st.last_sync.replace('T',' ').slice(0,16) : '-';
+    if($('digCount')) $('digCount').textContent = st.count || 0;
+    const list = await window.API.listDigitalSales({limit:2000});
+    DIG_LIST = Array.isArray(list)?list:[];
+    DIG_SYNCED=true;
+    renderDigitalSales();
+    try{ renderLaporan(); }catch{}
+  }catch(e){ console.warn('loadDigitalSales:', e.message); }
+}
+
+function renderDigitalSales(){
+  if(!$('digTable')) return;
+  const q=($('digSearch')||{}).value||'';
+  const ql=q.toLowerCase().trim();
+  const dari=($('digDari')||{}).value||'';
+  const sampai=($('digSampai')||{}).value||'';
+  let rows=[...DIG_LIST];
+  if(dari) rows=rows.filter(x=>(x.tanggal||'')>=dari);
+  if(sampai) rows=rows.filter(x=>(x.tanggal||'')<=sampai);
+  if(ql) rows=rows.filter(x=>[x.nomor_urut,x.kode,x.no_tujuan].join(' ').toLowerCase().includes(ql));
+  const omzet=rows.reduce((a,b)=>a+Number(b.harga_jual||0),0);
+  const laba=rows.reduce((a,b)=>a+Number(b.margin||b.harga_jual-b.hpp||0),0);
+  if($('digOmzet')) $('digOmzet').textContent=fmtRp(omzet);
+  if($('digLaba')) $('digLaba').textContent=fmtRp(laba);
+  if($('digCount')) $('digCount').textContent=DIG_LIST.length;
+  if($('digEmpty')) $('digEmpty').classList.toggle('hidden', rows.length>0);
+  $('digTable').innerHTML=rows.slice(0,500).map(x=>`<tr>
+    <td><b>${esc(x.nomor_urut)}</b></td>
+    <td>${esc(x.kode)}</td>
+    <td>${esc(x.no_tujuan)}</td>
+    <td>${fmtRp(x.hpp)}</td>
+    <td><b>${fmtRp(x.harga_jual)}</b></td>
+    <td style="color:var(--green)"><b>${fmtRp(x.margin)}</b></td>
+    <td>${esc(x.tanggal||'-')}</td>
+  </tr>`).join('')||'';
+}
+
 async function renderLaporan(){
   if(!$('lpLabaBody')) return;
   const {dari, sampai, kasir}=lpRange();
@@ -2958,11 +3003,30 @@ async function renderLaporan(){
       if(useBackend()){ const ls=await window.API.listSales({dari, sampai, kasir, limit:50}); if(ls&&ls.length) r._jualList=ls; }
     }catch{}
   }
-  // Backend lama mungkin belum punya kolom diskon -> pakai omzet + diskon.
+  // Backend lama mungkin belum punya kolom diskon/digital -> pakai omzet + diskon.
   if(r.penjualan_subtotal===undefined||r.penjualan_subtotal===null){
     r.penjualan_subtotal=Number(r.penjualan_omzet||0)+Number(r.penjualan_diskon||0);
   }
   if(r.penjualan_diskon===undefined||r.penjualan_diskon===null) r.penjualan_diskon=0;
+  // Pastikan digital ikut terhitung dari cache lokal jika backend belum update
+  try{
+    if((r.digital_omzet===undefined||r.digital_laba===undefined) && DIG_LIST && DIG_LIST.length){
+      const {dari:dd,sampai:ss}=lpRange();
+      let dl=[...DIG_LIST];
+      if(dd) dl=dl.filter(x=>(x.tanggal||'')>=dd);
+      if(ss) dl=dl.filter(x=>(x.tanggal||'')<=ss);
+      r.digital_count = dl.length;
+      r.digital_omzet = dl.reduce((a,b)=>a+Number(b.harga_jual||0),0);
+      r.digital_hpp = dl.reduce((a,b)=>a+Number(b.hpp||0),0);
+      r.digital_laba = dl.reduce((a,b)=>a+Number(b.margin||0)||Number(b.harga_jual||0)-Number(b.hpp||0),0);
+      r.penjualan_omzet = Number(r.penjualan_omzet||0) + r.digital_omzet;
+      r.penjualan_hpp = Number(r.penjualan_hpp||0) + r.digital_hpp;
+      r.penjualan_laba = Number(r.penjualan_laba||0) + r.digital_laba;
+      r.penjualan_subtotal = Number(r.penjualan_subtotal||0) + r.digital_omzet;
+      r.total_pendapatan = Number(r.total_pendapatan||0) + r.digital_omzet;
+      r.total_laba = Number(r.total_laba||0) + r.digital_laba;
+    }
+  }catch{}
   // Backend mungkin belum punya kolom expense/jenis (server lama) -> hitung dari lokal.
   try{
     if((r.expense_total===undefined||r.expense_count===undefined||r.income_total===undefined) && (typeof EXPENSES!=='undefined')){
@@ -3001,9 +3065,10 @@ async function renderLaporan(){
   // selalu sama dengan isi tabel.
   if($('lpLabaBody')) $('lpLabaBody').innerHTML=`
     <tr><td>Pendapatan service (${esc(r.service_selesai)} Diambil, hanya Diambil masuk omzet)</td><td style="text-align:right"><b>${fmtRp(r.service_omzet)}</b></td></tr>
-    <tr><td>Penjualan barang bruto (${esc(r.penjualan_count)} nota)</td><td style="text-align:right"><b>${fmtRp(r.penjualan_subtotal||0)}</b></td></tr>
+    <tr><td>Penjualan barang bruto (${esc(r.penjualan_count)} nota)${Number(r.digital_count||0)>0?` + Penjualan Digital (${esc(r.digital_count)})`:''}</td><td style="text-align:right"><b>${fmtRp(r.penjualan_subtotal||0)}</b></td></tr>
+    ${Number(r.digital_laba||0)>0?`<tr><td>Laba Penjualan Digital (${esc(r.digital_count||0)} transaksi)</td><td style="text-align:right"><b>${fmtRp(r.digital_laba)}</b></td></tr>`:''}
     <tr><td>Diskon penjualan</td><td style="text-align:right">(${fmtRp(r.penjualan_diskon||0)})</td></tr>
-    <tr><td>Pendapatan penjualan barang (bersih)</td><td style="text-align:right"><b>${fmtRp(r.penjualan_omzet)}</b></td></tr>
+    <tr><td>Pendapatan penjualan (bersih)</td><td style="text-align:right"><b>${fmtRp(r.penjualan_omzet)}</b></td></tr>
     <tr><td>Pendapatan lain (${esc(r.income_count||0)} transaksi) — <a href="#" onclick="goto('pengeluaran');return false;" style="color:var(--blue)">lihat rincian →</a></td><td style="text-align:right"><b>${fmtRp(r.income_total||0)}</b></td></tr>
     <tr><td><b>Total pendapatan</b></td><td style="text-align:right"><b>${fmtRp(r.total_pendapatan)}</b></td></tr>
     <tr><td>HPP barang terjual</td><td style="text-align:right">(${fmtRp(r.penjualan_hpp)})</td></tr>
@@ -3216,6 +3281,15 @@ function bindLaporan(){
   if($('btnLpCSV')) $('btnLpCSV').onclick=exportLaporanCSV;
   if($('btnLpPrint')) $('btnLpPrint').onclick=printLaporan;
   syncLpKasirOptions();
+  // Penjualan Digital
+  if($('btnDigSync')) $('btnDigSync').onclick=async ()=>{
+    try{ toast('Sync Penjualan Digital...'); const r=await window.API.syncDigitalSales(); toast('Sync selesai: +'+(r.added||0)+' baru, '+(r.skipped||0)+' duplikat/dilewati'); DIG_SYNCED=false; await loadDigitalSales(false); renderAll(); }catch(e){ toast(e.message||'Gagal sync'); }
+  };
+  if($('digSearch')) $('digSearch').oninput=renderDigitalSales;
+  if($('btnDigFilter')) $('btnDigFilter').onclick=renderDigitalSales;
+  if($('btnDigReset')) $('btnDigReset').onclick=()=>{ if($('digSearch'))$('digSearch').value=''; if($('digDari'))$('digDari').value=''; if($('digSampai'))$('digSampai').value=''; renderDigitalSales(); };
+  if($('btnDigAutoSync')) $('btnDigAutoSync').onclick=()=>{ loadDigitalSales(true); toast('Auto-sync dijalankan'); };
+  try{ loadDigitalSales(true); }catch{}
   try{ syncLpFilterRows(NAVLTAB.laporan||'laba'); }catch{}
 }
 // Tab Stok Produk tidak butuh filter kasir -> tampilkan filter jenis di tempatnya.

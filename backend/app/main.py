@@ -56,6 +56,7 @@ from .routers import expenses as expenses_router
 from .routers import kas_sessions as kas_router
 from .routers import ai_monitor as ai_monitor_router
 from .routers import leads as leads_router
+from .routers import digital_sales as digital_sales_router
 from .seed import seed
 
 app = FastAPI(
@@ -161,6 +162,10 @@ try:
     _ensure_index("expenses", "ix_expenses_jenis", "jenis")
     _ensure_columns("cash_sessions", {"service_tunai": "INTEGER DEFAULT 0"})
     _ensure_columns("settings", {"akses": "JSON DEFAULT '{}'"})
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        pass
     with SessionLocal() as _db:
         seed(_db)
 except Exception as e:  # jangan bikin container crash-loop tanpa pesan
@@ -177,6 +182,7 @@ app.include_router(expenses_router.router, prefix="/api")
 app.include_router(kas_router.router, prefix="/api")
 app.include_router(ai_monitor_router.router, prefix="/api")
 app.include_router(leads_router.router, prefix="/api")
+app.include_router(digital_sales_router.router, prefix="/api")
 
 # Folder upload gambar headbar -> serve di /static/uploads.
 # Path diambil dari app.paths supaya PENTING sama dengan folder yang dipakai

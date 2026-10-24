@@ -222,15 +222,21 @@ def report(
         expenses = db.query(models.Expense).all()
     except Exception:
         expenses = []
+    try:
+        digital = db.query(models.DigitalSale).all()
+    except Exception:
+        digital = []
     if dari or sampai:
         services = [r for r in services if _in_range(r.tanggal or "", dari, sampai)]
         sales = [r for r in sales if _in_range(r.tanggal or "", dari, sampai)]
         expenses = [r for r in expenses if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
+        digital = [r for r in digital if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
     kasir = (kasir or "").strip()
     if kasir:
         services = [r for r in services if _match_kasir(getattr(r, "kasir", ""), kasir)]
         sales = [r for r in sales if _match_kasir(r.kasir, kasir)]
         expenses = [r for r in expenses if _match_kasir(getattr(r, "dicatat_oleh", ""), kasir)]
+        digital = []
     # Omzet service HANYA dari status Diambil
     diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
     service_omzet = sum(int(r.biaya or 0) for r in diambil)
@@ -240,13 +246,20 @@ def report(
     penjualan_omzet = sum(int(r.total or 0) for r in sales)
     penjualan_hpp = sum(int(r.hpp_total or 0) for r in sales)
     penjualan_laba = penjualan_omzet - penjualan_hpp
+    # Penjualan Digital
+    digital_omzet = sum(int(getattr(r, "harga_jual", 0) or 0) for r in digital)
+    digital_hpp = sum(int(getattr(r, "hpp", 0) or 0) for r in digital)
+    digital_laba = sum(int(getattr(r, "margin", 0) or (int(getattr(r, "harga_jual", 0) or 0) - int(getattr(r, "hpp", 0) or 0))) for r in digital)
+    penjualan_omzet_total = penjualan_omzet + digital_omzet
+    penjualan_hpp_total = penjualan_hpp + digital_hpp
+    penjualan_laba_total = penjualan_laba + digital_laba
     income = [r for r in expenses if _is_income(r)]
     biaya = [r for r in expenses if not _is_income(r)]
     expense_total = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya)
     income_total = sum(int(getattr(r, "jumlah", 0) or 0) for r in income)
     # Laba service dianggap = omzet jasa (tanpa HPP tercatat).
     # Total laba (bersih) = omzet service + laba penjualan + pendapatan lain - biaya.
-    total_laba = service_omzet + penjualan_laba + income_total - expense_total
+    total_laba = service_omzet + penjualan_laba_total + income_total - expense_total
     diambil_sorted = sorted(diambil, key=lambda r: r.id or 0, reverse=True)[:50]
     return {
         "dari": dari or "", "sampai": sampai or "", "kasir": kasir,
@@ -262,16 +275,20 @@ def report(
             for r in diambil_sorted
         ],
         "penjualan_count": len(sales),
-        "penjualan_subtotal": penjualan_subtotal,
+        "penjualan_subtotal": penjualan_subtotal + digital_omzet,
         "penjualan_diskon": penjualan_diskon,
-        "penjualan_omzet": penjualan_omzet,
-        "penjualan_hpp": penjualan_hpp,
-        "penjualan_laba": penjualan_laba,
+        "penjualan_omzet": penjualan_omzet_total,
+        "penjualan_hpp": penjualan_hpp_total,
+        "penjualan_laba": penjualan_laba_total,
+        "digital_count": len(digital),
+        "digital_omzet": digital_omzet,
+        "digital_hpp": digital_hpp,
+        "digital_laba": digital_laba,
         "expense_count": len(biaya),
         "expense_total": expense_total,
         "income_count": len(income),
         "income_total": income_total,
-        "total_pendapatan": service_omzet + penjualan_omzet + income_total,
+        "total_pendapatan": service_omzet + penjualan_omzet_total + income_total,
         "total_laba": total_laba,
         "stok_item": len(spares),
         "stok_nilai_hpp": sum(int(s.hpp or 0) * int(s.stok or 0) for s in spares),
@@ -299,15 +316,21 @@ def report_harian(
         expenses = db.query(models.Expense).all()
     except Exception:
         expenses = []
+    try:
+        digital = db.query(models.DigitalSale).all()
+    except Exception:
+        digital = []
     if dari or sampai:
         services = [r for r in services if _in_range(r.tanggal or "", dari, sampai)]
         sales = [r for r in sales if _in_range(r.tanggal or "", dari, sampai)]
         expenses = [r for r in expenses if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
+        digital = [r for r in digital if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
     kasir = (kasir or "").strip()
     if kasir:
         services = [r for r in services if _match_kasir(getattr(r, "kasir", ""), kasir)]
         sales = [r for r in sales if _match_kasir(r.kasir, kasir)]
         expenses = [r for r in expenses if _match_kasir(getattr(r, "dicatat_oleh", ""), kasir)]
+        digital = []
 
     rows: dict[tuple[str, str], dict] = {}
 
@@ -318,6 +341,7 @@ def report_harian(
                 "tanggal": tgl, "kasir": nama,
                 "svc_masuk": 0, "svc_diambil": 0, "svc_omzet": 0,
                 "nota": 0, "jual_omzet": 0, "jual_laba": 0,
+                "digital_count": 0, "digital_omzet": 0, "digital_laba": 0,
                 "exp_n": 0, "exp": 0, "inc_n": 0, "inc": 0, "wa_terkirim": 0,
                 "total_pendapatan": 0, "total_laba": 0,
             }
@@ -341,6 +365,20 @@ def report_harian(
         r["nota"] += 1
         r["jual_omzet"] += int(s.total or 0)
         r["jual_laba"] += int(s.laba if s.laba is not None else (int(s.total or 0) - int(s.hpp_total or 0)))
+
+    for d in digital:
+        tgl = (getattr(d, "tanggal", "") or datetime.now().date().isoformat())[:10]
+        nama = "Digital"
+        r = _row(tgl, nama)
+        r["digital_count"] += 1
+        hj = int(getattr(d, "harga_jual", 0) or 0)
+        hpp_d = int(getattr(d, "hpp", 0) or 0)
+        mg = int(getattr(d, "margin", 0) or (hj - hpp_d))
+        r["jual_omzet"] += hj
+        r["jual_laba"] += mg
+        r["digital_omzet"] += hj
+        r["digital_laba"] += mg
+        r["nota"] += 1
 
     for e in expenses:
         tgl = (getattr(e, "tanggal", "") or "")[:10]
