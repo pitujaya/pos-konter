@@ -3052,8 +3052,8 @@ async function renderLaporan(){
   if(r.penjualan_diskon===undefined||r.penjualan_diskon===null) r.penjualan_diskon=0;
   // Pastikan digital ikut terhitung dari cache lokal jika backend belum update
   try{
-    if((r.digital_omzet===undefined||r.digital_laba===undefined) && DIG_LIST && DIG_LIST.length){
-      const {dari:dd,sampai:ss}=lpRange();
+    const {dari:dd,sampai:ss,kasir:kk}=lpRange();
+    if((r.digital_omzet===undefined||r.digital_laba===undefined || r.digital_count===undefined) && DIG_LIST && DIG_LIST.length){
       let dl=[...DIG_LIST];
       if(dd) dl=dl.filter(x=>(x.tanggal||'')>=dd);
       if(ss) dl=dl.filter(x=>(x.tanggal||'')<=ss);
@@ -3067,6 +3067,7 @@ async function renderLaporan(){
       r.penjualan_subtotal = Number(r.penjualan_subtotal||0) + r.digital_omzet;
       r.total_pendapatan = Number(r.total_pendapatan||0) + r.digital_omzet;
       r.total_laba = Number(r.total_laba||0) + r.digital_laba;
+      r.penjualan_count = Number(r.penjualan_count||0);
     }
   }catch{}
   // Backend mungkin belum punya kolom expense/jenis (server lama) -> hitung dari lokal.
@@ -3099,7 +3100,7 @@ async function renderLaporan(){
   if($('lpSvcMasuk')) $('lpSvcMasuk').textContent=r.service_masuk;
   if($('lpSvcSelesai')) $('lpSvcSelesai').textContent=r.service_selesai;
   if($('lpSvcOmzet')) $('lpSvcOmzet').textContent=fmtRp(r.service_omzet);
-  if($('lpJlNota')) $('lpJlNota').textContent=r.penjualan_count;
+  if($('lpJlNota')) $('lpJlNota').textContent=Number(r.penjualan_count||0) + Number(r.digital_count||0);
   if($('lpJlOmzet')) $('lpJlOmzet').textContent=fmtRp(r.penjualan_omzet);
   if($('lpJlLaba')) $('lpJlLaba').textContent=fmtRp(r.penjualan_laba);
   // Catatan: kartu statistik stok (lpStItem/lpStHpp/lpStJual/lpStLow)
@@ -3135,8 +3136,17 @@ async function renderLaporan(){
   if($('lpDiambilCount')) $('lpDiambilCount').textContent=diambilList.length;
   if($('lpDiambilBody')) $('lpDiambilBody').innerHTML=diambilList.map(x=>`<tr><td><b>${esc(x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.nama||'-')}<br><small class="muted">${esc(x.merk||'')} ${esc(x.tipe||'')}</small></td><td>${esc(x.kasir||'-')}</td><td style="text-align:right"><b>${fmtRp(x.biaya)}</b></td></tr>`).join('')||'<tr><td colspan="4">Belum ada service Diambil pada periode ini.</td></tr>';
   const jl=r._jualList||[];
-  if($('lpJualCount')) $('lpJualCount').textContent=r.penjualan_count;
-  if($('lpJualBody')) $('lpJualBody').innerHTML=jl.map(x=>`<tr><td><b>${esc(x.no_nota||x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.pelanggan||x.nama||'Umum')}</td><td>${esc(x.kasir||'-')}</td><td style="text-align:right"><b>${fmtRp(x.total||x.biaya||0)}</b></td></tr>`).join('')||'<tr><td colspan="4">Belum ada penjualan pada periode ini.</td></tr>';
+  if($('lpJualCount')) $('lpJualCount').textContent=(Number(r.penjualan_count||0)+Number(r.digital_count||0));
+  let jlRows=[];
+  jl.forEach(x=>jlRows.push(`<tr><td><b>${esc(x.no_nota||x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.pelanggan||x.nama||'Umum')}</td><td>${esc(x.kasir||'-')}</td><td style="text-align:right"><b>${fmtRp(x.total||x.biaya||0)}</b></td></tr>`));
+  try{
+    const {dari:dd,sampai:ss}=lpRange();
+    let dl=[...DIG_LIST];
+    if(dd) dl=dl.filter(x=>(x.tanggal||'')>=dd);
+    if(ss) dl=dl.filter(x=>(x.tanggal||'')<=ss);
+    dl.slice(0,50).forEach(x=>jlRows.push(`<tr><td><b>DG-${esc(x.nomor_urut)}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>Digital (${esc(x.kode)})</td><td>Digital</td><td style="text-align:right"><b>${fmtRp(x.harga_jual||0)}</b></td></tr>`));
+  }catch{}
+  if($('lpJualBody')) $('lpJualBody').innerHTML=jlRows.join('')||'<tr><td colspan="4">Belum ada penjualan pada periode ini.</td></tr>';
   const sp=renderStokLaporan();
   renderRekapKasir(dari, sampai);
   renderRekapHarian(dari, sampai, kasir);
