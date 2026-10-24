@@ -1,6 +1,8 @@
 """Penjualan Digital - sync dari Google Spreadsheet CSV publish."""
 import csv
 import io
+import random
+import time
 from datetime import date, datetime
 from typing import Optional
 
@@ -80,8 +82,17 @@ def status(db: Session = Depends(get_db), _: models.User = Depends(get_current_u
 @router.post("/sync")
 async def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            resp = await client.get(SHEET_CSV_URL)
+        # Add cache-busting to force fresh fetch from Google
+        bust = int(time.time() * 1000) + random.randint(1, 9999)
+        url = f"{SHEET_CSV_URL}&t={bust}&cb={bust}"
+        headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        }
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as client:
+            resp = await client.get(url)
             resp.raise_for_status()
             text = resp.text
     except Exception as e:
@@ -100,6 +111,7 @@ async def sync(db: Session = Depends(get_db), _: models.User = Depends(get_curre
     f = io.StringIO(text)
     reader = csv.DictReader(f)
     added = 0
+    updated = 0
     skipped = 0
     today = date.today().isoformat()
     for row in reader:
@@ -118,11 +130,6 @@ async def sync(db: Session = Depends(get_db), _: models.User = Depends(get_curre
                     no_urut = str(v).strip() if v else None
                     break
         if not no_urut or no_urut == "":
-            skipped += 1
-            continue
-        # Check duplicate
-        exists = db.query(models.DigitalSale).filter(models.DigitalSale.nomor_urut == no_urut).first()
-        if exists:
             skipped += 1
             continue
         # Extract fields
@@ -145,8 +152,36 @@ async def sync(db: Session = Depends(get_db), _: models.User = Depends(get_curre
         if margin == 0 and harga_jual >= 0 and hpp >= 0:
             margin = harga_jual - hpp
 
+        exists = db.query(models.DigitalSale).filter(models.DigitalSale.nomor_urut == str(no_urut)).first()
+        if exists:
+            # Update jika ada perubahan (realtime-ish)
+            changed = False
+            if exists.kode != kode:
+                exists.kode = kode
+                changed = True
+            if exists.no_tujuan != no_tujuan:
+                exists.no_tujuan = no_tujuan
+                changed = True
+            if exists.hpp != hpp:
+                exists.hpp = hpp
+                changed = True
+            if exists.harga_jual != harga_jual:
+                exists.harga_jual = harga_jual
+                changed = True
+            if exists.margin != margin:
+                exists.margin = margin
+                changed = True
+            if not exists.tanggal:
+                exists.tanggal = today
+                changed = True
+            if changed:
+                exists.updated_at = datetime.utcnow()
+                updated += 1
+            else:
+                skipped += 1
+            continue
         ds = models.DigitalSale(
-            nomor_urut=no_urut,
+            nomor_urut=str(no_urut),
             kode=kode,
             no_tujuan=no_tujuan,
             hpp=hpp,
@@ -157,7 +192,25 @@ async def sync(db: Session = Depends(get_db), _: models.User = Depends(get_curre
         db.add(ds)
         added += 1
     db.commit()
-    return {"ok": True, "added": added, "skipped": skipped, "total_synced": added + skipped}
+    return {"ok": True, "added": added, "updated": updated, "skipped": skipped, "total_synced": added + updated + skipped}
+
+
+@router.get("/raw")
+async def raw_csv(_: models.User = Depends(get_current_user)):
+    try:
+        bust = int(time.time() * 1000) + random.randint(1, 9999)
+        url = f"{SHEET_CSV_URL}&t={bust}&cb={bust}"
+        headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        }
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            return {"ok": True, "text": resp.text, "count": len(resp.text.splitlines())}
+    except Exception as e:
+        raise HTTPException(500, f"Gagal: {e}")
 
 
 @router.get("")

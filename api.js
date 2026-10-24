@@ -269,6 +269,7 @@
     health() { return this.req("/health"); },
     digitalSalesStatus() { return this.req("/digital-sales/status"); },
     syncDigitalSales() { return this.req("/digital-sales/sync", { method: "POST" }); },
+    getDigitalSalesRaw() { return this.req("/digital-sales/raw"); },
     listDigitalSales(params = {}) {
       const qs = new URLSearchParams();
       if (params.q) qs.set("q", params.q);

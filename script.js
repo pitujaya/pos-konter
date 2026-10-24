@@ -2953,7 +2953,7 @@ async function loadDigitalSales(auto=false){
     const st = await window.API.digitalSalesStatus();
     if($('digSync')) $('digSync').textContent = st.last_sync ? st.last_sync.replace('T',' ').slice(0,16) : '-';
     if($('digCount')) $('digCount').textContent = st.count || 0;
-    const list = await window.API.listDigitalSales({limit:2000});
+    const list = await window.API.listDigitalSales({limit:5000});
     DIG_LIST = Array.isArray(list)?list:[];
     DIG_SYNCED=true;
     renderDigitalSales();
@@ -3283,7 +3283,7 @@ function bindLaporan(){
   syncLpKasirOptions();
   // Penjualan Digital
   if($('btnDigSync')) $('btnDigSync').onclick=async ()=>{
-    try{ toast('Sync Penjualan Digital...'); const r=await window.API.syncDigitalSales(); toast('Sync selesai: +'+(r.added||0)+' baru, '+(r.skipped||0)+' duplikat/dilewati'); DIG_SYNCED=false; await loadDigitalSales(false); renderAll(); }catch(e){ toast(e.message||'Gagal sync'); }
+    try{ toast('Sync Penjualan Digital...'); const r=await window.API.syncDigitalSales(); toast('Sync: +'+(r.added||0)+' baru, '+(r.updated||0)+' update, '+(r.skipped||0)+' sama'); DIG_SYNCED=false; await loadDigitalSales(false); renderAll(); }catch(e){ toast(e.message||'Gagal sync'); }
   };
   if($('digSearch')) $('digSearch').oninput=renderDigitalSales;
   if($('btnDigFilter')) $('btnDigFilter').onclick=renderDigitalSales;
