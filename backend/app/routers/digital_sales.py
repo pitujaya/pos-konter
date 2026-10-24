@@ -86,34 +86,31 @@ def _num(v) -> int:
     s = str(v).strip().replace("\u00a0", " ").replace("'", "")
     if s == "" or s.lower() == "none":
         return 0
-    # Remove currency symbols
     import re
     s = re.sub(r'[^\d,.\-]', '', s)
-    if s == "" or s == "-":
+    if s == "" or s == "-" or s == "," or s == ".":
         return 0
-    # Indonesian format: 19.965 or 23.000 (dot as thousand separator) or 3.035,00 (dot thousand, comma decimal)
+    # Indonesian format: 1.645.800 (dots = thousand sep) or 3.035,00 (dots thousand, comma decimal)
     if "," in s and "." in s:
-        # If comma is last, it's decimal separator (European/Indonesian)
         if s.rfind(",") > s.rfind("."):
             s2 = s.replace(".", "").replace(",", ".")
         else:
             s2 = s.replace(",", "")
     elif "," in s and "." not in s:
-        # Could be decimal comma
         parts = s.split(",")
         if len(parts) == 2 and len(parts[1]) <= 2:
             s2 = s.replace(",", ".")
         else:
+            # multiple commas unlikely, treat as thousand
             s2 = s.replace(",", "")
     elif "." in s and "," not in s:
         parts = s.split(".")
-        # If multiple dots or ends with 3 digits and looks like thousand sep
         if len(parts) > 2:
-            s2 = s.replace(".", "")
+            # all dots = thousand separators
+            s2 = "".join(parts)
         elif len(parts) == 2 and len(parts[1]) == 3:
-            # Ambiguous - in Indonesian context often thousand sep
-            # But be conservative: try as thousand sep first (common in this sheet)
-            s2 = s.replace(".", "")
+            # Could be thousand sep (19.965) or decimal - in this sheet thousand sep
+            s2 = "".join(parts)
         elif len(parts) == 2 and len(parts[1]) == 2:
             s2 = s
         else:
@@ -121,9 +118,9 @@ def _num(v) -> int:
     else:
         s2 = s
     try:
+        # Remove any remaining non-digit except sign and dot
+        s2 = re.sub(r'[^\d\.\-]', '', s2)
         f = float(s2)
-        if abs(f - round(f)) < 1e-9:
-            return int(round(f))
         return int(round(f))
     except Exception:
         return 0
