@@ -248,6 +248,8 @@ class SaleIn(BaseModel):
     telp: str | None = ""
     metode: str | None = "Tunai"
     catatan: str | None = ""
+    diskon: int = Field(default=0, ge=0, description="diskon nominal (Rp)")
+    diskon_persen: int = Field(default=0, ge=0, le=100, description="diskon persen (0-100)")
     items: list[SaleItemIn] = Field(min_length=1)
 
 
@@ -269,6 +271,9 @@ class SaleOut(BaseModel):
     tanggal: str = ""
     pelanggan: str = ""
     telp: str = ""
+    subtotal: int = 0
+    diskon: int = 0
+    diskon_persen: int = 0
     total: int = 0
     hpp_total: int = 0
     laba: int = 0
@@ -319,6 +324,8 @@ class ReportOut(BaseModel):
     service_per_status: dict = {}
     service_diambil: list = []
     penjualan_count: int = 0
+    penjualan_subtotal: int = 0
+    penjualan_diskon: int = 0
     penjualan_omzet: int = 0
     penjualan_hpp: int = 0
     penjualan_laba: int = 0

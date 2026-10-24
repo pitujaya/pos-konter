@@ -152,6 +152,11 @@ try:
         "wa_terkirim_oleh": "VARCHAR(120) DEFAULT ''",
     })
     _ensure_index("services", "ix_services_kasir", "kasir")
+    _ensure_columns("sales", {
+        "subtotal": "INTEGER DEFAULT 0",
+        "diskon": "INTEGER DEFAULT 0",
+        "diskon_persen": "INTEGER DEFAULT 0",
+    })
     _ensure_columns("expenses", {"jenis": "VARCHAR(20) DEFAULT 'biaya'"})
     _ensure_index("expenses", "ix_expenses_jenis", "jenis")
     _ensure_columns("cash_sessions", {"service_tunai": "INTEGER DEFAULT 0"})

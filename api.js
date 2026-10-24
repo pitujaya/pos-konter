@@ -325,6 +325,9 @@
     updateSparepart(id, payload) { return this.req("/spareparts/" + id, { method: "PUT", body: payload }); },
     adjustStock(id, delta) { return this.req("/spareparts/" + id + "/stock", { method: "PATCH", body: { delta } }); },
     getBySku(sku) { return this.req("/spareparts/sku/" + encodeURIComponent(sku)); },
+    getSparepartTemplateExcel() { return this.req("/spareparts/template/excel", { raw: true }); },
+    getSparepartTemplateCsv() { return this.req("/spareparts/template/csv", { raw: true }); },
+    importSpareparts(file) { const fd = new FormData(); fd.append("file", file); return this.req("/spareparts/import", { method: "POST", body: fd, isForm: true }); },
     deleteSparepart(id) { return this.req("/spareparts/" + id, { method: "DELETE" }); },
     listSales(params = {}) {
       const qs = new URLSearchParams({

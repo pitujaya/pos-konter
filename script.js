@@ -2264,6 +2264,44 @@ function openSpareModal(){
   setTimeout(()=>{ const el=$('sp_nama'); if(el) el.focus(); },50);
 }
 if($('btnAddSpare')) $('btnAddSpare').onclick=openSpareModal;
+function downloadSpareTemplate(){
+  if(!useBackend()){ toast('Template hanya tersedia di mode Backend/API'); return; }
+  (async ()=>{
+    try{
+      toast('Mengunduh template...');
+      const res = await window.API.getSparepartTemplateExcel();
+      let blob = null;
+      if(res instanceof Blob){ blob = res; }
+      else if(res && res.data instanceof Blob){ blob = res.data; }
+      else { throw new Error('Format tidak didukung'); }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'template-import-produk.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast('Template Excel diunduh');
+    }catch(e){
+      try{
+        // fallback csv
+        const res = await window.API.getSparepartTemplateCsv();
+        let blob = res instanceof Blob ? res : (res && res.data instanceof Blob ? res.data : null);
+        if(!blob){ throw e; }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'template-import-produk.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast('Template CSV diunduh');
+      }catch(err){ toast(err.message||'Gagal download template'); }
+    }
+  })();
+}
 function updSpMargin(){
   const hpp=Number(($('sp_hpp')||{}).value||0), jual=Number(($('sp_jual')||{}).value||0);
   if($('spMargin')) $('spMargin').textContent = hpp>0 ? `Margin: ${fmtRp(jual-hpp)} (${(jual-hpp>=0?'+':'')+Math.round((jual-hpp)/hpp*100)}%)` : '';
@@ -2463,9 +2501,24 @@ async function pullSales(){
     return true;
   }catch(e){ console.warn('pullSales gagal:', e.message); return false; }
 }
-function cartTotal(){ return CART.reduce((a,c)=>a+Number(c.harga||0)*Number(c.qty||0),0); }
+function cartSubtotal(){ return CART.reduce((a,c)=>a+Number(c.harga||0)*Number(c.qty||0),0); }
+function cartDiskon(){
+  const sub=cartSubtotal();
+  const tipe=($('j_diskon_tipe')||{}).value||'rp';
+  const nilai=Number(($('j_diskon')||{}).value||0);
+  if(!(nilai>0)) return 0;
+  const d=tipe==='persen' ? Math.round(sub*nilai/100) : nilai;
+  return Math.max(0, Math.min(Math.round(d), sub));
+}
+function cartTotal(){ return cartSubtotal()-cartDiskon(); }
+function resetDiskonJual(){
+  if($('j_diskon')) $('j_diskon').value=0;
+  if($('j_diskon_tipe')) $('j_diskon_tipe').value='rp';
+}
 function updKembalian(){
-  const t=cartTotal();
+  const sub=cartSubtotal(), disc=cartDiskon(), t=sub-disc;
+  if($('j_subtotal')) $('j_subtotal').textContent=fmtRp(sub);
+  if($('j_diskon_rp')) $('j_diskon_rp').textContent=disc>0?('- '+fmtRp(disc)):fmtRp(0);
   if($('j_total')) $('j_total').textContent=fmtRp(t);
   const bayar=Number(($('j_bayar')||{}).value||0);
   const el=$('j_kembali');
@@ -2506,7 +2559,7 @@ function renderSales(){
   if($('jl_table')) $('jl_table').innerHTML=r.slice(0,100).map(x=>`<tr>
     <td><b>${esc(x.no_nota)}</b><br><small class="muted">${fmtTgl(x.tanggal)} • ${esc(x.metode||'Tunai')}</small></td>
     <td>${esc(x.pelanggan||'Umum')}<br><small class="muted">${esc((x.items||[]).map(i=>i.nama+' ×'+i.qty).join(', ').slice(0,60))}</small></td>
-    <td><b>${fmtRp(x.total)}</b><br><small class="muted">laba ${fmtRp(x.laba)}</small></td>
+    <td><b>${fmtRp(x.total)}</b><br><small class="muted">${Number(x.diskon||0)>0?'diskon '+fmtRp(x.diskon)+' • ':''}laba ${fmtRp(x.laba)}</small></td>
     <td><div class="act-btns"><button class="icon-btn" onclick="cetakJual(${jsStr(x.id)})" title="Nota">🖨</button><button class="icon-btn" onclick="detailJual(${jsStr(x.id)})" title="Detail">👁</button>${bolehAkses('admin_hapus_penjualan')?`<button class="icon-btn" onclick="hapusJual(${jsStr(x.id)})" title="Hapus">🗑</button>`:''}</div></td></tr>`).join('');
 }
 window.cartQty=function(i,d){
@@ -2548,8 +2601,10 @@ function bindPenjualan(){
     });
   });
   if($('j_bayar')) $('j_bayar').addEventListener('input',updKembalian);
+  if($('j_diskon')) $('j_diskon').addEventListener('input',updKembalian);
+  if($('j_diskon_tipe')) $('j_diskon_tipe').addEventListener('change',updKembalian);
   if($('jl_search')) $('jl_search').addEventListener('input',renderSales);
-  if($('btnBatalJual')) $('btnBatalJual').onclick=()=>{ CART=[]; if($('j_bayar'))$('j_bayar').value=0; if($('j_catatan'))$('j_catatan').value=''; renderSales(); toast('Keranjang dibatalkan'); };
+  if($('btnBatalJual')) $('btnBatalJual').onclick=()=>{ CART=[]; resetDiskonJual(); if($('j_bayar'))$('j_bayar').value=0; if($('j_catatan'))$('j_catatan').value=''; renderSales(); toast('Keranjang dibatalkan'); };
   if($('btnSimpanJual')) $('btnSimpanJual').onclick=simpanJual;
 }
 async function simpanJual(){
@@ -2557,12 +2612,17 @@ async function simpanJual(){
   if(!requireSesi()) return;
   const metode=val('j_metode','Tunai');
   if(metode==='Tempo' && !bolehAkses('kasir_penjualan_tempo')){ toast('⛔ Hak akses: penjualan tempo dimatikan'); return; }
+  const dTipe=val('j_diskon_tipe','rp');
+  const dNilai=Number(val('j_diskon')||0);
+  const diskonRp=cartDiskon();
   const payload={
     tanggal: val('j_tanggal') || new Date().toISOString().slice(0,10),
     pelanggan: val('j_nama').trim() || 'Umum',
     telp: val('j_telp').trim(),
     metode,
     catatan: val('j_catatan').trim(),
+    diskon: dTipe==='persen' ? 0 : diskonRp,
+    diskon_persen: dTipe==='persen' ? Math.max(0,Math.min(100,Math.round(dNilai))) : 0,
     items: CART.map(c=>({sparepart_id:Number(c.id), sku:c.sku, qty:Number(c.qty)})),
   };
   const bayar=Number(($('j_bayar')||{}).value||0);
@@ -2574,7 +2634,7 @@ async function simpanJual(){
     try{
       const s=await window.API.createSale(payload);
       await pullSpareparts(); await pullSales(); renderAll();
-      CART=[]; if($('j_bayar'))$('j_bayar').value=0; if($('j_nama'))$('j_nama').value=''; if($('j_telp'))$('j_telp').value=''; if($('j_catatan'))$('j_catatan').value='';
+      CART=[]; resetDiskonJual(); if($('j_bayar'))$('j_bayar').value=0; if($('j_nama'))$('j_nama').value=''; if($('j_telp'))$('j_telp').value=''; if($('j_catatan'))$('j_catatan').value='';
       renderSales(); toast('Penjualan '+s.no_nota+' tersimpan ✅');
       cetakJual(s.id);
       return;
@@ -2586,19 +2646,22 @@ async function simpanJual(){
     if(!sp){ toast('Barang '+c.nama+' tidak ada di stok'); return; }
     if(Number(sp.stok||0)<Number(c.qty||0)){ toast('Stok '+sp.nama+' kurang (sisa '+sp.stok+')'); return; }
   }
-  let total=0, hppT=0;
+  let subtotal=0, hppT=0;
   const items=CART.map(c=>{
     const sp=findSpare(c.id);
     sp.stok=Number(sp.stok||0)-Number(c.qty||0);
-    total+=Number(sp.harga_jual||0)*Number(c.qty||0);
+    subtotal+=Number(sp.harga_jual||0)*Number(c.qty||0);
     hppT+=Number(sp.hpp||0)*Number(c.qty||0);
     return {sparepart_id:sp.id, sku:sp.sku, nama:sp.nama, hpp:sp.hpp||0, harga:sp.harga_jual||0, qty:Number(c.qty||0), subtotal:Number(sp.harga_jual||0)*Number(c.qty||0)};
   });
+  const diskon=cartDiskon();
+  const total=subtotal-diskon;
+  const diskonPersen=dTipe==='persen' ? Math.round(dNilai) : 0;
   const me=currentUser();
-  const s={id:Date.now(), no_nota:genNoNota(), tanggal:payload.tanggal, pelanggan:payload.pelanggan, telp:payload.telp, total, hpp_total:hppT, laba:total-hppT, metode:payload.metode, catatan:payload.catatan, kasir:me?me.nama:'', items};
+  const s={id:Date.now(), no_nota:genNoNota(), tanggal:payload.tanggal, pelanggan:payload.pelanggan, telp:payload.telp, subtotal, diskon, diskon_persen:diskonPersen, total, hpp_total:hppT, laba:total-hppT, metode:payload.metode, catatan:payload.catatan, kasir:me?me.nama:'', items};
   SALES.unshift(s); saveSalesLocal();
   try{ if(typeof saveSpareLocal==='function') saveSpareLocal(); }catch{}
-  CART=[]; if($('j_bayar'))$('j_bayar').value=0; if($('j_nama'))$('j_nama').value=''; if($('j_telp'))$('j_telp').value=''; if($('j_catatan'))$('j_catatan').value='';
+  CART=[]; resetDiskonJual(); if($('j_bayar'))$('j_bayar').value=0; if($('j_nama'))$('j_nama').value=''; if($('j_telp'))$('j_telp').value=''; if($('j_catatan'))$('j_catatan').value='';
   renderAll(); toast('Penjualan '+s.no_nota+' tersimpan ✅');
   cetakJual(s.id);
 }
@@ -2614,6 +2677,7 @@ function notaJualHTML(x){
     <hr>
     <p>${rows||'-'}</p>
     <hr>
+    ${Number(x.diskon||0)>0?`<p>Subtotal: ${fmtRp(x.subtotal)}<br>Diskon${Number(x.diskon_persen||0)>0?' ('+esc(x.diskon_persen)+'%)':''}: -${fmtRp(x.diskon)}</p>`:''}
     <p><b>Total: ${fmtRp(x.total)}</b>${x.catatan?'<br>Catatan: '+esc(x.catatan):''}<br><small>${esc(SET.nota)}</small></p>
     <br><br>
     <table style="width:100%;text-align:center"><tr><td>Pembeli<br><br><br>( ............ )</td><td>Kasir<br><br><br>( ${esc(x.kasir||'........')} )</td></tr></table>
@@ -2633,6 +2697,8 @@ window.detailJual=function(id){
     <div class="kv"><b>Pembeli</b><span>${esc(x.pelanggan||'Umum')}${x.telp?' • '+esc(x.telp):''}</span></div>
     <div class="kv"><b>Kasir</b><span>${esc(x.kasir||'-')}</span></div>
     <div class="kv"><b>Item</b><span>${(x.items||[]).map(i=>esc(i.nama)+' ×'+esc(i.qty)+' = '+fmtRp(i.subtotal)).join('<br>')||'-'}</span></div>
+    <div class="kv"><b>Subtotal</b><span>${fmtRp(x.subtotal||(Number(x.total||0)+Number(x.diskon||0)))}</span></div>
+    <div class="kv"><b>Diskon${Number(x.diskon_persen||0)>0?' ('+esc(x.diskon_persen)+'%)':''}</b><span>${Number(x.diskon||0)>0?('- '+fmtRp(x.diskon)):fmtRp(0)}</span></div>
     <div class="kv"><b>Total</b><span><b>${fmtRp(x.total)}</b> (laba ${fmtRp(x.laba)})</span></div>
     <div class="kv"><b>Catatan</b><span>${esc(x.catatan||'-')}</span></div>`;
   $('detailFoot').innerHTML=`<button class="btn ghost" onclick="cetakJual(${jsStr(x.id)})">🖨 Cetak Nota</button>${bolehAkses('admin_hapus_penjualan')?`<button class="btn ghost" onclick="hapusJual(${jsStr(x.id)})">🗑 Hapus</button>`:''}<button class="btn primary" data-close>Tutup</button>`;
@@ -2849,6 +2915,8 @@ function computeReportLocal(dari, sampai, kasir){
   const diambil=svc.filter(x=>normStatus(x.status)==='Diambil');
   const per={}; STATUS.forEach(s=>per[s]=svc.filter(x=>normStatus(x.status)===s).length);
   const sOm=diambil.reduce((a,b)=>a+Number(b.biaya||0),0);
+  const jDisc=jual.reduce((a,b)=>a+Number(b.diskon||0),0);
+  const jSub=jual.reduce((a,b)=>a+(Number(b.subtotal||0)||(Number(b.total||0)+Number(b.diskon||0))),0);
   const jOm=jual.reduce((a,b)=>a+Number(b.total||0),0);
   const jHpp=jual.reduce((a,b)=>a+Number(b.hpp_total||0),0);
   const jLb=jOm-jHpp;
@@ -2863,7 +2931,7 @@ function computeReportLocal(dari, sampai, kasir){
     service_selesai: diambil.length,
     service_omzet: sOm, service_per_status: per,
     service_diambil: [...diambil].sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,50).map(x=>({noService:x.noService,tanggal:x.tanggal,nama:x.nama,telp:x.telp,merk:x.merk,tipe:x.tipe,biaya:x.biaya,teknisi:x.teknisi,kasir:x.kasir})),
-    penjualan_count: jual.length, penjualan_omzet: jOm, penjualan_hpp: jHpp, penjualan_laba: jLb,
+    penjualan_count: jual.length, penjualan_subtotal: jSub, penjualan_diskon: jDisc, penjualan_omzet: jOm, penjualan_hpp: jHpp, penjualan_laba: jLb,
     expense_count: exList.length, expense_total: exTot,
     income_count: inList.length, income_total: inTot,
     total_pendapatan: sOm+jOm+inTot, total_laba: sOm+jLb+inTot-exTot,
@@ -2890,6 +2958,11 @@ async function renderLaporan(){
       if(useBackend()){ const ls=await window.API.listSales({dari, sampai, kasir, limit:50}); if(ls&&ls.length) r._jualList=ls; }
     }catch{}
   }
+  // Backend lama mungkin belum punya kolom diskon -> pakai omzet + diskon.
+  if(r.penjualan_subtotal===undefined||r.penjualan_subtotal===null){
+    r.penjualan_subtotal=Number(r.penjualan_omzet||0)+Number(r.penjualan_diskon||0);
+  }
+  if(r.penjualan_diskon===undefined||r.penjualan_diskon===null) r.penjualan_diskon=0;
   // Backend mungkin belum punya kolom expense/jenis (server lama) -> hitung dari lokal.
   try{
     if((r.expense_total===undefined||r.expense_count===undefined||r.income_total===undefined) && (typeof EXPENSES!=='undefined')){
@@ -2928,7 +3001,9 @@ async function renderLaporan(){
   // selalu sama dengan isi tabel.
   if($('lpLabaBody')) $('lpLabaBody').innerHTML=`
     <tr><td>Pendapatan service (${esc(r.service_selesai)} Diambil, hanya Diambil masuk omzet)</td><td style="text-align:right"><b>${fmtRp(r.service_omzet)}</b></td></tr>
-    <tr><td>Pendapatan penjualan barang (${esc(r.penjualan_count)} nota)</td><td style="text-align:right"><b>${fmtRp(r.penjualan_omzet)}</b></td></tr>
+    <tr><td>Penjualan barang bruto (${esc(r.penjualan_count)} nota)</td><td style="text-align:right"><b>${fmtRp(r.penjualan_subtotal||0)}</b></td></tr>
+    <tr><td>Diskon penjualan</td><td style="text-align:right">(${fmtRp(r.penjualan_diskon||0)})</td></tr>
+    <tr><td>Pendapatan penjualan barang (bersih)</td><td style="text-align:right"><b>${fmtRp(r.penjualan_omzet)}</b></td></tr>
     <tr><td>Pendapatan lain (${esc(r.income_count||0)} transaksi) — <a href="#" onclick="goto('pengeluaran');return false;" style="color:var(--blue)">lihat rincian →</a></td><td style="text-align:right"><b>${fmtRp(r.income_total||0)}</b></td></tr>
     <tr><td><b>Total pendapatan</b></td><td style="text-align:right"><b>${fmtRp(r.total_pendapatan)}</b></td></tr>
     <tr><td>HPP barang terjual</td><td style="text-align:right">(${fmtRp(r.penjualan_hpp)})</td></tr>
@@ -3169,6 +3244,8 @@ function exportLaporanCSV(){
   L.push('LABA RUGI');
   L.push('Keterangan,Nilai');
   L.push('Pendapatan service,'+r.service_omzet);
+  L.push('Penjualan barang bruto,'+(r.penjualan_subtotal||0));
+  L.push('Diskon penjualan,'+(r.penjualan_diskon||0));
   L.push('Pendapatan penjualan,'+r.penjualan_omzet);
   L.push('Pendapatan lain ('+(r.income_count||0)+' transaksi),'+(r.income_total||0));
   L.push('Total pendapatan,'+r.total_pendapatan);

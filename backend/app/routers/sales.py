@@ -22,11 +22,25 @@ def _is_income(e) -> bool:
     return str(getattr(e, "jenis", "biaya") or "biaya").strip().lower() == "pendapatan"
 
 
+def _sale_diskon(s: models.Sale) -> int:
+    return int(getattr(s, "diskon", 0) or 0)
+
+
+def _sale_subtotal(s: models.Sale) -> int:
+    """Subtotal sebelum diskon. Nota lama (sebelum ada diskon) -> subtotal = total."""
+    sub = int(getattr(s, "subtotal", 0) or 0)
+    if sub:
+        return sub
+    return int(s.total or 0) + _sale_diskon(s)
+
+
 def _sale_to_out(s: models.Sale) -> dict:
     items = sorted(s.items or [], key=lambda x: x.id or 0)
     return {
         "id": s.id, "no_nota": s.no_nota, "tanggal": s.tanggal or "",
         "pelanggan": s.pelanggan or "", "telp": s.telp or "",
+        "subtotal": _sale_subtotal(s), "diskon": _sale_diskon(s),
+        "diskon_persen": int(getattr(s, "diskon_persen", 0) or 0),
         "total": s.total or 0, "hpp_total": s.hpp_total or 0, "laba": s.laba or 0,
         "metode": s.metode or "Tunai", "catatan": s.catatan or "",
         "kasir": s.kasir or "",
@@ -107,12 +121,22 @@ def create_sale(body: schemas.SaleIn, db: Session = Depends(get_db),
                 400,
                 f"Stok {sp.nama} kurang (sisa {sp.stok}, diminta {total_qty})",
             )
-    total = sum((sp.harga_jual or 0) * qty for sp, qty in lines)
+    subtotal = sum((sp.harga_jual or 0) * qty for sp, qty in lines)
     hpp_total = sum((sp.hpp or 0) * qty for sp, qty in lines)
+    # Diskon: persen dihitung server dari subtotal (agar tidak bisa dimanipulasi),
+    # nominal dipakai apa adanya. Nilai selalu dibatasi 0..subtotal.
+    diskon_persen = int(body.diskon_persen or 0)
+    if diskon_persen > 0:
+        diskon = int(round(subtotal * diskon_persen / 100))
+    else:
+        diskon = int(body.diskon or 0)
+    diskon = max(0, min(diskon, subtotal))
+    total = subtotal - diskon
     sale = models.Sale(
         no_nota=_gen_no_nota(db), tanggal=tanggal,
         pelanggan=(body.pelanggan or "").strip() or "Umum",
         telp=(body.telp or "").strip(),
+        subtotal=subtotal, diskon=diskon, diskon_persen=diskon_persen,
         total=total, hpp_total=hpp_total, laba=total - hpp_total,
         metode=(body.metode or "Tunai").strip() or "Tunai",
         catatan=(body.catatan or "").strip(),
@@ -210,6 +234,9 @@ def report(
     # Omzet service HANYA dari status Diambil
     diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
     service_omzet = sum(int(r.biaya or 0) for r in diambil)
+    penjualan_subtotal = sum(_sale_subtotal(r) for r in sales)
+    penjualan_diskon = sum(_sale_diskon(r) for r in sales)
+    # Omzet penjualan = subtotal - diskon (total bersih yang dibayar pembeli).
     penjualan_omzet = sum(int(r.total or 0) for r in sales)
     penjualan_hpp = sum(int(r.hpp_total or 0) for r in sales)
     penjualan_laba = penjualan_omzet - penjualan_hpp
@@ -235,6 +262,8 @@ def report(
             for r in diambil_sorted
         ],
         "penjualan_count": len(sales),
+        "penjualan_subtotal": penjualan_subtotal,
+        "penjualan_diskon": penjualan_diskon,
         "penjualan_omzet": penjualan_omzet,
         "penjualan_hpp": penjualan_hpp,
         "penjualan_laba": penjualan_laba,

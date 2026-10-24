@@ -411,9 +411,14 @@
           <button class="ltab" data-prtab="accessories">🎧 Stok Accessories</button>
           <button class="ltab" data-prtab="handphone">📱 Stok Handphone</button>
         </div>
-        <button class="btn primary" id="btnAddSpare">+ Input Produk Baru</button>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <button class="btn ghost" id="btnSpTemplate">⬇️ Template Excel/CSV</button>
+          <button class="btn ghost" id="btnSpImport">📥 Import Produk</button>
+          <button class="btn primary" id="btnAddSpare">+ Input Produk Baru</button>
+        </div>
         <button class="btn ghost small hidden" id="btnProdukAll" onclick="produkSemua()">← Tampilkan Semua Tab</button>
       </div>
+      <input type="file" id="fileSpImport" accept=".xlsx,.xlsm,.csv,.txt" style="display:none" />
       <div class="stats lp-stats lp-stats-3">
         <div class="stat"><div class="stat-icon blue">📦</div><div><small>Total Item</small><h3 id="spTotal">0</h3></div></div>
         <div class="stat money"><div class="stat-icon money-i">💰</div><div><small>Nilai Stok (HPP)</small><h3 id="spNilai">Rp 0</h3></div></div>
@@ -472,7 +477,13 @@
           </table>
           <div id="j_empty" class="empty">Keranjang kosong. Cari barang di atas untuk menambah.</div>
           </div>
-          <div class="kv" style="margin-top:10px"><b>Total Bayar</b><span><b id="j_total" style="font-size:18px">Rp 0</b></span></div>
+          <div class="row2" style="margin-top:10px">
+            <label>Diskon<input id="j_diskon" type="number" min="0" value="0" placeholder="0" /></label>
+            <label>Jenis Diskon<select id="j_diskon_tipe"><option value="rp">Rp (nominal)</option><option value="persen">% (persen)</option></select></label>
+          </div>
+          <div class="kv"><b>Subtotal</b><span id="j_subtotal">Rp 0</span></div>
+          <div class="kv"><b>Diskon</b><span id="j_diskon_rp">Rp 0</span></div>
+          <div class="kv"><b>Total Bayar</b><span><b id="j_total" style="font-size:18px">Rp 0</b></span></div>
           <div class="row2">
             <label>Uang Diterima (Rp)<input id="j_bayar" type="number" min="0" value="0" /></label>
             <label>Kembalian<input id="j_kembali" readonly value="Rp 0" /></label>
