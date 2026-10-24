@@ -238,6 +238,7 @@ def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_use
     except Exception:
         pass
     db.commit()
+    db.expire_all()
     return {"ok": True, "added": added, "updated": updated, "removed": removed, "skipped": skipped, "total_synced": added + updated + skipped}
 
 
