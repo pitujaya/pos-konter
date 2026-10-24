@@ -800,7 +800,7 @@ function goto(page, filter){
     }
     if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); }
   }
-  if(page==='dashboard'){ try{ renderOmzetChart(); }catch{} if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); } }
+  if(page==='dashboard'){ try{ renderOmzetChart(); }catch{} if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); try{ DIG_SYNCED=false; loadDigitalSales(false,true); }catch{} } }
   if(page==='produk'){ try{ renderSpareparts(); }catch{} if(useBackend()){ pullSpareparts().then(()=>{ renderAll(); }).catch(()=>{}); } }
   if(page==='penjualan'){ try{ renderSales(); }catch{} if(useBackend()){ pullSales().then(()=>{ try{renderSales();}catch{} }).catch(()=>{}); } }
   if(page==='pengeluaran'){ try{ renderExpenses(); }catch{} if(useBackend()){ pullExpenses().then(()=>{ try{renderExpenses();}catch{} try{renderLaporan();}catch{} }).catch(()=>{}); } }
@@ -2981,17 +2981,18 @@ let LAPORAN_CACHE=null;
 let DIG_LIST=[];
 let DIG_SYNCED=false;
 
-async function loadDigitalSales(auto=false){
+async function loadDigitalSales(auto=false, force=false){
   if(!useBackend()) return;
   try{
-    if(auto && DIG_SYNCED) return;
+    if(auto && DIG_SYNCED && !force) return;
     const st = await window.API.digitalSalesStatus();
     if($('digSync')) $('digSync').textContent = st.last_sync ? st.last_sync.replace('T',' ').slice(0,16) : '-';
     if($('digCount')) $('digCount').textContent = st.count || 0;
-    const list = await window.API.listDigitalSales({limit:5000});
+    const list = await window.API.listDigitalSales({limit:10000});
     DIG_LIST = Array.isArray(list)?list:[];
     DIG_SYNCED=true;
     renderDigitalSales();
+    try{ renderStats(); }catch{}
     try{ renderLaporan(); }catch{}
   }catch(e){ console.warn('loadDigitalSales:', e.message); }
 }
@@ -3318,13 +3319,13 @@ function bindLaporan(){
   syncLpKasirOptions();
   // Penjualan Digital
   if($('btnDigSync')) $('btnDigSync').onclick=async ()=>{
-    try{ toast('Sync Penjualan Digital...'); const r=await window.API.syncDigitalSales(); toast('Sync: +'+(r.added||0)+' baru, '+(r.updated||0)+' update, '+(r.skipped||0)+' sama'); DIG_SYNCED=false; await loadDigitalSales(false); renderAll(); }catch(e){ toast(e.message||'Gagal sync'); }
+    try{ toast('Sync Penjualan Digital...'); const r=await window.API.syncDigitalSales(); toast('Sync: +'+(r.added||0)+' baru, '+(r.updated||0)+' update, '+(r.removed||0)+' dihapus'); DIG_SYNCED=false; await loadDigitalSales(false,true); renderAll(); }catch(e){ toast(e.message||'Gagal sync'); }
   };
   if($('digSearch')) $('digSearch').oninput=renderDigitalSales;
   if($('btnDigFilter')) $('btnDigFilter').onclick=renderDigitalSales;
   if($('btnDigReset')) $('btnDigReset').onclick=()=>{ if($('digSearch'))$('digSearch').value=''; if($('digDari'))$('digDari').value=''; if($('digSampai'))$('digSampai').value=''; renderDigitalSales(); };
-  if($('btnDigAutoSync')) $('btnDigAutoSync').onclick=()=>{ loadDigitalSales(true); toast('Auto-sync dijalankan'); };
-  try{ loadDigitalSales(true); }catch{}
+  if($('btnDigAutoSync')) $('btnDigAutoSync').onclick=async ()=>{ try{ toast('Auto-sync...'); const r=await window.API.syncDigitalSales(); toast('Sync: +'+(r.added||0)+' baru, '+(r.updated||0)+' update'); DIG_SYNCED=false; await loadDigitalSales(false,true); renderAll(); }catch(e){ toast(e.message||'Gagal sync'); } };
+  try{ (async ()=>{ try{ await window.API.syncDigitalSales(); }catch{} DIG_SYNCED=false; await loadDigitalSales(false,true); })(); }catch{}
   try{ syncLpFilterRows(NAVLTAB.laporan||'laba'); }catch{}
 }
 // Tab Stok Produk tidak butuh filter kasir -> tampilkan filter jenis di tempatnya.
