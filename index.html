@@ -202,14 +202,36 @@
       </div>
 
       <h1 class="page-title">Dashboard</h1>
-      <p class="page-sub">Ringkasan operasional service HP bulan ini • klik status untuk melihat datanya</p>
+      <p class="page-sub">Ringkasan operasional bulan ini</p>
 
-      <div class="stats">
-        <div class="stat linkable" onclick="goto('data','Semua')" title="Lihat semua data"><div class="stat-icon blue">📥</div><div><small>Total Masuk</small><h3 id="stTotal">0</h3></div></div>
-        <div class="stat linkable" onclick="goto('data','Dikerjakan')" title="Lihat yg Dikerjakan"><div class="stat-icon purple">🔧</div><div><small>Dikerjakan</small><h3 id="stAntri">0</h3></div></div>
-        <div class="stat linkable" onclick="goto('data','Selesai')" title="Lihat yg Selesai"><div class="stat-icon yellow">⏳</div><div><small>Selesai</small><h3 id="stProses">0</h3></div></div>
-        <div class="stat linkable" onclick="goto('data','Diambil')" title="Lihat yg Diambil"><div class="stat-icon green">✅</div><div><small>Diambil</small><h3 id="stSelesai">0</h3></div></div>
-        <div class="stat money linkable" onclick="goto('laporan')" title="Lihat laporan"><div class="stat-icon money-i">💰</div><div><small>Omzet (Diambil)</small><h3 id="stOmzet">Rp 0</h3></div></div>
+      <div class="card">
+        <div class="card-head"><h3>🛠️ Ringkasan Service</h3></div>
+        <div class="stats" style="grid-template-columns: repeat(auto-fit,minmax(150px,1fr));">
+          <div class="stat linkable" onclick="goto('data','Semua')" title="Lihat semua data"><div class="stat-icon blue">📥</div><div><small>Total Masuk</small><h3 id="stTotal">0</h3></div></div>
+          <div class="stat linkable" onclick="goto('data','Dikerjakan')" title="Lihat yg Dikerjakan"><div class="stat-icon purple">🔧</div><div><small>Dikerjakan</small><h3 id="stAntri">0</h3></div></div>
+          <div class="stat linkable" onclick="goto('data','Selesai')" title="Lihat yg Selesai"><div class="stat-icon yellow">⏳</div><div><small>Selesai</small><h3 id="stProses">0</h3></div></div>
+          <div class="stat linkable" onclick="goto('data','Diambil')" title="Lihat yg Diambil"><div class="stat-icon green">✅</div><div><small>Diambil</small><h3 id="stSelesai">0</h3></div></div>
+          <div class="stat money linkable" onclick="goto('laporan')" title="Lihat laporan"><div class="stat-icon money-i">💰</div><div><small>Omzet Service (Diambil)</small><h3 id="stOmzet">Rp 0</h3></div></div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><h3>💳 Ringkasan Penjualan Digital</h3></div>
+          <div class="stats" style="grid-template-columns: repeat(auto-fit,minmax(140px,1fr));">
+            <div class="stat linkable" onclick="goto('penjualan-digital')" title="Lihat Penjualan Digital"><div class="stat-icon blue">📋</div><div><small>Total Unit</small><h3 id="stDigCount">0</h3></div></div>
+            <div class="stat money linkable" onclick="goto('penjualan-digital')" title="Lihat Penjualan Digital"><div class="stat-icon money-i">💰</div><div><small>Omzet</small><h3 id="stDigOmzet">Rp 0</h3></div></div>
+            <div class="stat linkable" onclick="goto('penjualan-digital')" title="Lihat Penjualan Digital"><div class="stat-icon green">📈</div><div><small>Laba</small><h3 id="stDigLaba">Rp 0</h3></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>📦 Ringkasan Produk</h3></div>
+          <div class="stats" style="grid-template-columns: repeat(auto-fit,minmax(140px,1fr));">
+            <div class="stat linkable" onclick="goto('produk')" title="Lihat Produk"><div class="stat-icon blue">📦</div><div><small>Total Unit</small><h3 id="stProdUnit">0</h3></div></div>
+            <div class="stat money linkable" onclick="goto('produk')" title="Lihat Produk"><div class="stat-icon money-i">💰</div><div><small>Omzet (Harga Jual)</small><h3 id="stProdOmzet">Rp 0</h3></div></div>
+            <div class="stat linkable" onclick="goto('produk')" title="Lihat Produk"><div class="stat-icon green">💹</div><div><small>Potensi Laba</small><h3 id="stProdLaba">Rp 0</h3></div></div>
+          </div>
+        </div>
       </div>
 
       <div class="card">

@@ -1130,6 +1130,25 @@ function renderStats(){
   $('stSelesai').textContent=c('Diambil');
   // Omzet hanya dari service yang SUDAH DIAMBIL (bulan berjalan)
   $('stOmzet').textContent=fmtRp(day.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
+  // Ringkasan Penjualan Digital
+  try{
+    const dl = Array.isArray(DIG_LIST)?DIG_LIST:[];
+    $('stDigCount').textContent = dl.reduce((a,b)=>a+1,0);
+    const digOm = dl.reduce((a,b)=>a+Number(b.harga_jual||0),0);
+    const digLb = dl.reduce((a,b)=>a+Number(b.margin||0)||Number(b.harga_jual||0)-Number(b.hpp||0),0);
+    if($('stDigOmzet')) $('stDigOmzet').textContent=fmtRp(digOm);
+    if($('stDigLaba')) $('stDigLaba').textContent=fmtRp(digLb);
+  }catch{}
+  // Ringkasan Produk
+  try{
+    const spAll = (typeof SPARE!=='undefined'?SPARE:[]);
+    const unit = spAll.reduce((a,b)=>a+Number(b.stok||0),0);
+    const omJual = spAll.reduce((a,b)=>a+Number(b.harga_jual||0)*Number(b.stok||0),0);
+    const labaPot = spAll.reduce((a,b)=>a+(Number(b.harga_jual||0)-Number(b.hpp||0))*Number(b.stok||0),0);
+    if($('stProdUnit')) $('stProdUnit').textContent=unit;
+    if($('stProdOmzet')) $('stProdOmzet').textContent=fmtRp(omJual);
+    if($('stProdLaba')) $('stProdLaba').textContent=fmtRp(labaPot);
+  }catch{}
   // Link status di dashboard -> ketuk untuk buka Data Service terfilter
   if($('statusLinks')){ try { $('statusLinks').innerHTML=''; } catch(e){} }
   if($('statusChart')){ try { $('statusChart').innerHTML=''; $('statusChart').style.display='none'; } catch(e){} }
