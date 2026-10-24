@@ -146,6 +146,8 @@ def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_use
         text = _fetch_csv()
     except Exception as e:
         raise HTTPException(500, f"Gagal mengambil data spreadsheet: {e}")
+    # Sync dari CSV harus jadi sumber kebenaran: hapus yang tidak ada di sheet lagi
+    # (biar nomor urut & jumlah nyambung persis)
 
     try:
         # Try to decode
@@ -162,7 +164,9 @@ def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_use
     added = 0
     updated = 0
     skipped = 0
+    removed = 0
     today = date.today().isoformat()
+    seen = set()
     for row in reader:
         if not row:
             continue
@@ -181,6 +185,7 @@ def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_use
         if not no_urut or no_urut == "":
             skipped += 1
             continue
+        seen.add(str(no_urut))
         # Extract fields
         def get_field(*patterns):
             for k, v in row.items():
@@ -224,8 +229,16 @@ def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_use
         )
         db.add(ds)
         added += 1
+    # Hapus baris yang sudah tidak ada di sheet
+    try:
+        for r in db.query(models.DigitalSale).all():
+            if str(r.nomor_urut) not in seen:
+                db.delete(r)
+                removed += 1
+    except Exception:
+        pass
     db.commit()
-    return {"ok": True, "added": added, "updated": updated, "skipped": skipped, "total_synced": added + updated + skipped}
+    return {"ok": True, "added": added, "updated": updated, "removed": removed, "skipped": skipped, "total_synced": added + updated + skipped}
 
 
 @router.get("/raw")
