@@ -3068,20 +3068,27 @@ async function renderLaporan(){
       const dOm = dl.reduce((a,b)=>a+Number(b.harga_jual||0),0);
       const dHpp = dl.reduce((a,b)=>a+Number(b.hpp||0),0);
       const dLb = dl.reduce((a,b)=>a+Number(b.margin||0)||Number(b.harga_jual||0)-Number(b.hpp||0),0);
+      // Hitung ulang total penjualan (barang + digital) berdasarkan filter
+      const penjualanOmzetBarang = Number(r.penjualan_omzet||0) - Number(r.digital_omzet_base||0);
+      const penjualanHppBarang = Number(r.penjualan_hpp||0) - Number(r.digital_hpp_base||0);
+      const penjualanLabaBarang = Number(r.penjualan_laba||0) - Number(r.digital_laba_base||0);
+      r.digital_omzet_base = Number(r.digital_omzet_base||0) || ( (r.digital_omzet||0) > 0 && !dd && !ss ? r.digital_omzet : 0 );
+      if(!dd && !ss && (r.digital_omzet_base||0) === 0 && (r.digital_omzet||0) > 0){
+        r.digital_omzet_base = r.digital_omzet;
+        r.digital_hpp_base = r.digital_hpp;
+        r.digital_laba_base = r.digital_laba;
+      }
       r.digital_count = dCount;
       r.digital_omzet = dOm;
       r.digital_hpp = dHpp;
       r.digital_laba = dLb;
-      r.penjualan_omzet = Number(r.penjualan_omzet||0) - Number(r.digital_omzet_backup||r.digital_omzet||0) + dOm;
-      r.penjualan_hpp = Number(r.penjualan_hpp||0) - Number(r.digital_hpp_backup||r.digital_hpp||0) + dHpp;
-      r.penjualan_laba = Number(r.penjualan_laba||0) - Number(r.digital_laba_backup||r.digital_laba||0) + dLb;
-      r.penjualan_subtotal = Number(r.penjualan_subtotal||0) - Number(r.digital_omzet_backup||r.digital_omzet||0) + dOm;
-      r.total_pendapatan = Number(r.total_pendapatan||0) - Number(r.digital_omzet_backup||r.digital_omzet||0) + dOm;
-      r.total_laba = Number(r.total_laba||0) - Number(r.digital_laba_backup||r.digital_laba||0) + dLb;
-      r.digital_omzet_backup = dOm;
-      r.digital_hpp_backup = dHpp;
-      r.digital_laba_backup = dLb;
-      r.penjualan_count = Number(r.penjualan_count||0);
+      r.penjualan_omzet = penjualanOmzetBarang + dOm;
+      r.penjualan_hpp = penjualanHppBarang + dHpp;
+      r.penjualan_laba = penjualanLabaBarang + dLb;
+      r.penjualan_subtotal = Number(r.penjualan_subtotal||0) - (Number(r.digital_sub_base||r.digital_omzet_base||0)) + dOm;
+      r.digital_sub_base = r.penjualan_subtotal - penjualanOmzetBarang;
+      r.total_pendapatan = Number(r.service_omzet||0) + r.penjualan_omzet + Number(r.income_total||0);
+      r.total_laba = Number(r.service_omzet||0) + r.penjualan_laba + Number(r.income_total||0) - Number(r.expense_total||0);
     }
   }catch{}
   // Backend mungkin belum punya kolom expense/jenis (server lama) -> hitung dari lokal.
@@ -3106,6 +3113,28 @@ async function renderLaporan(){
   if($('lpPendapatan')) $('lpPendapatan').textContent=fmtRp(r.total_pendapatan);
   if($('lpLaba')) $('lpLaba').textContent=fmtRp(r.total_laba);
   if($('lpService')) $('lpService').textContent=fmtRp(r.service_omzet);
+  try{
+    const {dari:dd,sampai:ss}=lpRange();
+    const hasLpFilter = !!(dd || ss);
+    if(hasLpFilter){
+      let dl=[...DIG_LIST];
+      if(dd) dl=dl.filter(x=>String(x.tanggal||'')>=dd);
+      if(ss) dl=dl.filter(x=>String(x.tanggal||'')<=ss);
+      let bl = Array.isArray(r._jualList)?[...r._jualList]:[];
+      if(dd) bl=bl.filter(x=>String(x.tanggal||'')>=dd);
+      if(ss) bl=bl.filter(x=>String(x.tanggal||'')<=ss);
+      const bOm = bl.reduce((a,b)=>a+Number(b.total||b.biaya||0),0);
+      const bLb = bl.reduce((a,b)=>a+Number(b.laba||0),0);
+      const dOm = dl.reduce((a,b)=>a+Number(b.harga_jual||0),0);
+      const dLb = dl.reduce((a,b)=>a+Number(b.margin||0)||Number(b.harga_jual||0)-Number(b.hpp||0),0);
+      r.penjualan_count = bl.length;
+      r.digital_count = dl.length;
+      r.penjualan_omzet = bOm + dOm;
+      r.penjualan_laba = bLb + dLb;
+      r.penjualan_hpp = (Number(r.penjualan_hpp||0) - (Number(r.digital_hpp||0))) + dl.reduce((a,b)=>a+Number(b.hpp||0),0);
+      if(r._jualListFiltered){ /* keep */ }
+    }
+  }catch{}
   if($('lpJual')) $('lpJual').textContent=fmtRp(r.penjualan_omzet);
   if($('lpExpense')) $('lpExpense').textContent=fmtRp(r.expense_total||0);
   if($('lpExpenseCount')) $('lpExpenseCount').textContent=(r.expense_count||0);
@@ -3150,15 +3179,24 @@ async function renderLaporan(){
   if($('lpDiambilCount')) $('lpDiambilCount').textContent=diambilList.length;
   if($('lpDiambilBody')) $('lpDiambilBody').innerHTML=diambilList.map(x=>`<tr><td><b>${esc(x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.nama||'-')}<br><small class="muted">${esc(x.merk||'')} ${esc(x.tipe||'')}</small></td><td>${esc(x.kasir||'-')}</td><td style="text-align:right"><b>${fmtRp(x.biaya)}</b></td></tr>`).join('')||'<tr><td colspan="4">Belum ada service Diambil pada periode ini.</td></tr>';
   const jl=r._jualList||[];
-  if($('lpJualCount')) $('lpJualCount').textContent=(Number(r.penjualan_count||0)+Number(r.digital_count||0));
+  const {dari:dd2,sampai:ss2}=lpRange();
+  const hasLpFilter2 = !!(dd2 || ss2);
+  if($('lpJualCount')) {
+    if(hasLpFilter2) $('lpJualCount').textContent=(Number(r.penjualan_count||0)+Number(r.digital_count||0));
+    else $('lpJualCount').textContent=(Number(r.penjualan_count||0)+Number(r.digital_count||0));
+  }
   let jlRows=[];
-  jl.forEach(x=>jlRows.push(`<tr><td><b>${esc(x.no_nota||x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.pelanggan||x.nama||'Umum')}</td><td>${esc(x.kasir||'-')}</td><td style="text-align:right"><b>${fmtRp(x.total||x.biaya||0)}</b></td></tr>`));
+  let jlArr = [...jl];
+  if(hasLpFilter2){
+    if(dd2) jlArr=jlArr.filter(x=>String(x.tanggal||'').slice(0,10)>=dd2);
+    if(ss2) jlArr=jlArr.filter(x=>String(x.tanggal||'').slice(0,10)<=ss2);
+  }
+  jlArr.forEach(x=>jlRows.push(`<tr><td><b>${esc(x.no_nota||x.noService||'-')}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>${esc(x.pelanggan||x.nama||'Umum')}</td><td>${esc(x.kasir||'-')}</td><td style="text-align:right"><b>${fmtRp(x.total||x.biaya||0)}</b></td></tr>`));
   try{
-    const {dari:dd,sampai:ss}=lpRange();
     let dl=[...DIG_LIST];
-    if(dd) dl=dl.filter(x=>String(x.tanggal||'')>=dd);
-    if(ss) dl=dl.filter(x=>String(x.tanggal||'')<=ss);
-    dl.slice(0,200).forEach(x=>jlRows.push(`<tr><td><b>DG-${esc(x.nomor_urut)}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>Digital (${esc(x.kode)})</td><td>Digital</td><td style="text-align:right"><b>${fmtRp(x.harga_jual||0)}</b></td></tr>`));
+    if(dd2) dl=dl.filter(x=>String(x.tanggal||'')>=dd2);
+    if(ss2) dl=dl.filter(x=>String(x.tanggal||'')<=ss2);
+    dl.slice(0,300).forEach(x=>jlRows.push(`<tr><td><b>DG-${esc(x.nomor_urut)}</b><br><small class="muted">${fmtTgl(x.tanggal)}</small></td><td>Digital (${esc(x.kode)})</td><td>Digital</td><td style="text-align:right"><b>${fmtRp(x.harga_jual||0)}</b></td></tr>`));
   }catch{}
   if($('lpJualBody')) $('lpJualBody').innerHTML=jlRows.join('')||'<tr><td colspan="4">Belum ada penjualan pada periode ini.</td></tr>';
   const sp=renderStokLaporan();
