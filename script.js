@@ -1130,9 +1130,13 @@ function renderStats(){
   $('stSelesai').textContent=c('Diambil');
   // Omzet hanya dari service yang SUDAH DIAMBIL (bulan berjalan)
   $('stOmzet').textContent=fmtRp(day.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
-  // Ringkasan Penjualan Digital
+  // Ringkasan Penjualan Digital (bulan ini)
   try{
-    const dl = Array.isArray(DIG_LIST)?DIG_LIST:[];
+    const now=new Date(), pad=n=>String(n).padStart(2,'0');
+    const dari=`${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+    const sampai=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+    let dl = Array.isArray(DIG_LIST)?DIG_LIST:[];
+    dl = dl.filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
     $('stDigCount').textContent = dl.reduce((a,b)=>a+1,0);
     const digOm = dl.reduce((a,b)=>a+Number(b.harga_jual||0),0);
     const digLb = dl.reduce((a,b)=>a+Number(b.margin||0)||Number(b.harga_jual||0)-Number(b.hpp||0),0);
@@ -3020,9 +3024,9 @@ function renderDigitalSales(){
   const laba=rows.reduce((a,b)=>a+Number(b.margin||b.harga_jual-b.hpp||0),0);
   if($('digOmzet')) $('digOmzet').textContent=fmtRp(omzet);
   if($('digLaba')) $('digLaba').textContent=fmtRp(laba);
-  if($('digCount')) $('digCount').textContent=DIG_LIST.length;
+  if($('digCount')) $('digCount').textContent=rows.length;
   if($('digEmpty')) $('digEmpty').classList.toggle('hidden', rows.length>0);
-  $('digTable').innerHTML=rows.slice(0,500).map(x=>`<tr>
+  $('digTable').innerHTML=rows.slice(0,1000).map(x=>`<tr>
     <td><b>${esc(x.nomor_urut)}</b></td>
     <td>${esc(x.kode)}</td>
     <td>${esc(x.no_tujuan)}</td>
