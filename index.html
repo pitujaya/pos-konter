@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="ServisHP Pro" />
 <meta name="mobile-web-app-capable" content="yes" />
 <title>ServisHP Pro - Management Service HP</title>
-<link rel="stylesheet" href="style.css?v=1.9.9" />
+<link rel="stylesheet" href="style.css?v=2610291603" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -206,7 +206,7 @@
 
       <div class="card">
         <div class="card-head"><h3>🛠️ Ringkasan Service</h3></div>
-        <div class="stats" style="grid-template-columns: repeat(auto-fit,minmax(150px,1fr));">
+        <div class="stats stats-service">
           <div class="stat linkable" onclick="goto('data','Semua')" title="Lihat semua data"><div class="stat-icon blue">📥</div><div><small>Total Masuk</small><h3 id="stTotal">0</h3></div></div>
           <div class="stat linkable" onclick="goto('data','Dikerjakan')" title="Lihat yg Dikerjakan"><div class="stat-icon purple">🔧</div><div><small>Dikerjakan</small><h3 id="stAntri">0</h3></div></div>
           <div class="stat linkable" onclick="goto('data','Selesai')" title="Lihat yg Selesai"><div class="stat-icon yellow">⏳</div><div><small>Selesai</small><h3 id="stProses">0</h3></div></div>
@@ -218,7 +218,7 @@
       <div class="grid2">
         <div class="card">
           <div class="card-head"><h3>💳 Ringkasan Penjualan Digital</h3></div>
-          <div class="stats" style="grid-template-columns: repeat(auto-fit,minmax(140px,1fr));">
+          <div class="stats stats-mini">
             <div class="stat linkable" onclick="goto('penjualan-digital')" title="Lihat Penjualan Digital"><div class="stat-icon blue">📋</div><div><small>Total Unit</small><h3 id="stDigCount">0</h3></div></div>
             <div class="stat money linkable" onclick="goto('penjualan-digital')" title="Lihat Penjualan Digital"><div class="stat-icon money-i">💰</div><div><small>Omzet</small><h3 id="stDigOmzet">Rp 0</h3></div></div>
             <div class="stat linkable" onclick="goto('penjualan-digital')" title="Lihat Penjualan Digital"><div class="stat-icon green">📈</div><div><small>Laba</small><h3 id="stDigLaba">Rp 0</h3></div></div>
@@ -226,7 +226,7 @@
         </div>
         <div class="card">
           <div class="card-head"><h3>🛒 Ringkasan Penjualan Barang</h3></div>
-          <div class="stats" style="grid-template-columns: repeat(auto-fit,minmax(140px,1fr));">
+          <div class="stats stats-mini">
             <div class="stat linkable" onclick="goto('penjualan')" title="Lihat Penjualan Barang"><div class="stat-icon blue">🛒</div><div><small>Total Unit Terjual</small><h3 id="stProdUnit">0</h3></div></div>
             <div class="stat money linkable" onclick="goto('penjualan')" title="Lihat Penjualan Barang"><div class="stat-icon money-i">💰</div><div><small>Omzet</small><h3 id="stProdOmzet">Rp 0</h3></div></div>
             <div class="stat linkable" onclick="goto('penjualan')" title="Lihat Penjualan Barang"><div class="stat-icon green">📈</div><div><small>Laba</small><h3 id="stProdLaba">Rp 0</h3></div></div>
@@ -1129,14 +1129,14 @@
 
 <div class="toast-wrap" id="toastWrap"></div>
 
-<script src="config.js?v=1.2.0"></script>
-<script src="api.js?v=1.3.3"></script>
-<script src="script.js?v=2.1.11"></script>
+<script src="config.js?v=2610291603"></script>
+<script src="api.js?v=2610291603"></script>
+<script src="script-2610291603.js"></script>
 <script>
 // Daftarkan Service Worker supaya aplikasi bisa dipasang (PWA) & cache shell.
 if('serviceWorker' in navigator && location.protocol !== 'file:'){
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw.js').catch(function(e){ console.warn('SW gagal:', e && e.message); });
+    navigator.serviceWorker.register('sw-2610291603.js').catch(function(e){ console.warn('SW gagal:', e && e.message); });
   });
 }
 </script>

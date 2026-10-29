@@ -482,3 +482,53 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
 .switch input:checked+.slider{background:var(--green)}
 .switch input:checked+.slider:before{transform:translateX(20px)}
 .switch input:focus-visible+.slider{box-shadow:0 0 0 3px #bbf7d0}
+
+/* ===== DESKTOP / MONITOR: teks lebih ringkas + kotak dashboard rapi ===== */
+@media (min-width:1101px){
+  .main{padding:0 22px 30px}
+  .topbar{padding:12px 0}
+  .nav-btn{font-size:14px}
+  .nav-sub-btn{font-size:13px}
+  .search-wrap input{font-size:13.5px}
+  .kas-pill{font-size:12.5px;padding:8px 13px}
+  .page-title{font-size:22px}
+  .page-sub{font-size:13px;margin:3px 0 14px}
+  .card{padding:16px;border-radius:12px;margin-bottom:14px}
+  .card-head{margin-bottom:10px}
+  .card-head h3{font-size:15.5px}
+  .stats{gap:12px;margin-bottom:14px}
+  .stat{padding:12px;gap:10px}
+  .stat small{font-size:12px;line-height:1.3}
+  .stat h3{font-size:19px}
+  .stat-icon{width:38px;height:38px;font-size:19px;border-radius:10px}
+  .grid2{gap:14px}
+  table{font-size:13px}
+  th{font-size:11.5px;padding:9px 10px}
+  td{padding:10px}
+  .btn{font-size:13.5px}
+  .muted,.link{font-size:13px}
+  .ltab{font-size:13px;padding:10px 12px}
+  .fbtn{font-size:12.5px}
+  .badge{font-size:11.5px}
+  .status-link{font-size:12.5px}
+
+  #page-dashboard .stats{margin-bottom:0}
+  #page-dashboard .stats-service{grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+  #page-dashboard .stats-service .stat{padding:11px 10px;gap:8px;min-width:0}
+  #page-dashboard .stats-service .stat>div{min-width:0}
+  #page-dashboard .stats-service .stat small{font-size:11px;line-height:1.25}
+  #page-dashboard .stats-service .stat h3{font-size:clamp(14px,1.15vw,18px);line-height:1.2;white-space:nowrap;font-variant-numeric:tabular-nums}
+  #page-dashboard .stats-service .stat-icon{width:32px;height:32px;font-size:16px;border-radius:9px}
+  #page-dashboard .grid2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #page-dashboard .grid2 .stats{grid-template-columns:1fr;gap:8px}
+  #page-dashboard .grid2 .stat{padding:10px 12px;gap:10px;box-shadow:none;border:1px solid var(--line);min-width:0}
+  #page-dashboard .grid2 .stat.money{border:2px solid #fbbf24}
+  #page-dashboard .grid2 .stat-icon{width:32px;height:32px;font-size:16px;border-radius:9px}
+  #page-dashboard .grid2 .stat small{font-size:11.5px}
+  #page-dashboard .grid2 .stat h3{font-size:17px;line-height:1.25;white-space:nowrap;font-variant-numeric:tabular-nums}
+}
+@media (min-width:1101px) and (max-width:1199px){
+  #page-dashboard .stats-service{grid-template-columns:repeat(6,minmax(0,1fr))}
+  #page-dashboard .stats-service>.stat{grid-column:span 2}
+  #page-dashboard .stats-service>.stat:nth-child(n+4){grid-column:span 3}
+}

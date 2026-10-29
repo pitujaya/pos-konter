@@ -666,6 +666,17 @@ function navSetGroup(grp, open){
   const h=grp.querySelector('.nav-head');
   if(h) h.setAttribute('aria-expanded', open?'true':'false');
 }
+function scrollNavGroup(grp){
+  if(!grp) return;
+  try{
+    const nav=grp.closest('.nav');
+    if(!nav) return;
+    const n=nav.getBoundingClientRect(), g=grp.getBoundingClientRect();
+    if(g.top < n.top || g.bottom > n.bottom){
+      nav.scrollTop = Math.max(0, nav.scrollTop + (g.top - n.top) - 10);
+    }
+  }catch{}
+}
 function navSyncActive(page, ltab, group){
   if(ltab && group) NAVLTAB[group]=ltab;
   document.querySelectorAll('.nav-group').forEach(grp=>{
@@ -678,6 +689,7 @@ function navSyncActive(page, ltab, group){
     if(onPage && kids.length){
       document.querySelectorAll('.nav-group.open').forEach(g=>{ if(g!==grp) navSetGroup(g,false); });
       navSetGroup(grp, true);
+      setTimeout(()=>scrollNavGroup(grp),0);
     }
     kids.forEach(k=>{
       const samePage=k.dataset.page===page;
@@ -699,6 +711,7 @@ document.querySelectorAll('.nav-head').forEach(h=>h.addEventListener('click',(e)
   const open=!grp.classList.contains('open');
   document.querySelectorAll('.nav-group.open').forEach(g=>{ if(g!==grp) navSetGroup(g,false); });
   navSetGroup(grp, open);
+  if(open) setTimeout(()=>scrollNavGroup(grp),0);
 }));
 // ===== FOKUS BAGIAN HALAMAN (klik sub-menu -> hanya bagian itu yang tampil) =====
 let focusCard=null;
@@ -771,6 +784,7 @@ document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',
     if(el) setTimeout(()=>{ try{ el.scrollIntoView({behavior:'smooth', block:'start'}); }catch{} },160);
   }
   navSyncActive(page, ltab||undefined, gkey);
+  setTimeout(()=>scrollNavGroup(grp),0);
 }));
 document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.goto)));
 function goto(page, filter){
@@ -821,7 +835,14 @@ $('openSidebar').onclick=()=>{ try{ openSidebar(); }catch{ $('sidebar').classLis
 $('closeSidebar').onclick=()=>{ try{ closeSidebar(); }catch{ $('sidebar').classList.remove('open'); } };
 if($('sidebarOverlay')) $('sidebarOverlay').onclick=()=>{ closeSidebar(); };
 // ===== SIDEBAR HELPERS (dipakai tombol back APK via MainActivity) =====
-function openSidebar(){ try{ $('sidebar').classList.add('open'); }catch{} try{ const ov=$('sidebarOverlay'); if(ov) ov.classList.add('show'); }catch{} }
+function openSidebar(){
+  try{ $('sidebar').classList.add('open'); }catch{}
+  try{ const ov=$('sidebarOverlay'); if(ov) ov.classList.add('show'); }catch{}
+  try{
+    const act=document.querySelector('.nav-sub-btn.active') || document.querySelector('.nav-group.open .nav-head');
+    if(act){ const grp=act.closest('.nav-group'); if(grp){ navSetGroup(grp,true); setTimeout(()=>scrollNavGroup(grp),60); } }
+  }catch{}
+}
 function closeSidebar(){ try{ $('sidebar').classList.remove('open'); }catch{} try{ const ov=$('sidebarOverlay'); if(ov) ov.classList.remove('show'); }catch{} }
 function isSidebarOpen(){ try{ return !!($('sidebar')&&$('sidebar').classList.contains('open')); }catch{ return false; } }
 try{ window.openSidebar=openSidebar; window.closeSidebar=closeSidebar; window.isSidebarOpen=isSidebarOpen; }catch{}
@@ -1866,7 +1887,7 @@ document.querySelectorAll('.pw-eye').forEach(b=>b.onclick=()=>{
 $('btnForgot').onclick=async ()=>{
   const id=$('l_id').value.trim();
   if(!id){ toast('Isi email / No. HP dulu untuk reset'); return; }
-  if(BACKEND_OK && window.API){
+  if(window.API){
     // Reset password lewat endpoint publik sudah dinonaktifkan di backend
     // (bisa dipakai siapa pun untuk membajak akun). Jadi di mode server,
     // arahkan pengguna ke Super Admin.
@@ -1886,7 +1907,7 @@ $('loginForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const id=$('l_id').value.trim(), pw=$('l_pw').value, remember=$('l_remember').checked;
   if(!id||!pw){ toast('Isi email/No. HP + password'); return; }
-  if(BACKEND_OK && window.API){
+  if(window.API){
     try{
       const r = await window.API.login(id, pw, remember);
       window.API.setToken(r.access_token, remember);
@@ -1921,7 +1942,7 @@ $('registerForm').addEventListener('submit', async (e)=>{
   if(hp && !/^[0-9+]{9,15}$/.test(hp)){ toast('Nomor HP tidak valid (9-15 digit)'); return; }
   if(pw.length<6){ toast('Password minimal 6 karakter'); return; }
   if(pw!==pw2){ toast('Konfirmasi password tidak sama'); return; }
-  if(BACKEND_OK && window.API){
+  if(window.API){
     try{
       const r = await window.API.register(nama, email||null, hp||null, pw, role);
       window.API.setToken(r.access_token, true);
@@ -3168,3 +3189,344 @@ async function renderLaporan(){
   finally{ show('lpLoading',false); show('lpWrap',true); }
 }
 
+// init (dengan guard login + auto backend)
+(async function init(){
+  await checkBackend(true);
+  // Hint akun demo hanya relevan untuk pemakaian lokal. Di server publik
+  // menampilkan kredensial default itu berbahaya (kredensial sudah diubah
+  // owner, tapi tetap membocorkan username admin).
+  if(BACKEND_OK){ const dh=$('demoHint'); if(dh) dh.classList.add('hidden'); }
+  // Token kedaluwarsa / dicabut -> api.js sudah menghapus tokennya (event 401).
+  // Tanpa ini user tersangkut di error 401 terus-menerus tanpa diminta login.
+  try{
+    window.addEventListener('servishp:401', ()=>{
+      ME_CACHE=null; KAS=null;
+      try{ showAuth(); }catch{}
+      toast('Sesi berakhir. Silakan login kembali.', 4000);
+    });
+  }catch(e){}
+  // coba pakai token tersimpan
+  if(BACKEND_OK && backendToken()){
+    try{
+      const me = await window.API.me();
+      ME_CACHE = me;
+      setSession(me.id, !!localStorage.getItem('servishp_token_v1'));
+      showApp(me);
+      await refreshFromBackend();
+      initTanggal(); renderAll();
+      try{ if(typeof btInit==='function') btInit(); }catch{}
+      return;
+    }catch(e){ console.warn('token tidak valid:', e.message); }
+  }
+  const me=currentUser();
+  if(me){ showApp(me); } else { showAuth(); }
+  initTanggal(); renderAll();
+  try{ if(typeof btInit==='function') btInit(); }catch{}
+  // kalau backend hidup tapi belum login, tetap tarik status saja
+})();
+
+// ===== PRINTER BLUETOOTH THERMAL (APK via window.AndroidBT) =====
+// Printer umum: XPrinter / RPP02 / 58mm, Bluetooth Classic SPP.
+// Alur: Pairing di Settings Android -> buka Pengaturan > Printer -> Scan -> Sambungkan -> Tes Cetak.
+// Struk diformat 32 kolom agar pas di kertas 58mm.
+const LS_BT = 'servishp_bt_v1';
+function btCfg(){ try{ return JSON.parse(localStorage.getItem(LS_BT))||{}; }catch{ return {}; } }
+function btSaveCfg(p){ try{ localStorage.setItem(LS_BT, JSON.stringify(Object.assign(btCfg(), p))); }catch{} }
+function hasNativeBT(){ return !!(window.AndroidBT && typeof window.AndroidBT.printText==='function'); }
+function btParse(s, def){ try{ const j=JSON.parse(s); return (j&&typeof j==='object')?j:def; }catch{ return def; } }
+function btRaw(fn){
+  try{
+    if(!hasNativeBT()) return null;
+    const f=window.AndroidBT[fn];
+    if(typeof f!=='function') return null;
+    const args=Array.prototype.slice.call(arguments,1);
+    return f.apply(window.AndroidBT, args);
+  }catch(e){ console.warn('AndroidBT.'+fn+' gagal:', e); return null; }
+}
+function btStatusInfo(){
+  const r=btRaw('status');
+  return btParse(r, {ok:false, connected:false, name:'', mac:''});
+}
+// --- formatter 32 kolom ---
+const STRUK_W = 32;
+function sLine(ch){ ch=ch||'-'; return new Array(STRUK_W+1).join(ch); }
+function sCenter(t){
+  t=String(t==null?'':t);
+  // potong halus per kata bila kepanjangan
+  if(t.length>STRUK_W) t=t.slice(0,STRUK_W);
+  const pad=Math.max(0, Math.floor((STRUK_W-t.length)/2));
+  return new Array(pad+1).join(' ')+t;
+}
+function sLR(l, r){
+  l=String(l==null?'':l); r=String(r==null?'':r);
+  if(l.length+r.length+1>STRUK_W){
+    const maxL=Math.max(4, STRUK_W-r.length-2);
+    if(l.length>maxL) l=l.slice(0,maxL-1)+'.';
+  }
+  const sp=STRUK_W-l.length-r.length;
+  return l+new Array(Math.max(sp,1)+1).join(' ')+r;
+}
+function sWrap(label, value){
+  // "Label: value" dibungkus per 32 kolom agar tidak kepotong printer
+  const full=(label?label:'')+(value==null?'':value);
+  const out=[];
+  let s=String(full);
+  while(s.length>STRUK_W){ out.push(s.slice(0,STRUK_W)); s=s.slice(STRUK_W); }
+  out.push(s);
+  return out.join('\n');
+}
+function strukHead(){
+  const L=[];
+  L.push(sCenter(SET.nama||'POS Konter'));
+  if(SET.alamat) String(SET.alamat).split('\n').forEach(a=>L.push(sCenter(a.trim().slice(0,32))));
+  if(SET.telp) L.push(sCenter('Telp: '+SET.telp));
+  L.push(sLine());
+  return L.join('\n');
+}
+function strukFoot(){
+  const L=[];
+  L.push(sLine());
+  if(SET.nota) {
+    // bungkus catatan nota
+    let s=String(SET.nota);
+    while(s.length>STRUK_W){ L.push(s.slice(0,STRUK_W)); s=s.slice(STRUK_W); }
+    L.push(s);
+    L.push(sLine());
+  }
+  L.push(sCenter('Terima kasih 🙏'));
+  L.push(sCenter('Dicetak '+new Date().toLocaleString('id-ID')));
+  return L.join('\n');
+}
+function buildStrukService(x){
+  const L=[strukHead()];
+  L.push(sCenter('** NOTA SERVICE **'));
+  L.push(sLR('No:', String(x.noService||'-').slice(0,18)));
+  L.push(sLR('Masuk:', fmtTgl(x.tanggal)));
+  L.push(sLR('Estimasi:', fmtTgl(x.estimasi)));
+  L.push(sLine());
+  L.push(sWrap('Plg: ', (x.nama||'-')+' ('+(x.telp||'-')+')'));
+  if(x.alamat) L.push(sWrap('Alm: ', x.alamat));
+  L.push(sWrap('Unit: ', (x.merk||'')+' '+(x.tipe||'')));
+  if(x.sandi) L.push(sWrap('Sandi: ', x.sandi));
+  L.push(sWrap('Lengkap: ', (x.kelengkapan||[]).join(', ')||'-'));
+  L.push(sWrap('Keluhan: ', x.keluhan||'-'));
+  if(x.kondisi) L.push(sWrap('Kondisi: ', x.kondisi));
+  L.push(sLine());
+  L.push(sLR('Biaya:', fmtRp(x.biaya)));
+  L.push(sLR('Status:', normStatus(x.status)));
+  L.push(sLR('Teknisi:', (x.teknisi||'-').slice(0,16)));
+  L.push(strukFoot());
+  return L.join('\n');
+}
+function buildStrukJual(x){
+  const L=[strukHead()];
+  L.push(sCenter('** NOTA PENJUALAN **'));
+  L.push(sLR('No:', String(x.no_nota||'-').slice(0,18)));
+  L.push(sLR('Tgl:', fmtTgl(x.tanggal)));
+  L.push(sLR('Kasir:', String(x.kasir||'-').slice(0,16)));
+  L.push(sLine());
+  L.push(sWrap('Pbl: ', (x.pelanggan||'Umum')+(x.telp?' ('+x.telp+')':'')));
+  L.push(sLR('Bayar:', (x.metode||'Tunai').slice(0,12)));
+  L.push(sLine());
+  (x.items||[]).forEach(it=>{
+    let nm=String(it.nama||it.sku||'Item');
+    if(nm.length>STRUK_W) nm=nm.slice(0,STRUK_W);
+    L.push(nm);
+    L.push(sLR(' '+it.qty+' x '+fmtRp(it.harga), fmtRp(it.subtotal)));
+  });
+  L.push(sLine());
+  L.push(sLR('TOTAL:', fmtRp(x.total)));
+  if(x.catatan) L.push(sWrap('Cat: ', x.catatan));
+  L.push(strukFoot());
+  return L.join('\n');
+}
+function buildStrukTest(){
+  const L=[strukHead()];
+  L.push(sCenter('** TES PRINTER **'));
+  L.push(sCenter('12345678901234567890123456789012'));
+  L.push(sLine('='));
+  L.push(sLR('Kiri', 'Kanan'));
+  L.push(sLine());
+  L.push(sCenter('Jika tulisan ini rapi & terpotong'));
+  L.push(sCenter('pas 32 kolom, printer siap dipakai.'));
+  L.push(strukFoot());
+  return L.join('\n');
+}
+// --- aksi cetak ---
+function btPrintText(text){
+  const r=btRaw('printText', String(text));
+  const j=btParse(r, null);
+  if(j && j.ok) return true;
+  if(j && j.message) toast('BT: '+j.message);
+  else toast('Gagal cetak via Bluetooth');
+  return false;
+}
+// Dipanggil window.cetak(): true = sudah tercetak via BT (jangan window.print lagi)
+function tryPrintServiceBT(x){
+  const cfg=btCfg();
+  if(!hasNativeBT()) return false;           // browser biasa -> fallback window.print
+  const st=btStatusInfo();
+  if(!st.connected){
+    // coba auto-connect sekali ke MAC tersimpan
+    if(cfg.mac){
+      const r=btParse(btRaw('connect', cfg.mac), null);
+      if(!(r&&r.ok)){ toast('Printer BT belum tersambung — sambungkan di Pengaturan > Printer 🖨'); return false; }
+      try{ renderBtStatus(); }catch{}
+    } else { toast('Belum ada printer BT — atur di Pengaturan > Printer 🖨'); return false; }
+  }
+  const ok=btPrintText(buildStrukService(x));
+  if(ok) toast('Struk tercetak via Bluetooth 🖨');
+  return ok;
+}
+function tryPrintJualBT(x){
+  const cfg=btCfg();
+  if(!hasNativeBT()) return false;
+  const st=btStatusInfo();
+  if(!st.connected){
+    if(cfg.mac){
+      const r=btParse(btRaw('connect', cfg.mac), null);
+      if(!(r&&r.ok)){ toast('Printer BT belum tersambung — sambungkan di Pengaturan > Printer 🖨'); return false; }
+      try{ renderBtStatus(); }catch{}
+    } else { toast('Belum ada printer BT — atur di Pengaturan > Printer 🖨'); return false; }
+  }
+  const ok=btPrintText(buildStrukJual(x));
+  if(ok) toast('Nota tercetak via Bluetooth 🖨');
+  return ok;
+}
+// --- UI Pengaturan ---
+function renderBtStatus(){
+  const el=$('btStatus'); if(!el) return;
+  if(!hasNativeBT()){
+    el.textContent='📵 Mode browser — bluetooth hanya aktif di APK Android. Tetap bisa Cetak via print browser.';
+    return;
+  }
+  const cfg=btCfg();
+  const st=btStatusInfo();
+  if(st.connected) el.textContent='🟢 Tersambung: '+(st.name||cfg.name||'printer')+' ('+(st.mac||cfg.mac)+')';
+  else if(cfg.mac) el.textContent='🔴 Terputus — terakhir: '+(cfg.name||'')+' ('+cfg.mac+'). Klik Sambungkan.';
+  else el.textContent='🔴 Belum tersambung — Scan lalu Sambungkan.';
+}
+function btRefreshSel(devices){
+  const sel=$('btDevice'); if(!sel) return;
+  const cfg=btCfg();
+  sel.innerHTML=(devices||[]).map(d=>`<option value="${esc(d.mac)}" ${cfg.mac===d.mac?'selected':''}>${esc(d.name)} • ${esc(d.mac)}</option>`).join('')
+    || '<option value="">(tidak ada perangkat paired)</option>';
+}
+function btScan(){
+  if(!hasNativeBT()){ toast('Buka via APK untuk scan bluetooth'); return; }
+  btRaw('requestPerms');
+  toast('Memindai perangkat paired...');
+  setTimeout(()=>{
+    const r=btParse(btRaw('listPaired'), null);
+    if(r&&r.ok){
+      btRefreshSel(r.devices||[]);
+      renderBtStatus();
+      const n=(r.devices||[]).length;
+      toast(n?n+' perangkat ditemukan ✅':'Tidak ada perangkat paired. Pairing dulu di Settings ⚙');
+    } else {
+      renderBtStatus();
+      toast('Scan gagal: '+((r&&r.message)||'cek izin bluetooth'));
+    }
+  }, 600);
+}
+function btConnect(){
+  if(!hasNativeBT()){ toast('Buka via APK untuk konek'); return; }
+  const sel=$('btDevice');
+  const mac=sel?sel.value:(btCfg().mac||'');
+  if(!mac){ toast('Pilih perangkat dulu / Scan dulu'); return; }
+  toast('Menyambungkan ke '+mac+'...');
+  setTimeout(()=>{
+    const r=btParse(btRaw('connect', mac), null);
+    if(r&&r.ok){
+      const name=(function(){ try{ const o=[...sel.options].find(o=>o.value===mac); return o?o.text.split(' • ')[0]:''; }catch{ return ''; } })();
+      btSaveCfg({mac, name:name||r.name||''});
+      try{ if(window.AndroidBT&&window.AndroidBT.autoConnect){} }catch{}
+      renderBtStatus();
+      toast('Tersambung ke '+(name||r.name||mac)+' 🖨✅');
+    } else {
+      renderBtStatus();
+      toast('Gagal konek: '+((r&&r.message)||'coba lagi'));
+    }
+  }, 100);
+}
+function btDisconnect(){
+  if(!hasNativeBT()) return;
+  btRaw('disconnect');
+  renderBtStatus();
+  toast('Printer diputus');
+}
+function btTest(){
+  if(!hasNativeBT()){ toast('Buka via APK untuk tes cetak'); return; }
+  const st=btStatusInfo();
+  if(!st.connected){ toast('Sambungkan printer dulu'); return; }
+  if(btPrintText(buildStrukTest())) toast('Tes tercetak 🖨✅');
+}
+// Tes langsung dari sisi native (Android) - buat cek printer tanpa teks dari web
+function btTestNative(){
+  if(!hasNativeBT()){ toast('Buka via APK untuk tes cetak'); return; }
+  const st=btStatusInfo();
+  if(!st.connected){ toast('Sambungkan printer dulu'); return; }
+  const r=btParse(btRaw('testPrint'), null);
+  if(r&&r.ok) toast('Tes native tercetak 🖨✅');
+  else toast('BT: '+((r&&r.message)||'gagal'));
+}
+function btInit(){
+  renderBtStatus();
+  const bP=$('btnBtPerm'); if(bP&&!bP.dataset.b){ bP.dataset.b='1'; bP.onclick=()=>{ btRaw('requestPerms'); toast('Izin bluetooth diminta — izinkan di popup HP'); setTimeout(renderBtStatus,800); }; }
+  const bS=$('btnBtScan'); if(bS&&!bS.dataset.b){ bS.dataset.b='1'; bS.onclick=btScan; }
+  const bC=$('btnBtConnect'); if(bC&&!bC.dataset.b){ bC.dataset.b='1'; bC.onclick=btConnect; }
+  const bD=$('btnBtDisconnect'); if(bD&&!bD.dataset.b){ bD.dataset.b='1'; bD.onclick=btDisconnect; }
+  const bT=$('btnBtTest'); if(bT&&!bT.dataset.b){ bT.dataset.b='1'; bT.onclick=btTest; }
+  const bTN=$('btnBtTestNative'); if(bTN&&!bTN.dataset.b){ bTN.dataset.b='1'; bTN.onclick=btTestNative; }
+  const sel=$('btDevice'); if(sel&&!sel.dataset.b){ sel.dataset.b='1'; sel.onchange=()=>{ const o=sel.options[sel.selectedIndex]; if(o&&sel.value) btSaveCfg({mac:sel.value, name:o.text.split(' • ')[0]}); }; }
+  // auto-connect sekali saat aplikasi dibuka (APK) bila ada MAC tersimpan
+  try{
+    if(hasNativeBT()){
+      const cfg=btCfg();
+      const st=btStatusInfo();
+      if(!st.connected&&cfg.mac){
+        const r=btParse(btRaw('autoConnect'), null);
+        if(r&&r.ok) setTimeout(renderBtStatus, 500);
+      }
+    }
+  }catch{}
+  setTimeout(renderBtStatus, 800);
+}
+window.btScan=btScan; window.btConnect=btConnect; window.btDisconnect=btDisconnect; window.btTest=btTest; window.btTestNative=btTestNative;
+
+// ===== Penjualan Digital: sync & filter handlers =====
+(function(){
+  const byId = (id)=>document.getElementById(id);
+  const digToast = (msg)=>{ try{ toast(msg); }catch(e){ try{ console.log(msg); }catch(_){} } };
+  async function doDigSync(){
+    if(!useBackend()){ digToast('Backend belum tersambung'); return; }
+    const btn=byId('btnDigSync'); const old=btn?btn.textContent:'';
+    if(btn){ btn.disabled=true; btn.textContent='⏳ Sinkron...'; }
+    try{
+      const r=await window.API.syncDigitalSales();
+      await loadDigitalSales(false,true);
+      digToast('✅ Sinkron digital: '+((r&&r.added)||0)+' baru, '+((r&&r.updated)||0)+' update');
+    }catch(e){ digToast('❌ Gagal sync digital: '+(e&&e.message?e.message:e)); }
+    finally{ if(btn){ btn.disabled=false; btn.textContent=old||'🔄 Sync Sekarang'; } }
+  }
+  const b=byId('btnDigSync'); if(b && !b.dataset.digB){ b.dataset.digB='1'; b.addEventListener('click',doDigSync); }
+  const auto=byId('btnDigAutoSync');
+  let autoTimer=null;
+  const autoOn=()=>{ try{ return localStorage.getItem('servishp_dig_auto')==='1'; }catch(e){ return false; } };
+  function setAuto(on){
+    try{ localStorage.setItem('servishp_dig_auto', on?'1':'0'); }catch(e){}
+    if(auto){ auto.textContent=on?'⏸ Auto-sync aktif':'⚡ Auto-sync'; auto.classList.toggle('primary',on); }
+    if(autoTimer){ clearInterval(autoTimer); autoTimer=null; }
+    if(on){ autoTimer=setInterval(()=>{ try{ if(document.visibilityState!=='hidden' && useBackend()) doDigSync(); }catch(e){} }, 5*60*1000); }
+  }
+  if(auto && !auto.dataset.digB){ auto.dataset.digB='1'; auto.addEventListener('click',()=>{ setAuto(!autoOn()); digToast(autoOn()?'⚡ Auto-sync aktif (5 menit)':'⏸ Auto-sync nonaktif'); }); }
+  try{ setAuto(autoOn()); }catch(e){}
+  const filter=byId('btnDigFilter'); if(filter && !filter.dataset.digB){ filter.dataset.digB='1'; filter.addEventListener('click',()=>renderDigitalSales()); }
+  const reset=byId('btnDigReset'); if(reset && !reset.dataset.digB){ reset.dataset.digB='1'; reset.addEventListener('click',()=>{ ['digSearch','digDari','digSampai'].forEach(id=>{ const el=byId(id); if(el) el.value=''; }); renderDigitalSales(); }); }
+  const search=byId('digSearch'); if(search && !search.dataset.digB){ search.dataset.digB='1'; let t=null; search.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(()=>renderDigitalSales(),250); }); }
+  const d1=byId('digDari'); if(d1 && !d1.dataset.digB){ d1.dataset.digB='1'; d1.addEventListener('change',()=>renderDigitalSales()); }
+  const d2=byId('digSampai'); if(d2 && !d2.dataset.digB){ d2.dataset.digB='1'; d2.addEventListener('change',()=>renderDigitalSales()); }
+  document.querySelectorAll('[data-page="penjualan-digital"], [onclick*="penjualan-digital"]').forEach(el=>{
+    if(!el.dataset.digLoad){ el.dataset.digLoad='1'; el.addEventListener('click',()=>setTimeout(()=>{ try{ loadDigitalSales(false,true); }catch(e){} },80)); }
+  });
+})();
