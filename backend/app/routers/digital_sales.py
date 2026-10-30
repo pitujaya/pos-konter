@@ -2,8 +2,9 @@
 import csv
 import io
 import random
+import re
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 try:
@@ -126,6 +127,41 @@ def _num(v) -> int:
         return 0
 
 
+def _parse_date(v, default=None) -> Optional[str]:
+    """Ambil tanggal dari kolom TGL spreadsheet -> ISO YYYY-MM-DD."""
+    if v is None:
+        return default
+    s = str(v).strip()
+    if not s or s.lower() in ("none", "nan", "-"):
+        return default
+    s_iso = s.replace("T", " ").replace("Z", "").strip()
+    for fmt in (
+        "%Y-%m-%d", "%Y/%m/%d",
+        "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y",
+        "%d/%m/%y", "%d-%m-%y", "%d.%m.%y",
+    ):
+        try:
+            return datetime.strptime(s_iso[:10], fmt).date().isoformat()
+        except Exception:
+            pass
+    m = re.search(r"(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})", s)
+    if m:
+        d, mo, y = m.group(1), m.group(2), m.group(3)
+        if len(y) == 2:
+            y = "20" + y
+        try:
+            return date(int(y), int(mo), int(d)).isoformat()
+        except Exception:
+            pass
+    # Google Sheets / Excel serial date (hari sejak 1899-12-30)
+    if re.fullmatch(r"\d{5}(?:\.0+)?", s):
+        try:
+            return (date(1899, 12, 30) + timedelta(days=int(float(s)))).isoformat()
+        except Exception:
+            pass
+    return default
+
+
 @router.get("/status")
 def status(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     total = db.query(models.DigitalSale).count()
@@ -197,6 +233,7 @@ def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_use
 
         kode = str(get_field("kode") or "").strip()
         no_tujuan = str(get_field("notujuan", "tujuan") or "").strip()
+        sheet_date = _parse_date(get_field("tgl", "tanggal", "date"), None)
         hpp = _num(get_field("hpp"))
         harga_jual = _num(get_field("hargajual", "jual"))
         margin = _num(get_field("margin"))
@@ -211,7 +248,7 @@ def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_use
             exists.hpp = hpp
             exists.harga_jual = harga_jual
             exists.margin = margin if margin != 0 or (harga_jual >= 0 and hpp >= 0) else (harga_jual - hpp)
-            exists.tanggal = today
+            exists.tanggal = sheet_date or exists.tanggal or today
             exists.updated_at = datetime.utcnow()
             updated += 1
             continue
@@ -222,7 +259,7 @@ def sync(db: Session = Depends(get_db), _: models.User = Depends(get_current_use
             hpp=hpp,
             harga_jual=harga_jual,
             margin=margin,
-            tanggal=today,
+            tanggal=sheet_date or today,
         )
         db.add(ds)
         added += 1
