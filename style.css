@@ -237,6 +237,7 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
 .produk-bar .ltabs::-webkit-scrollbar{display:none}
 .produk-bar .ltab{flex:0 0 auto;min-width:0;padding:9px 13px;font-size:13px;white-space:nowrap}
 .produk-bar .btn{flex:0 0 auto;white-space:nowrap}
+.produk-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto;min-width:0}
 .omzet-wrap{overflow-x:hidden;overflow-y:hidden;width:100%;max-width:100%;box-sizing:border-box}
 .omzet-chart{min-width:0;width:100%;max-width:100%;box-sizing:border-box}
 .omzet-chart svg{width:100% !important;max-width:100% !important;height:auto !important;display:block}
@@ -364,9 +365,10 @@ label input:focus,label select:focus,label textarea:focus{border-color:var(--blu
   .toolbar-right{display:flex;gap:8px;flex-wrap:wrap}
   .toolbar-right select{flex:1;min-height:40px}
   /* Bar produk: tombol Input Produk Baru full width di bawah tab (tetapi di ATAS tabel) */
-  .produk-bar{top:58px;flex-direction:column;align-items:stretch;gap:8px;padding:8px 0}
+  .produk-bar{top:58px;flex-direction:column;align-items:stretch;gap:6px;padding:6px 0}
   .produk-bar .ltabs{width:100%}
-  .produk-bar .btn{width:100%;justify-content:center;min-height:42px}
+  .produk-actions{display:flex;flex-wrap:nowrap;gap:6px;width:100%}
+  .produk-actions .btn{flex:1 1 0;width:auto;min-width:0;justify-content:center;padding:6px 5px;font-size:clamp(10px,2.9vw,11.5px);min-height:36px;overflow:hidden;text-overflow:ellipsis}
   .form-banner{flex-direction:column;align-items:stretch;gap:10px}
   .form-actions{flex-direction:column-reverse;align-items:stretch}
   .form-actions .btn{width:100%}
