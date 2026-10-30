@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
         const val API_BASE = "https://pos.pitujaya.my.id/api"
         const val TOKEN_KEY = "servishp_token_v1"
         const val PREFS_AUTH = "pos_auth"
+        const val PREFS_WEB_VERSION = "pos_web_version"
         // UUID SPP standar printer thermal bluetooth
         val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     }
@@ -77,8 +78,60 @@ class MainActivity : AppCompatActivity() {
     private var firstScreenResolved = false
     private var autoLoginChecked = false
     private var autoLoginInFlight = false
+    private var lastVersionCheck = 0L
 
     private val bg = Executors.newSingleThreadExecutor()
+
+    // ================= AUTO UPDATE FRONTEND =================
+    // APK ini memuat web dari server. Saat aplikasi dibuka kembali, versi aset
+    // di index.html (?v=...) dicek. Kalau server sudah deploy versi baru,
+    // WebView otomatis reload sehingga tampilan APK selalu sama dengan web.
+
+    private fun fetchFrontendVersion(): String? {
+        var conn: HttpURLConnection? = null
+        return try {
+            conn = (URL(BACKEND_URL).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 8000
+                readTimeout = 8000
+                useCaches = false
+                setRequestProperty("Cache-Control", "no-cache")
+                setRequestProperty("Pragma", "no-cache")
+            }
+            if (conn.responseCode !in 200..299) return null
+            val html = conn.inputStream.bufferedReader().use { it.readText() }
+            Regex("(?:style\\.css|script-[0-9]+\\.js|script\\.js)\\?v=([A-Za-z0-9._-]+)")
+                .find(html)?.groupValues?.getOrNull(1)
+        } catch (_: Exception) {
+            null
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    private fun checkFrontendUpdate() {
+        val now = System.currentTimeMillis()
+        if (now - lastVersionCheck < 60_000L) return
+        lastVersionCheck = now
+        if (!isOnline()) return
+        bg.execute {
+            val version = fetchFrontendVersion() ?: return@execute
+            val prefs = getSharedPreferences(PREFS_WEB_VERSION, MODE_PRIVATE)
+            val known = prefs.getString("version", null)
+            if (known == null) {
+                prefs.edit().putString("version", version).apply()
+                return@execute
+            }
+            if (version == known) return@execute
+            prefs.edit().putString("version", version).apply()
+            runOnUiThread {
+                try {
+                    web.clearCache(true)
+                    web.reload()
+                } catch (_: Exception) {}
+            }
+        }
+    }
 
     // ================= AUTO LOGIN (native, sebelum WebView pakai token) =================
 
@@ -963,6 +1016,8 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // Cek ulang tiap kembali ke aplikasi (mis. user baru nyalakan data)
         loadOrBlock()
+        // Pastikan APK ikut versi web terbaru tanpa perlu install ulang.
+        checkFrontendUpdate()
     }
 
     override fun onSaveInstanceState(out: Bundle) {
