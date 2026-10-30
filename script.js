@@ -661,7 +661,7 @@ try{ bindKas(); }catch(e){ console.warn('bindKas:', e); }
 // ===== NAVIGASI =====
 let curLtab='laba';
 // tab aktif per grup menu (laporan & produk punya tab sendiri)
-const NAVLTAB = { laporan:'laba', produk:'sparepart' };
+const NAVLTAB = { laporan:'laba', produk:'sparepart', 'biaya-pendapatan':'biaya' };
 function navSetGroup(grp, open){
   if(!grp) return;
   grp.classList.toggle('open', !!open);
@@ -695,7 +695,8 @@ function navSyncActive(page, ltab, group){
     }
     kids.forEach(k=>{
       const samePage=k.dataset.page===page;
-      const sameTab=!k.dataset.ltab || !tab || k.dataset.ltab===tab;
+      const ktab=k.dataset.ltab||k.dataset.extab||'';
+      const sameTab=!ktab || !tab || ktab===tab;
       k.classList.toggle('active', samePage && sameTab);
     });
   });
@@ -774,6 +775,7 @@ document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',
   e.preventDefault();
   const page=b.dataset.page||'';
   const ltab=b.dataset.ltab||'';
+  const extab=b.dataset.extab||'';
   const grp=b.closest('.nav-group');
   const gkey=grp ? (grp.dataset.group||'') : '';
   if(gkey==='produk'){
@@ -782,6 +784,7 @@ document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',
     try{ gotoLtab(ltab); }catch{}
   }
   goto(page);
+  if(extab){ try{ setExTab(extab); }catch{} }
   if(gkey==='produk'){ if(ltab){ try{ fokusProdukTab(ltab); }catch{} } }
   else if(ltab){ try{ fokusLaporanTab(ltab); }catch{} }
   if(b.dataset.show){ try{ focusSection('page-'+page, b.dataset.show); }catch{} }
@@ -789,7 +792,7 @@ document.querySelectorAll('.nav-sub-btn').forEach(b=>b.addEventListener('click',
     const el=$(b.dataset.anchor);
     if(el) setTimeout(()=>{ try{ el.scrollIntoView({behavior:'smooth', block:'start'}); }catch{} },160);
   }
-  navSyncActive(page, ltab||undefined, gkey);
+  navSyncActive(page, ltab||extab||undefined, gkey);
   setTimeout(()=>scrollNavGroup(grp),0);
 }));
 document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.goto)));
@@ -1663,6 +1666,8 @@ function applyAksesUI(){
   const bolehLaba=!isKasir || aksesOn('kasir_lihat_laba');
   const bolehJual=!isKasir || aksesOn('kasir_laporan_penjualan_detail');
   document.querySelectorAll('.nav-sub-btn[data-page="pengeluaran"]').forEach(b=>b.classList.toggle('hidden', !bolehBiaya));
+  const grpBiaya=document.querySelector('.nav-group[data-group="biaya-pendapatan"]');
+  if(grpBiaya) grpBiaya.classList.toggle('hidden', !bolehBiaya);
   document.querySelectorAll('[data-ltab="laba"]').forEach(b=>b.classList.toggle('hidden', !bolehLaba));
   document.querySelectorAll('[data-ltab="jual"]').forEach(b=>b.classList.toggle('hidden', !bolehJual));
   const pLaba=$('ltab-laba'); if(pLaba) pLaba.classList.toggle('hidden', !bolehLaba);
@@ -2804,6 +2809,7 @@ window.hapusJual=async function(id){
 const LS_EXPENSE = 'servishp_expenses_v1';
 let EXPENSES = loadExpensesLocal();
 let exEditId = null;
+let exTab = 'biaya';
 function exJenis(x){ return String((x&&x.jenis)||'biaya').trim().toLowerCase()==='pendapatan'?'pendapatan':'biaya'; }
 function loadExpensesLocal(){ try{ return JSON.parse(localStorage.getItem(LS_EXPENSE)) || []; }catch{ return []; } }
 function saveExpensesLocal(){ try{ localStorage.setItem(LS_EXPENSE, JSON.stringify(EXPENSES)); }catch{} }
@@ -2829,6 +2835,7 @@ function exFiltered(){
 }
 function renderExpenses(){
   if(!$('ex_table')) return;
+  if($('ex_jenis') && $('ex_jenis').value!==exTab) $('ex_jenis').value=exTab;
   const today=new Date().toISOString().slice(0,10);
   if($('ex_tanggal') && !$('ex_tanggal').value) $('ex_tanggal').value=today;
   if($('in_tanggal') && !$('in_tanggal').value) $('in_tanggal').value=today;
@@ -2843,13 +2850,14 @@ function renderExpenses(){
   if($('inTotal')) $('inTotal').textContent=fmtRp(totalIncome);
   if($('exBulan')) $('exBulan').textContent=fmtRp(bulanBiaya);
   if($('inBulan')) $('inBulan').textContent=fmtRp(bulanIncome);
-  if($('exCount')) $('exCount').textContent=EXPENSES.length+' transaksi';
-  const {list:r, dari, sampai}=exFiltered();
-  const sumB=sum(r.filter(x=>exJenis(x)==='biaya'));
-  const sumI=sum(r.filter(x=>exJenis(x)==='pendapatan'));
-  if($('exInfo')) $('exInfo').textContent = (dari||sampai||(($('ex_search')||{}).value||'')||(($('ex_jenis')||{}).value||''))
-    ? `Menampilkan ${r.length} dari ${EXPENSES.length} • biaya ${fmtRp(sumB)} • pendapatan ${fmtRp(sumI)}`
-    : (EXPENSES.length?`Menampilkan semua (${EXPENSES.length}) • biaya ${fmtRp(totalBiaya)} • pendapatan ${fmtRp(totalIncome)}`:'');
+  const jenisList=EXPENSES.filter(x=>exJenis(x)===exTab);
+  const totalJenis=jenisList.length;
+  if($('exCount')) $('exCount').textContent=totalJenis+' transaksi';
+  const {list:r}=exFiltered();
+  const sumR=sum(r);
+  if($('exInfo')) $('exInfo').textContent = totalJenis
+    ? `Menampilkan ${r.length} dari ${totalJenis} • ${exTab==='biaya'?'biaya':'pendapatan lain'} ${fmtRp(sumR)}`
+    : '';
   if($('ex_empty')) $('ex_empty').classList.toggle('hidden', r.length>0);
   const admin=isAdminUp();
   if($('ex_table')) $('ex_table').innerHTML=r.slice(0,200).map(x=>{ const inc=exJenis(x)==='pendapatan'; return `<tr>
@@ -2857,6 +2865,19 @@ function renderExpenses(){
     <td>${esc(x.keterangan||'-')}<br><small class="muted">👤 ${esc(x.dicatat_oleh||'-')}</small></td>
     <td style="text-align:right"><b style="${inc?'color:#16a34a':''}">${inc?'+':'−'}${fmtRp(x.jumlah)}</b></td>
     <td><div class="act-btns">${admin?`<button class="icon-btn" onclick="exEdit(${jsStr(x.id)})" title="Edit">✏️</button><button class="icon-btn" onclick="exHapus(${jsStr(x.id)})" title="Hapus">🗑</button>`:'<small class="muted">—</small>'}</div></td></tr>`; }).join('');
+}
+function setExTab(name){
+  exTab = name==='pendapatan' ? 'pendapatan' : 'biaya';
+  const isB = exTab==='biaya';
+  document.querySelectorAll('#exTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.extab===exTab));
+  document.querySelectorAll('.ex-only-biaya').forEach(el=>el.classList.toggle('hidden', !isB));
+  document.querySelectorAll('.ex-only-pendapatan').forEach(el=>el.classList.toggle('hidden', isB));
+  const cb=$('exCardBiaya'); if(cb){ cb.classList.toggle('hidden', !isB); cb.style.gridColumn = isB ? '1/-1' : ''; }
+  const cp=$('exCardPendapatan'); if(cp){ cp.classList.toggle('hidden', isB); cp.style.gridColumn = isB ? '' : '1/-1'; }
+  if($('exHistoryTitle')) $('exHistoryTitle').textContent = isB ? 'Riwayat Biaya' : 'Riwayat Pendapatan Lain';
+  if($('ex_empty')) $('ex_empty').textContent = isB ? 'Belum ada biaya. Input di atas untuk mencatat.' : 'Belum ada pendapatan lain. Input di atas untuk mencatat.';
+  if($('ex_jenis')) $('ex_jenis').value = exTab;
+  try{ renderExpenses(); }catch{}
 }
 async function simpanExLike(jenis){
   if(!requireSesi()) return;
@@ -2914,6 +2935,10 @@ window.exHapus=async function(id){
   renderAll(); toast('Transaksi dihapus');
 };
 function bindExpenses(){
+  document.querySelectorAll('#exTabs .ltab').forEach(b=>b.onclick=()=>{
+    setExTab(b.dataset.extab);
+    try{ navSyncActive('pengeluaran', b.dataset.extab, 'biaya-pendapatan'); }catch{}
+  });
   if($('btnSimpanEx')) $('btnSimpanEx').onclick=simpanExpense;
   if($('btnSimpanIn')) $('btnSimpanIn').onclick=simpanIncome;
   if($('btnBatalEx')) $('btnBatalEx').onclick=()=>{ if($('ex_ket'))$('ex_ket').value=''; if($('ex_jumlah'))$('ex_jumlah').value=0; if($('ex_tanggal'))$('ex_tanggal').value=new Date().toISOString().slice(0,10); toast('Input dibatalkan'); };
@@ -2941,6 +2966,7 @@ function bindExpenses(){
     $('modalExpense').classList.add('hidden');
     renderAll(); toast('Transaksi diperbarui ✅');
   };
+  try{ setExTab(exTab); }catch{}
 }
 try{ bindExpenses(); }catch{}
 

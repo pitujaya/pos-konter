@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="ServisHP Pro" />
 <meta name="mobile-web-app-capable" content="yes" />
 <title>ServisHP Pro - Management Service HP</title>
-<link rel="stylesheet" href="style.css?v=2610291604" />
+<link rel="stylesheet" href="style.css?v=2610301600" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -103,7 +103,14 @@
           <button type="button" class="nav-sub-btn" data-page="tambah">📝 Form Service</button>
           <button type="button" class="nav-sub-btn" data-page="penjualan">🛒 Penjualan Barang</button>
           <button type="button" class="nav-sub-btn" data-page="penjualan-digital">💳 Penjualan Digital</button>
-          <button type="button" class="nav-sub-btn" data-page="pengeluaran">💰 Biaya &amp; Pendapatan Lain</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="biaya-pendapatan">
+        <button type="button" class="nav-btn nav-head" aria-expanded="false">💰 <span>Biaya &amp; Pendapatan Lain</span><i class="nav-chev">▸</i></button>
+        <div class="nav-sub">
+          <button type="button" class="nav-sub-btn" data-page="pengeluaran" data-extab="biaya">💸 Biaya</button>
+          <button type="button" class="nav-sub-btn" data-page="pengeluaran" data-extab="pendapatan">💰 Pendapatan Lain</button>
         </div>
       </div>
 
@@ -574,14 +581,18 @@
     <section class="page" id="page-pengeluaran">
       <h1 class="page-title">Biaya &amp; Pendapatan Lain</h1>
       <p class="page-sub">Catat biaya operasional (<b>mengurangi laba</b>) dan pendapatan lain (<b>menambah pendapatan &amp; laba</b>) • <b id="exCount">0 transaksi</b></p>
+      <div class="ltabs" id="exTabs">
+        <button type="button" class="ltab active" data-extab="biaya">💸 <span>Biaya</span></button>
+        <button type="button" class="ltab" data-extab="pendapatan">💰 <span>Pendapatan Lain</span></button>
+      </div>
       <div class="stats lp-stats lp-stats-2 lp-stats-plain">
-        <div class="stat"><div class="stat-icon yellow">💸</div><div><small>Total Biaya</small><h3 id="exTotal">Rp 0</h3></div></div>
-        <div class="stat"><div class="stat-icon green">💰</div><div><small>Total Pendapatan Lain</small><h3 id="inTotal">Rp 0</h3></div></div>
-        <div class="stat"><div class="stat-icon blue">📅</div><div><small>Biaya Bulan Ini</small><h3 id="exBulan">Rp 0</h3></div></div>
-        <div class="stat"><div class="stat-icon green">🧾</div><div><small>Pendapatan Bulan Ini</small><h3 id="inBulan">Rp 0</h3></div></div>
+        <div class="stat ex-only-biaya"><div class="stat-icon yellow">💸</div><div><small>Total Biaya</small><h3 id="exTotal">Rp 0</h3></div></div>
+        <div class="stat ex-only-pendapatan"><div class="stat-icon green">💰</div><div><small>Total Pendapatan Lain</small><h3 id="inTotal">Rp 0</h3></div></div>
+        <div class="stat ex-only-biaya"><div class="stat-icon blue">📅</div><div><small>Biaya Bulan Ini</small><h3 id="exBulan">Rp 0</h3></div></div>
+        <div class="stat ex-only-pendapatan"><div class="stat-icon green">🧾</div><div><small>Pendapatan Bulan Ini</small><h3 id="inBulan">Rp 0</h3></div></div>
       </div>
       <div class="grid2">
-        <div class="card">
+        <div class="card ex-card-biaya" id="exCardBiaya">
           <h3>➕ Input Biaya</h3>
           <p class="muted">Setiap input tersimpan & langsung memotong laba bersih.</p>
           <div class="row2">
@@ -605,7 +616,7 @@
             <button type="button" class="btn primary big" id="btnSimpanEx">💾 Simpan Biaya</button>
           </div>
         </div>
-        <div class="card">
+        <div class="card ex-card-pendapatan" id="exCardPendapatan">
           <h3>➕ Input Pendapatan Lain</h3>
           <p class="muted">Pendapatan di luar service & penjualan (bunga bank, cashback, sewa, dll) — otomatis menambah pendapatan & laba.</p>
           <div class="row2">
@@ -627,25 +638,22 @@
           </div>
         </div>
         <div class="card" style="grid-column:1/-1">
-          <div class="card-head"><h3>Riwayat Biaya &amp; Pendapatan Lain</h3><button class="btn small primary" id="btnLihatLaporan">📑 Lihat di Laporan</button></div>
+          <div class="card-head"><h3 id="exHistoryTitle">Riwayat Biaya</h3><button class="btn small primary" id="btnLihatLaporan">📑 Lihat di Laporan</button></div>
           <div class="row2">
             <label>Dari<input id="ex_dari" type="date" /></label>
             <label>Sampai<input id="ex_sampai" type="date" /></label>
           </div>
-          <div class="row2">
-            <label>Jenis<select id="ex_jenis">
-              <option value="">Semua jenis</option>
-              <option value="biaya">💸 Biaya</option>
-              <option value="pendapatan">💰 Pendapatan lain</option>
-            </select></label>
-            <label>Cari<div class="search-wrap"><span>🔍</span><input id="ex_search" placeholder="Cari kategori / keterangan..." /></div></label>
-          </div>
+          <label>Cari<div class="search-wrap"><span>🔍</span><input id="ex_search" placeholder="Cari kategori / keterangan..." /></div></label>
+          <select id="ex_jenis" class="hidden" aria-hidden="true" tabindex="-1">
+            <option value="biaya" selected>Biaya</option>
+            <option value="pendapatan">Pendapatan lain</option>
+          </select>
           <p class="muted" id="exInfo"></p>
           <div class="table-wrap"><table style="min-width:0">
             <thead><tr><th>Tanggal</th><th>Keterangan</th><th style="text-align:right">Jumlah</th><th>Aksi</th></tr></thead>
             <tbody id="ex_table"></tbody>
           </table>
-          <div id="ex_empty" class="empty hidden">Belum ada biaya atau pendapatan lain. Input di atas untuk mencatat.</div>
+          <div id="ex_empty" class="empty hidden">Belum ada biaya. Input di atas untuk mencatat.</div>
           </div>
         </div>
       </div>
@@ -1131,7 +1139,7 @@
 
 <script src="config.js?v=2610291603"></script>
 <script src="api.js?v=2610291603"></script>
-<script src="script-2610301400.js"></script>
+<script src="script-2610301600.js?v=2610301600"></script>
 <script>
 // Daftarkan Service Worker supaya aplikasi bisa dipasang (PWA) & cache shell.
 if('serviceWorker' in navigator && location.protocol !== 'file:'){

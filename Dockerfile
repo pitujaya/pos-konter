@@ -24,7 +24,7 @@ COPY backend/app ./app
 # PENTING: daftar file di sini harus lengkap. Kalau ada file frontend baru
 # (mis. manifest.json / sw.js untuk PWA) tapi tidak dicopy -> 404 di produksi
 # walau file-nya ada di repo.
-COPY index.html api.js script.js script-2610291300.js script-2610291500.js script-2610291601.js script-2610291602.js script-2610291603.js script-2610301400.js style.css config.js monitor.html manifest.json sw-2610291300.js sw-2610291500.js sw-2610291601.js sw-2610291602.js sw-2610291603.js /app/frontend/
+COPY index.html api.js script.js script-2610291300.js script-2610291500.js script-2610291601.js script-2610291602.js script-2610291603.js script-2610301400.js script-2610301600.js style.css config.js monitor.html manifest.json sw-2610291300.js sw-2610291500.js sw-2610291601.js sw-2610291602.js sw-2610291603.js /app/frontend/
 COPY sw-2610291603.js /app/frontend/sw.js
 # Aset ikon (opsional, abaikan bila tidak ada -> pakai wildcard aman via shell)
 COPY icon.png icon-192.png apple-touch-icon.png /app/frontend/
