@@ -162,6 +162,15 @@ def _parse_date(v, default=None) -> Optional[str]:
     return default
 
 
+def _no_sort_key(r):
+    """Urutkan Nomor Urut secara numerik (1, 2, ..., 10) bukan teks (1, 10, 2)."""
+    s = str(getattr(r, "nomor_urut", "") or "").strip()
+    try:
+        return (0, int(s))
+    except Exception:
+        return (1, s)
+
+
 @router.get("/status")
 def status(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     total = db.query(models.DigitalSale).count()
@@ -295,7 +304,8 @@ def list_digital(
     db: Session = Depends(get_db),
     _: models.User = Depends(get_current_user),
 ):
-    rows = db.query(models.DigitalSale).order_by(models.DigitalSale.id.desc()).all()
+    rows = db.query(models.DigitalSale).all()
+    rows.sort(key=_no_sort_key)
     if dari:
         rows = [r for r in rows if (r.tanggal or "") >= dari]
     if sampai:
