@@ -3199,8 +3199,19 @@ async function renderLaporan(){
     try{ renderStokLaporan(); }catch(e){ console.warn('renderStokLaporan:', e); }
     try{ renderRekapKasir(dariF,sampaiF); }catch(e){ console.warn('renderRekapKasir:', e); }
     try{ renderRekapHarian(dariF,sampaiF,kasir); }catch(e){ console.warn('renderRekapHarian:', e); }
-    if($('lpSvcList')) $('lpSvcList').innerHTML=(r.service_diambil||[]).map(x=>'<tr><td>'+(esc(x.noService))+'<br><small>'+fmtTgl(x.tanggal)+'</small></td><td>'+(esc(x.nama))+'<br><small>'+esc(x.merk)+' '+esc(x.tipe)+'</small></td><td>'+(esc(x.teknisi)||'-')+'</td><td style="text-align:right"><b>'+fmtRp(x.biaya)+'</b></td></tr>').join('')||'<tr><td colspan="4">Belum ada</td></tr>';
-    if($('lpSvcPer')) $('lpSvcPer').innerHTML=Object.keys(r.service_per_status||{}).map(k=>'<tr><td>'+(esc(k))+'</td><td style="text-align:right">'+(r.service_per_status[k]||0)+'</td></tr>').join('');
+    const diambilList = Array.isArray(r.service_diambil) ? r.service_diambil : [];
+    if($('lpServiceCount')) $('lpServiceCount').textContent = r.service_masuk || 0;
+    if($('lpServiceBody')){
+      const per = r.service_per_status || {};
+      const keys = Object.keys(per);
+      $('lpServiceBody').innerHTML = keys.map(k=>'<tr><td>'+(esc(k))+'</td><td style="text-align:right">'+(per[k]||0)+'</td></tr>').join('') || '<tr><td colspan="2">Belum ada service.</td></tr>';
+    }
+    if($('lpDiambilCount')) $('lpDiambilCount').textContent = (r.service_selesai != null ? r.service_selesai : diambilList.length);
+    if($('lpDiambilBody')){
+      let diambilRows = diambilList.map(x=>'<tr><td><b>'+esc(x.noService||'-')+'</b><br><small class="muted">'+fmtTgl(x.tanggal)+'</small></td><td>'+esc(x.nama||'-')+'<br><small class="muted">'+esc(((x.merk||'')+' '+(x.tipe||'')).trim())+'</small></td><td>'+esc(x.kasir||'-')+'</td><td style="text-align:right"><b>'+fmtRp(x.biaya||0)+'</b></td></tr>');
+      if(diambilRows.length) diambilRows.push('<tr><td colspan="3" style="text-align:right"><b>Total masuk omzet</b></td><td style="text-align:right"><b>'+fmtRp(r.service_omzet||0)+'</b></td></tr>');
+      $('lpDiambilBody').innerHTML = diambilRows.join('') || '<tr><td colspan="4">Belum ada service yang sudah diambil pada periode ini.</td></tr>';
+    }
     if($('lpExpBody')) $('lpExpBody').innerHTML=(r.expense_list||[]).map(x=>'<tr><td>'+(esc(x.jenis||x.keterangan))+'<br><small>'+fmtTgl(x.tanggal)+'</small></td><td>'+(esc(x.dicatat_oleh||'-'))+'</td><td style="text-align:right"><b>'+(esc(fmtRp(x.jumlah)))+'</b></td></tr>').join('')||'<tr><td colspan="3">Belum ada</td></tr>';
     if($('lpIncBody')) $('lpIncBody').innerHTML=(r.income_list||[]).map(x=>'<tr><td>'+(esc(x.jenis||x.keterangan))+'<br><small>'+fmtTgl(x.tanggal)+'</small></td><td>'+(esc(x.dicatat_oleh||'-'))+'</td><td style="text-align:right"><b>'+(esc(fmtRp(x.jumlah)))+'</b></td></tr>').join('')||'<tr><td colspan="3">Belum ada</td></tr>';
   }catch(e){ console.error(e); }
