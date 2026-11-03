@@ -3198,11 +3198,10 @@ async function renderLaporan(){
     if($('lpJlSub')) $('lpJlSub').textContent=fmtRp(r.penjualan_subtotal||r.penjualan_omzet);
     if($('lpJlDisc')) $('lpJlDisc').textContent=fmtRp(r.penjualan_diskon||0);
     if($('lpJlHpp')) $('lpJlHpp').textContent=fmtRp(r.penjualan_hpp||0);
-    if($('lpJlCount')) {
-      const ld2=($('lp_dari')||{}).value||'';
-      const ls2=($('lp_sampai')||{}).value||'';
-      if(ld2||ls2){ let c=(r.penjualan_count||0)+(r.digital_count||0); $('lpJlCount').textContent=c; }
-      else $('lpJlCount').textContent=(r.penjualan_count||0)+(r.digital_count||0);
+    if($('lpJualCount')||$('lpJlCount')) {
+      const c=(r.penjualan_count||0)+(r.digital_count||0);
+      if($('lpJualCount')) $('lpJualCount').textContent=c;
+      if($('lpJlCount')) $('lpJlCount').textContent=c;
     }
     const jl=r._jualList||[];
     const ld3=($('lp_dari')||{}).value||'';
