@@ -206,6 +206,7 @@ const AKSES_DEF = {
   kasir_biaya_pendapatan: true,
   kasir_penjualan_tempo: true,
   kasir_laporan_penjualan_detail: true,
+  kasir_edit_service: true,
 };
 const AKSES_GRUP = [
   { judul: 'ADMIN', items: [
@@ -217,6 +218,7 @@ const AKSES_GRUP = [
     ['kasir_biaya_pendapatan', 'Izinkan mengakses menu Biaya dan Pendapatan?'],
     ['kasir_penjualan_tempo', 'Izinkan menambahkan penjualan tempo?'],
     ['kasir_laporan_penjualan_detail', 'Izinkan melihat laporan penjualan detail'],
+    ['kasir_edit_service', 'Izinkan mengedit data service'],
   ]},
 ];
 function normAkses(a){
@@ -1217,8 +1219,8 @@ function renderData(){
       <td><div class="act-btns">
         <button class="icon-btn" onclick="detail(${jsStr(x.id)})" title="Detail">👁</button>
         <button class="icon-btn" onclick="cetak(${jsStr(x.id)})" title="Nota">🖨</button>
-        ${isAdminUp() ? `<button class="icon-btn" onclick="edit(${jsStr(x.id)})" title="Edit">✏️</button>
-        <button class="icon-btn" onclick="hapus(${jsStr(x.id)})" title="Hapus">🗑</button>` : ``}
+        ${bolehAkses('kasir_edit_service') ? `<button class="icon-btn" onclick="edit(${jsStr(x.id)})" title="Edit">✏️</button>` : ``}
+        ${isAdminUp() ? `<button class="icon-btn" onclick="hapus(${jsStr(x.id)})" title="Hapus">🗑</button>` : ``}
         ${wa ? `<a class="icon-btn wa-btn" href="${wa}" target="_blank" rel="noopener" title="Chat WhatsApp ${esc(x.nama)}">💬</a>` : ``}
       </div></td></tr>`;
   }).join('');
@@ -1327,7 +1329,7 @@ window.detail=function(id){
   $('detailFoot').innerHTML=`
     <button class="btn ghost" onclick="cetak(${jsStr(x.id)})">🖨 Cetak Nota</button>
     ${waHref(x) ? `<button class="btn ghost" onclick="bukaWa(${jsStr(x.id)},'status')">💬 Chat WA</button>` : ``}
-    ${isAdminUp() ? `<button class="btn ghost" onclick="edit(${jsStr(x.id)})">✏️ Edit</button>` : ``}
+    ${bolehAkses('kasir_edit_service') ? `<button class="btn ghost" onclick="edit(${jsStr(x.id)})">✏️ Edit</button>` : ``}
     <button class="btn primary" onclick="saveStatus(${jsStr(x.id)})">Simpan Status</button>`;
   $('modalDetail').classList.remove('hidden');
 };
@@ -1388,9 +1390,9 @@ window.saveStatus=async function(id){
   if(normStatus(ns)==='Diambil'){ try{ tawarkanWaAmbil(id); }catch{} }
 };
 
-// ===== EDIT / HAPUS (Admin & Super Admin saja) =====
+// ===== EDIT / HAPUS (edit sesuai izin kasir; hapus khusus admin) =====
 window.edit=function(id){
-  if(!needAdmin()) return;
+  if(!bolehAkses('kasir_edit_service')){ toast('⛔ Hak akses edit service dimatikan'); return; }
   const x=DB.find(d=>d.id===id); if(!x) return; editId=id;
   $('modalDetail').classList.add('hidden');
   $('e_nama').value=x.nama; $('e_telp').value=x.telp; $('e_merk').value=x.merk; $('e_tipe').value=x.tipe;
@@ -1400,7 +1402,7 @@ window.edit=function(id){
   $('modalEdit').classList.remove('hidden');
 };
 $('btnSaveEdit').onclick=async ()=>{
-  if(!needAdmin()) return;
+  if(!bolehAkses('kasir_edit_service')){ toast('⛔ Hak akses edit service dimatikan'); return; }
   const payload={ nama:$('e_nama').value, telp:$('e_telp').value, merk:$('e_merk').value, tipe:$('e_tipe').value,
     keluhan:$('e_keluhan').value, biaya:Number($('e_biaya').value||0),
     teknisi:$('e_teknisi').value, catatan:$('e_catatan').value, status:$('e_status').value };
@@ -2922,6 +2924,10 @@ window.exHapus=async function(id){
   renderAll(); toast('Transaksi dihapus');
 };
 function bindExpenses(){
+  const today=new Date().toISOString().slice(0,10);
+  // Default riwayat Biaya/Pendapatan = HARI INI (bukan semua tanggal).
+  if($('ex_dari') && !$('ex_dari').value) $('ex_dari').value=today;
+  if($('ex_sampai') && !$('ex_sampai').value) $('ex_sampai').value=today;
   document.querySelectorAll('#exTabs .ltab').forEach(b=>b.onclick=()=>{
     setExTab(b.dataset.extab);
     try{ navSyncActive('pengeluaran', b.dataset.extab, 'biaya-pendapatan'); }catch{}
@@ -3957,6 +3963,11 @@ window.btScan=btScan; window.btConnect=btConnect; window.btDisconnect=btDisconne
 (function(){
   const byId = (id)=>document.getElementById(id);
   const digToast = (msg)=>{ try{ toast(msg); }catch(e){ try{ console.log(msg); }catch(_){} } };
+  const todayStr = new Date().toISOString().slice(0,10);
+  // Default Penjualan Digital = HARI INI (bukan semua tanggal).
+  { const dd=byId('digDari'), ds=byId('digSampai');
+    if(dd && !dd.value) dd.value=todayStr;
+    if(ds && !ds.value) ds.value=todayStr; }
   async function doDigSync(){
     if(!useBackend()){ digToast('Backend belum tersambung'); return; }
     const btn=byId('btnDigSync'); const old=btn?btn.textContent:'';
@@ -3981,7 +3992,7 @@ window.btScan=btScan; window.btConnect=btConnect; window.btDisconnect=btDisconne
   if(auto && !auto.dataset.digB){ auto.dataset.digB='1'; auto.addEventListener('click',()=>{ setAuto(!autoOn()); digToast(autoOn()?'⚡ Auto-sync aktif (5 menit)':'⏸ Auto-sync nonaktif'); }); }
   try{ setAuto(autoOn()); }catch(e){}
   const filter=byId('btnDigFilter'); if(filter && !filter.dataset.digB){ filter.dataset.digB='1'; filter.addEventListener('click',()=>renderDigitalSales()); }
-  const reset=byId('btnDigReset'); if(reset && !reset.dataset.digB){ reset.dataset.digB='1'; reset.addEventListener('click',()=>{ ['digSearch','digDari','digSampai'].forEach(id=>{ const el=byId(id); if(el) el.value=''; }); renderDigitalSales(); }); }
+  const reset=byId('btnDigReset'); if(reset && !reset.dataset.digB){ reset.dataset.digB='1'; reset.addEventListener('click',()=>{ const se=byId('digSearch'); if(se) se.value=''; const dd=byId('digDari'); if(dd) dd.value=todayStr; const ds=byId('digSampai'); if(ds) ds.value=todayStr; renderDigitalSales(); }); }
   const search=byId('digSearch'); if(search && !search.dataset.digB){ search.dataset.digB='1'; let t=null; search.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(()=>renderDigitalSales(),250); }); }
   const d1=byId('digDari'); if(d1 && !d1.dataset.digB){ d1.dataset.digB='1'; d1.addEventListener('change',()=>renderDigitalSales()); }
   const d2=byId('digSampai'); if(d2 && !d2.dataset.digB){ d2.dataset.digB='1'; d2.addEventListener('change',()=>renderDigitalSales()); }

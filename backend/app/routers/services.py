@@ -134,7 +134,14 @@ def get_service(service_id: int, db: Session = Depends(get_db), _: models.User =
 
 @router.put("/services/{service_id}", response_model=schemas.ServiceOut)
 def update_service(service_id: int, body: schemas.ServiceUpdateIn,
-                   db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
+                   db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    if user.role not in ("admin", "superadmin"):
+        if user.role != "kasir":
+            raise HTTPException(403, "Tidak berhak mengedit service")
+        setting = db.get(models.Setting, 1)
+        akses = (setting.akses or {}) if setting else {}
+        if akses.get("kasir_edit_service", True) is False:
+            raise HTTPException(403, "Hak akses edit service dimatikan")
     s = db.get(models.Service, service_id)
     if not s:
         raise HTTPException(404, "Data tidak ditemukan")
