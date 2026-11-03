@@ -3077,6 +3077,16 @@ function renderDigitalSales(){
   </tr>`).join('')||'';
 }
 
+function jualItemsHTML(x){
+  const items=Array.isArray(x.items)?x.items:[];
+  if(!items.length) return '<span class="muted">-</span>';
+  return items.map(it=>{
+    const nama=esc(it.nama||it.sku||'-');
+    const qty=Number(it.qty||0);
+    const sub=Number(it.subtotal!=null?it.subtotal:(Number(it.harga||0)*qty));
+    return '<div style="font-size:12px;line-height:1.35">'+nama+' <b>×'+esc(qty)+'</b> <small class="muted">'+fmtRp(sub)+'</small></div>';
+  }).join('');
+}
 async function renderLaporan(){
   if(!$('page-laporan').classList.contains('active')) return;
   show('lpLoading',true); hide('lpWrap');
@@ -3200,14 +3210,14 @@ async function renderLaporan(){
       if(ls3) jlArr=jlArr.filter(x=>String(x.tanggal||'').slice(0,10)<=ls3);
     }
     let jlRows=[];
-    jlArr.forEach(x=>jlRows.push('<tr><td><b>'+(esc(x.no_nota||x.noService||'-'))+'</b><br><small class="muted">'+fmtTgl(x.tanggal)+'</small></td><td>'+(esc(x.pelanggan||x.nama||'Umum'))+'</td><td>'+(esc(x.kasir||'-'))+'</td><td style="text-align:right"><b>'+fmtRp(x.total||x.biaya||0)+'</b></td></tr>'));
+    jlArr.forEach(x=>jlRows.push('<tr><td><b>'+(esc(x.no_nota||x.noService||'-'))+'</b><br><small class="muted">'+fmtTgl(x.tanggal)+'</small></td><td>'+(esc(x.pelanggan||x.nama||'Umum'))+'</td><td>'+(esc(x.kasir||'-'))+'</td><td>'+jualItemsHTML(x)+'</td><td style="text-align:right"><b>'+fmtRp(x.total||x.biaya||0)+'</b></td></tr>'));
     try{
       let dl=[...DIG_LIST];
       if(ld3) dl=dl.filter(x=>String(x.tanggal||'').slice(0,10)>=ld3);
       if(ls3) dl=dl.filter(x=>String(x.tanggal||'').slice(0,10)<=ls3);
-      dl.slice(0,500).forEach(x=>jlRows.push('<tr><td><b>DG-'+(esc(x.nomor_urut))+'</b><br><small class="muted">'+fmtTgl(x.tanggal)+'</small></td><td>Digital ('+(esc(x.kode))+')</td><td>Digital</td><td style="text-align:right"><b>'+fmtRp(x.harga_jual||0)+'</b></td></tr>'));
+      dl.slice(0,500).forEach(x=>jlRows.push('<tr><td><b>DG-'+(esc(x.nomor_urut))+'</b><br><small class="muted">'+fmtTgl(x.tanggal)+'</small></td><td>Digital ('+(esc(x.kode))+')</td><td>Digital</td><td><div style="font-size:12px;line-height:1.35">Digital '+(esc(x.kode))+((x.no_tujuan)?' <small class="muted">'+esc(x.no_tujuan)+'</small>':'')+'</div></td><td style="text-align:right"><b>'+fmtRp(x.harga_jual||0)+'</b></td></tr>'));
     }catch{}
-    if($('lpJualBody')) $('lpJualBody').innerHTML=jlRows.join('')||'<tr><td colspan="4">Belum ada penjualan pada periode ini.</td></tr>';
+    if($('lpJualBody')) $('lpJualBody').innerHTML=jlRows.join('')||'<tr><td colspan="5">Belum ada penjualan pada periode ini.</td></tr>';
     try{ renderStokLaporan(); }catch(e){ console.warn('renderStokLaporan:', e); }
     try{ renderRekapKasir(dariF,sampaiF); }catch(e){ console.warn('renderRekapKasir:', e); }
     try{ renderRekapHarian(dariF,sampaiF,kasir); }catch(e){ console.warn('renderRekapHarian:', e); }
