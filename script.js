@@ -3108,6 +3108,18 @@ function renderDigitalSales(){
   </tr>`).join('')||'';
 }
 
+function saleItemJenis(it){
+  try{
+    const sp=(typeof findSpare==='function'?findSpare(it.sparepart_id):null)
+      || (typeof SPARE!=='undefined'?(SPARE||[]).find(x=>it.sku && String(x.sku)===String(it.sku)):null);
+    if(sp && typeof spJenis==='function') return spJenis(sp);
+  }catch{}
+  const j=String((it&&it.jenis)||'').trim();
+  if(j) return j;
+  const k=String((it&&it.sku)||'').trim().toLowerCase();
+  if(k && typeof SPARE_JENIS!=='undefined' && SPARE_JENIS[k]) return SPARE_JENIS[k];
+  return 'Sparepart';
+}
 function jualItemsHTML(x){
   const items=Array.isArray(x.items)?x.items:[];
   if(!items.length) return '<span class="muted">-</span>';
@@ -3240,14 +3252,42 @@ async function renderLaporan(){
       if(ld3) jlArr=jlArr.filter(x=>String(x.tanggal||'').slice(0,10)>=ld3);
       if(ls3) jlArr=jlArr.filter(x=>String(x.tanggal||'').slice(0,10)<=ls3);
     }
+    const jualKat=(($('lp_jual_kat')||{}).value||'').trim();
+    const sumSub=arr=>arr.reduce((a,it)=>a+Number(it.subtotal!=null?it.subtotal:(Number(it.harga||0)*Number(it.qty||0))),0);
     let jlRows=[];
-    jlArr.forEach(x=>jlRows.push('<tr><td><b>'+(esc(x.no_nota||x.noService||'-'))+'</b><br><small class="muted">'+fmtTgl(x.tanggal)+'</small></td><td>'+(esc(x.pelanggan||x.nama||'Umum'))+'</td><td>'+(esc(x.kasir||'-'))+'</td><td>'+jualItemsHTML(x)+'</td><td style="text-align:right"><b>'+fmtRp(x.total||x.biaya||0)+'</b></td></tr>'));
+    let jualNota=0, jualOmzet=0, jualLaba=0;
+    if(jualKat && jualKat!=='Digital'){
+      jlArr.forEach(x=>{
+        const items=Array.isArray(x.items)?x.items:[];
+        const match=items.filter(it=>saleItemJenis(it)===jualKat);
+        if(!match.length) return;
+        const subAll=sumSub(items), subMatch=sumSub(match);
+        const ratio=subAll>0?(Number(x.total||x.biaya||0)/subAll):1;
+        const total=Math.round(subMatch*ratio);
+        const hpp=match.reduce((a,it)=>a+Number(it.hpp||0)*Number(it.qty||0),0);
+        jualNota++; jualOmzet+=total; jualLaba+=(total-hpp);
+        jlRows.push('<tr><td><b>'+(esc(x.no_nota||x.noService||'-'))+'</b><br><small class="muted">'+fmtTgl(x.tanggal)+'</small></td><td>'+(esc(x.pelanggan||x.nama||'Umum'))+'</td><td>'+(esc(x.kasir||'-'))+'</td><td>'+jualItemsHTML({items:match})+'</td><td style="text-align:right"><b>'+fmtRp(total)+'</b></td></tr>');
+      });
+    } else if(!jualKat){
+      jlArr.forEach(x=>jlRows.push('<tr><td><b>'+(esc(x.no_nota||x.noService||'-'))+'</b><br><small class="muted">'+fmtTgl(x.tanggal)+'</small></td><td>'+(esc(x.pelanggan||x.nama||'Umum'))+'</td><td>'+(esc(x.kasir||'-'))+'</td><td>'+jualItemsHTML(x)+'</td><td style="text-align:right"><b>'+fmtRp(x.total||x.biaya||0)+'</b></td></tr>'));
+    }
     try{
       let dl=[...DIG_LIST];
       if(ld3) dl=dl.filter(x=>String(x.tanggal||'').slice(0,10)>=ld3);
       if(ls3) dl=dl.filter(x=>String(x.tanggal||'').slice(0,10)<=ls3);
-      dl.slice(0,500).forEach(x=>jlRows.push('<tr><td><b>DG-'+(esc(x.nomor_urut))+'</b><br><small class="muted">'+fmtTgl(x.tanggal)+'</small></td><td>Digital ('+(esc(x.kode))+')</td><td>Digital</td><td><div style="font-size:12px;line-height:1.35">Digital '+(esc(x.kode))+((x.no_tujuan)?' <small class="muted">'+esc(x.no_tujuan)+'</small>':'')+'</div></td><td style="text-align:right"><b>'+fmtRp(x.harga_jual||0)+'</b></td></tr>'));
+      if(jualKat && jualKat!=='Digital') dl=[];
+      dl.slice(0,500).forEach(x=>{
+        jlRows.push('<tr><td><b>DG-'+(esc(x.nomor_urut))+'</b><br><small class="muted">'+fmtTgl(x.tanggal)+'</small></td><td>Digital ('+(esc(x.kode))+')</td><td>Digital</td><td><div style="font-size:12px;line-height:1.35">Digital '+(esc(x.kode))+((x.no_tujuan)?' <small class="muted">'+esc(x.no_tujuan)+'</small>':'')+'</div></td><td style="text-align:right"><b>'+fmtRp(x.harga_jual||0)+'</b></td></tr>');
+        if(jualKat==='Digital'){ jualNota++; const om=Number(x.harga_jual||0); jualOmzet+=om; jualLaba+=(Number(x.margin||0)||(om-Number(x.hpp||0))); }
+      });
     }catch{}
+    if(jualKat){
+      if($('lpJlNota')) $('lpJlNota').textContent=jualNota;
+      if($('lpJlOmzet')) $('lpJlOmzet').textContent=fmtRp(jualOmzet);
+      if($('lpJlLaba')) $('lpJlLaba').textContent=fmtRp(jualLaba);
+      if($('lpJualCount')) $('lpJualCount').textContent=jualNota;
+      if($('lpJlCount')) $('lpJlCount').textContent=jualNota;
+    }
     if($('lpJualBody')) $('lpJualBody').innerHTML=jlRows.join('')||'<tr><td colspan="5">Belum ada penjualan pada periode ini.</td></tr>';
     try{ renderStokLaporan(); }catch(e){ console.warn('renderStokLaporan:', e); }
     try{ renderRekapKasir(dariF,sampaiF); }catch(e){ console.warn('renderRekapKasir:', e); }
@@ -3445,7 +3485,8 @@ function bindLaporan(){
   if($('lp_dari')) $('lp_dari').onchange=renderLaporan;
   if($('lp_sampai')) $('lp_sampai').onchange=renderLaporan;
   if($('lp_kasir')) $('lp_kasir').onchange=()=>renderLaporan();
-  if($('lpResetKasir')) $('lpResetKasir').onclick=()=>{ if($('lp_kasir'))$('lp_kasir').value=''; renderLaporan(); toast('Filter kasir direset ↺'); };
+  if($('lp_jual_kat')) $('lp_jual_kat').onchange=()=>renderLaporan();
+  if($('lpResetKasir')) $('lpResetKasir').onclick=()=>{ if($('lp_kasir'))$('lp_kasir').value=''; if($('lp_jual_kat'))$('lp_jual_kat').value=''; renderLaporan(); toast('Filter direset ↺'); };
   if($('lb_jenis')) $('lb_jenis').onchange=()=>{ try{ renderLaporanBiaya(); }catch(e){} };
   if($('lb_search')) $('lb_search').addEventListener('input',()=>{ try{ renderLaporanBiaya(); }catch(e){} });
   // Filter jenis stok (Laporan > Stok Produk)
@@ -3460,11 +3501,13 @@ function bindLaporan(){
   // Handler tombol digital sudah dipasang oleh IIFE di bagian bawah.
   try{ syncLpFilterRows(NAVLTAB.laporan||'laba'); }catch{}
 }
-// Tab Stok Produk tidak butuh filter kasir -> tampilkan filter jenis di tempatnya.
+// Filter mengikuti tab: kasir umum, jenis stok di tab Stok, kategori di tab Penjualan.
 function syncLpFilterRows(name){
   const isStok=(name==='stok');
+  const isJual=(name==='jual');
   if($('lp_kasirRow')) $('lp_kasirRow').classList.toggle('hidden', isStok);
   if($('lp_jenisRow')) $('lp_jenisRow').classList.toggle('hidden', !isStok);
+  if($('lp_jualKatRow')) $('lp_jualKatRow').classList.toggle('hidden', !isJual);
 }
 window.gotoLtab=function(name){
   if(name==='laba' && !bolehAkses('kasir_lihat_laba')){ toast('⛔ Hak akses: Laba Rugi dimatikan'); return; }

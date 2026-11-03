@@ -651,7 +651,17 @@
         </div>
         <div class="row2" id="lp_kasirRow">
           <label>Kasir<select id="lp_kasir"></select></label>
-          <label>&nbsp;<button class="btn ghost" id="lpResetKasir" style="width:100%;justify-content:center">↺ Reset filter kasir</button></label>
+          <label>&nbsp;<button class="btn ghost" id="lpResetKasir" style="width:100%;justify-content:center">↺ Reset filter</button></label>
+        </div>
+        <div class="row2 hidden" id="lp_jualKatRow">
+          <label>Kategori Produk<select id="lp_jual_kat">
+            <option value="">Semua Kategori</option>
+            <option value="Sparepart">🔧 Sparepart</option>
+            <option value="Handphone">📱 Handphone</option>
+            <option value="Accessories">🎧 Accessories</option>
+            <option value="Digital">💳 Digital</option>
+          </select></label>
+          <label>&nbsp;</label>
         </div>
         <div class="row2 hidden" id="lp_jenisRow">
           <label>Jenis Stok<select id="lp_jenis" title="Filter jenis stok">
@@ -1142,7 +1152,7 @@
 
 <script src="config.js?v=2610291603"></script>
 <script src="api.js?v=2610291603"></script>
-<script src="script-2611031154.js?v=2611032127"></script>
+<script src="script-2611031154.js?v=2611032223"></script>
 <script>
 // Daftarkan Service Worker supaya aplikasi bisa dipasang (PWA) & cache shell.
 if('serviceWorker' in navigator && location.protocol !== 'file:'){
