@@ -1051,7 +1051,7 @@
       <div class="row2"><label>Jenis Produk *<select id="sp_jenis"></select></label><label>Merk<select id="sp_merk"></select></label></div>
       <div class="row2"><label>Kategori *<select id="sp_kategori"></select></label><label>Stok Minimum<input id="sp_min" type="number" min="0" value="0" /></label></div>
       <datalist id="spKategoriList"></datalist>
-      <div class="row3"><label>HPP (Rp)<input id="sp_hpp" type="number" min="0" value="0" /></label><label>Harga Jual (Rp)<input id="sp_jual" type="number" min="0" value="0" /></label><label>Jumlah Stok<input id="sp_stok" type="number" min="0" value="0" /></label></div>
+      <div class="row3"><label id="spHppLabel">HPP (Rp)<input id="sp_hpp" type="number" min="0" value="0" /></label><label>Harga Jual (Rp)<input id="sp_jual" type="number" min="0" value="0" /></label><label>Jumlah Stok<input id="sp_stok" type="number" min="0" value="0" /></label></div>
       <p class="muted" id="spMargin"></p>
     </div>
     <div class="modal-foot"><button type="button" class="btn ghost" id="btnCancelSpare" data-close>Batal</button><button type="button" class="btn primary" id="btnSaveSpare">Simpan</button></div>
@@ -1152,7 +1152,7 @@
 
 <script src="config.js?v=2610291603"></script>
 <script src="api.js?v=2610291603"></script>
-<script src="script-2611031154.js?v=2611032223"></script>
+<script src="script-2611031154.js?v=2611032241"></script>
 <script>
 // Daftarkan Service Worker supaya aplikasi bisa dipasang (PWA) & cache shell.
 if('serviceWorker' in navigator && location.protocol !== 'file:'){

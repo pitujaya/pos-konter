@@ -207,11 +207,17 @@ const AKSES_DEF = {
   kasir_penjualan_tempo: true,
   kasir_laporan_penjualan_detail: true,
   kasir_edit_service: true,
+  admin_lihat_hpp: true,
+  kasir_lihat_hpp: true,
+  admin_lihat_dashboard: true,
+  kasir_lihat_dashboard: true,
 };
 const AKSES_GRUP = [
   { judul: 'ADMIN', items: [
     ['admin_ubah_produk', 'Izinkan mengubah produk'],
     ['admin_hapus_penjualan', 'Izinkan menghapus penjualan'],
+    ['admin_lihat_hpp', 'Izinkan melihat harga HPP barang'],
+    ['admin_lihat_dashboard', 'Izinkan melihat dashboard'],
   ]},
   { judul: '2. KASIR', items: [
     ['kasir_lihat_laba', 'Izinkan melihat Laba Rugi?'],
@@ -219,6 +225,8 @@ const AKSES_GRUP = [
     ['kasir_penjualan_tempo', 'Izinkan menambahkan penjualan tempo?'],
     ['kasir_laporan_penjualan_detail', 'Izinkan melihat laporan penjualan detail'],
     ['kasir_edit_service', 'Izinkan mengedit data service'],
+    ['kasir_lihat_hpp', 'Izinkan melihat harga HPP barang'],
+    ['kasir_lihat_dashboard', 'Izinkan melihat dashboard'],
   ]},
 ];
 function normAkses(a){
@@ -238,6 +246,10 @@ function bolehAkses(key){
   if(String(key).startsWith('kasir_')) return role !== 'kasir' || aksesOn(key);
   return true;
 }
+// HPP & Dashboard: admin pakai izin admin_*, role lain (kasir) pakai kasir_*.
+// Super Admin selalu boleh.
+function bolehHpp(){ return myRole()==='admin' ? bolehAkses('admin_lihat_hpp') : bolehAkses('kasir_lihat_hpp'); }
+function bolehDashboard(){ return myRole()==='admin' ? bolehAkses('admin_lihat_dashboard') : bolehAkses('kasir_lihat_dashboard'); }
 let SET = loadSetting();
 SET.akses = normAkses(SET.akses);
 const LS_SLIDES = 'servishp_slides_v1';
@@ -788,6 +800,7 @@ function goto(page, filter){
   if(page==='pengaturan' && myRole()==='kasir'){ toast('⛔ Pengaturan khusus Admin / Super Admin'); return; }
   if(page==='pengguna' && !isSuperAdmin()){ toast('⛔ Kelola Pengguna khusus Super Admin'); return; }
   if(page==='pengeluaran' && !bolehAkses('kasir_biaya_pendapatan')){ toast('⛔ Hak akses: menu Biaya & Pendapatan dimatikan'); return; }
+  if(page==='dashboard' && !bolehDashboard()){ toast('⛔ Hak akses: dashboard dimatikan'); return; }
   try{ clearFocus(); }catch{}
   try{ clearFokusLaporan(); }catch{}
   try{ clearFokusProduk(); }catch{}
@@ -1650,6 +1663,13 @@ function applyAksesUI(){
   const bolehBiaya=!isKasir || aksesOn('kasir_biaya_pendapatan');
   const bolehLaba=!isKasir || aksesOn('kasir_lihat_laba');
   const bolehJual=!isKasir || aksesOn('kasir_laporan_penjualan_detail');
+  const bolehDash=bolehDashboard();
+  const hppOk=bolehHpp();
+  const hasSesi=!!getSession();
+  const grpDash=document.querySelector('.nav-group[data-group="dashboard"]');
+  if(grpDash) grpDash.classList.toggle('hidden', !bolehDash);
+  const lblHpp=$('spHppLabel'); if(lblHpp) lblHpp.style.display=hppOk?'':'none';
+  if(!hppOk && $('spMargin')) $('spMargin').textContent='';
   document.querySelectorAll('.nav-sub-btn[data-page="pengeluaran"]').forEach(b=>b.classList.toggle('hidden', !bolehBiaya));
   const grpBiaya=document.querySelector('.nav-group[data-group="biaya-pendapatan"]');
   if(grpBiaya) grpBiaya.classList.toggle('hidden', !bolehBiaya);
@@ -1665,12 +1685,13 @@ function applyAksesUI(){
     Array.prototype.forEach.call(sel.options,o=>{ if(o.value==='Tempo'){ o.hidden=!bolehTempo; o.disabled=!bolehTempo; } });
     if(!bolehTempo && sel.value==='Tempo') sel.value='Tunai';
   }
-  if(!bolehBiaya && $('page-pengeluaran') && $('page-pengeluaran').classList.contains('active')){ try{ goto('dashboard'); }catch(e){} }
+  if(hasSesi && !bolehBiaya && $('page-pengeluaran') && $('page-pengeluaran').classList.contains('active')){ try{ goto(bolehDash?'dashboard':'data'); }catch(e){} }
   if(isKasir){
     if(!bolehLaba && typeof curLtab!=='undefined' && curLtab==='laba'){ try{ gotoLtab('service'); }catch(e){} }
     if(!bolehJual && typeof curLtab!=='undefined' && curLtab==='jual'){ try{ gotoLtab('service'); }catch(e){} }
     if(!bolehBiaya && typeof curLtab!=='undefined' && curLtab==='biaya'){ try{ gotoLtab('service'); }catch(e){} }
   }
+  if(hasSesi && !bolehDash && $('page-dashboard') && $('page-dashboard').classList.contains('active')){ try{ goto('data'); }catch(e){} }
 }
 // Tandai form pengaturan "berubah" saat user mengetik, supaya render tidak menimpa.
 ['s_nama','s_alamat','s_telp','s_nota'].forEach(function(id){
@@ -2196,11 +2217,12 @@ function renderSpareparts(){
   else r.sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
   const low=pool.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).length;
   const nilai=pool.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0);
+  const hppOk=bolehHpp();
   // Label jenis aktif -> jelas sedang menampilkan kategori yang dipilih saja.
   const LABEL_JENIS={Sparepart:'🔧 Stok Sparepart', Accessories:'🎧 Stok Accessories', Handphone:'📱 Stok Handphone'};
   const labelJ=LABEL_JENIS[jenis]||jenis;
   if($('spTotal')) $('spTotal').textContent=pool.length;
-  if($('spNilai')) $('spNilai').textContent=fmtRp(nilai);
+  if($('spNilai')) $('spNilai').textContent=hppOk?fmtRp(nilai):'—';
   if($('spLow')) $('spLow').textContent=low;
   if($('spCount')) $('spCount').textContent=pool.length+' item';
   if($('spInfo')) $('spInfo').textContent = spLowOnly ? `• menampilkan ${r.length} stok menipis` : (low?`• ${low} stok menipis`:'' );
@@ -2221,12 +2243,13 @@ function renderSpareparts(){
   $('spTable').innerHTML=r.map(x=>{
     const isLow=Number(x.stok||0)<=Number(x.stok_min||0);
     const sid=esc(String(x.id));
+    const marginHtml=hppOk?`<br><small class="muted">Margin: ${esc(spMargin(x))}</small>`:'';
     return `<tr>
       <td><b>${esc(x.sku)}</b></td>
-      <td><b>${esc(x.nama)}</b><br><small class="muted">Margin: ${esc(spMargin(x))}</small></td>
+      <td><b>${esc(x.nama)}</b>${marginHtml}</td>
       <td>${esc(x.merk||'-')}</td>
       <td><span class="badge b-Dikerjakan">${esc(spKat(x))}</span></td>
-      <td>${fmtRp(x.hpp)}</td>
+      <td>${hppOk?fmtRp(x.hpp):'—'}</td>
       <td><b>${fmtRp(x.harga_jual)}</b></td>
       <td><b>${esc(x.stok)}</b><small class="muted"> / min ${esc(x.stok_min)}</small><br>${isLow?'<span class="badge b-Batal">Menipis</span>':'<span class="badge b-Selesai">Aman</span>'}</td>
       <td><div class="act-btns">
@@ -2371,6 +2394,7 @@ function downloadSpareTemplate(){
   })();
 }
 function updSpMargin(){
+  if(!bolehHpp()){ if($('spMargin')) $('spMargin').textContent=''; return; }
   const hpp=Number(($('sp_hpp')||{}).value||0), jual=Number(($('sp_jual')||{}).value||0);
   if($('spMargin')) $('spMargin').textContent = hpp>0 ? `Margin: ${fmtRp(jual-hpp)} (${(jual-hpp>=0?'+':'')+Math.round((jual-hpp)/hpp*100)}%)` : '';
 }
@@ -3093,6 +3117,7 @@ function renderDigitalSales(){
   if(ql) rows=rows.filter(x=>[x.nomor_urut,x.kode,x.no_tujuan].join(' ').toLowerCase().includes(ql));
   const omzet=rows.reduce((a,b)=>a+Number(b.harga_jual||0),0);
   const laba=rows.reduce((a,b)=>a+Number(b.margin||b.harga_jual-b.hpp||0),0);
+  const hppOk=bolehHpp();
   if($('digOmzet')) $('digOmzet').textContent=fmtRp(omzet);
   if($('digLaba')) $('digLaba').textContent=fmtRp(laba);
   if($('digCount')) $('digCount').textContent=rows.length;
@@ -3101,9 +3126,9 @@ function renderDigitalSales(){
     <td><b>${esc(x.nomor_urut)}</b></td>
     <td>${esc(x.kode)}</td>
     <td>${esc(x.no_tujuan)}</td>
-    <td>${fmtRp(x.hpp)}</td>
+    <td>${hppOk?fmtRp(x.hpp):'—'}</td>
     <td><b>${fmtRp(x.harga_jual)}</b></td>
-    <td style="color:var(--green)"><b>${fmtRp(x.margin)}</b></td>
+    <td style="color:var(--green)"><b>${hppOk?fmtRp(x.margin):'—'}</b></td>
     <td>${esc(x.tanggal||'-')}</td>
   </tr>`).join('')||'';
 }
@@ -3322,19 +3347,20 @@ function renderStokLaporan(){
   const stokHpp=sp.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0);
   const stokJual=sp.reduce((a,b)=>a+Number(b.harga_jual||0)*Number(b.stok||0),0);
   const stokLow=sp.filter(x=>Number(x.stok||0)<=Number(x.stok_min||0)).length;
+  const hppOk=bolehHpp();
   // Kartu statistik ikut filter supaya cocok dengan isi tabel.
   if($('lpStItem')) $('lpStItem').textContent=sp.length;
-  if($('lpStHpp')) $('lpStHpp').textContent=fmtRp(stokHpp);
+  if($('lpStHpp')) $('lpStHpp').textContent=hppOk?fmtRp(stokHpp):'—';
   if($('lpStJual')) $('lpStJual').textContent=fmtRp(stokJual);
   if($('lpStLow')) $('lpStLow').textContent=stokLow;
   if($('lpStokCount')) $('lpStokCount').textContent=sp.length;
   if($('lpStokBody')) $('lpStokBody').innerHTML=sp.map(x=>{ const low=Number(x.stok||0)<=Number(x.stok_min||0); return `<tr>
     <td><b>${esc(x.sku)}</b></td><td><b>${esc(x.nama)}</b><br><small class="muted">${esc(x.merk||'')} • ${esc(((x&&x.kategori)||'Lainnya'))}</small></td>
     <td><span class="badge b-Dikerjakan">${esc(spJenis(x))}</span></td>
-    <td>${fmtRp(x.hpp)}</td><td><b>${fmtRp(x.harga_jual)}</b></td>
+    <td>${hppOk?fmtRp(x.hpp):'—'}</td><td><b>${fmtRp(x.harga_jual)}</b></td>
     <td><b>${esc(x.stok)}</b><br>${low?'<span class="badge b-Batal">Menipis</span>':'<span class="badge b-Selesai">Aman</span>'}</td>
-    <td style="text-align:right"><b>${fmtRp(Number(x.hpp||0)*Number(x.stok||0))}</b></td></tr>`; }).join('')
-    + `<tr><td colspan="6"><b>Total nilai stok (HPP)${jenisF?(' • '+esc(jenisF)):''}</b> • ${esc(stokLow)} menipis</td><td style="text-align:right"><b>${fmtRp(stokHpp)}</b></td></tr>`;
+    <td style="text-align:right"><b>${hppOk?fmtRp(Number(x.hpp||0)*Number(x.stok||0)):'—'}</b></td></tr>`; }).join('')
+    + `<tr><td colspan="6"><b>Total nilai stok (HPP)${jenisF?(' • '+esc(jenisF)):''}</b> • ${esc(stokLow)} menipis</td><td style="text-align:right"><b>${hppOk?fmtRp(stokHpp):'—'}</b></td></tr>`;
   return sp;
 }
 // Rekap gabungan per kasir (dihitung dari data lokal yg sudah sync dari backend)
@@ -3523,6 +3549,7 @@ window.gotoLtab=function(name){
 };
 function exportLaporanCSV(){
   const r=LAPORAN_CACHE||computeReportLocal(...Object.values(lpRange()));
+  const hppOk=bolehHpp();
   const L=[];
   L.push('LAPORAN POS KONTER');
   L.push('Periode,'+(r.dari||'…')+' s/d '+(r.sampai||'…'));
@@ -3536,7 +3563,7 @@ function exportLaporanCSV(){
   L.push('Pendapatan penjualan,'+r.penjualan_omzet);
   L.push('Pendapatan lain ('+(r.income_count||0)+' transaksi),'+(r.income_total||0));
   L.push('Total pendapatan,'+r.total_pendapatan);
-  L.push('HPP barang terjual,'+r.penjualan_hpp);
+  if(hppOk) L.push('HPP barang terjual,'+r.penjualan_hpp);
   L.push('Laba penjualan,'+r.penjualan_laba);
   L.push('Pengeluaran/biaya ('+(r.expense_count||0)+' transaksi),'+(r.expense_total||0));
   L.push('Laba bersih (service + laba jual + pendapatan lain - biaya),'+r.total_laba);
@@ -3569,19 +3596,27 @@ function exportLaporanCSV(){
   }catch{}
   L.push('');
   L.push('STOK'+(lpJenis()?(' • '+lpJenis()):''));
-  L.push('SKU,Nama,Merk,Kategori,Jenis,HPP,Jual,Stok,Nilai HPP');
+  L.push('SKU,Nama,Merk,Kategori,Jenis'+(hppOk?',HPP':'')+',Jual,Stok'+(hppOk?',Nilai HPP':''));
   {
     const spAll=[...(typeof SPARE!=='undefined'?SPARE:[])].sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
     const jf=lpJenis();
     const spF=jf ? spAll.filter(x=>spJenis(x)===jf) : spAll;
-    spF.forEach(x=>L.push([x.sku,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.merk,'"'+String(((x&&x.kategori)||'Lainnya')).replace(/"/g,'""')+'"',spJenis(x),x.hpp,x.harga_jual,x.stok,Number(x.hpp||0)*Number(x.stok||0)].join(',')));
-    L.push(['TOTAL','','','','','','',spF.length,spF.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0)].join(','));
+    spF.forEach(x=>{
+      const row=[x.sku,'"'+String(x.nama||'').replace(/"/g,'""')+'"',x.merk,'"'+String(((x&&x.kategori)||'Lainnya')).replace(/"/g,'""')+'"',spJenis(x)];
+      if(hppOk) row.push(x.hpp);
+      row.push(x.harga_jual,x.stok);
+      if(hppOk) row.push(Number(x.hpp||0)*Number(x.stok||0));
+      L.push(row.join(','));
+    });
+    if(hppOk) L.push(['TOTAL','','','','','','',spF.length,spF.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0)].join(','));
+    else L.push(['TOTAL','','','','','',spF.length].join(','));
   }
   download('laporan-'+(r.dari||'semua')+'-sd-'+(r.sampai||'semua')+'.csv','\uFEFF'+L.join('\n'),'text/csv');
   toast('CSV laporan diunduh ⬇');
 }
 function printLaporan(){
   const r=LAPORAN_CACHE||computeReportLocal(...Object.values(lpRange()));
+  const hppOk=bolehHpp();
   const spAll=[...(typeof SPARE!=='undefined'?SPARE:[])].sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
   const jenisF=lpJenis();
   const sp=jenisF ? spAll.filter(x=>spJenis(x)===jenisF) : spAll;
@@ -3607,14 +3642,14 @@ function printLaporan(){
     Pendapatan penjualan: ${fmtRp(r.penjualan_omzet)} (${esc(r.penjualan_count)} nota)<br>
     Pendapatan lain: ${fmtRp(r.income_total||0)} (${esc(r.income_count||0)} transaksi)<br>
     <b>Total pendapatan: ${fmtRp(r.total_pendapatan)}</b><br>
-    HPP terjual: ${fmtRp(r.penjualan_hpp)}<br>
+    ${hppOk?'HPP terjual: '+fmtRp(r.penjualan_hpp)+'<br>':''}
     Pengeluaran: ${fmtRp(r.expense_total||0)} (${esc(r.expense_count||0)} transaksi)<br>
     <b>Laba bersih: ${fmtRp(r.total_laba)}</b></p>
     <hr>
     <p><b>Service per status:</b><br>${STATUS.map(s=>esc(s)+': '+esc((r.service_per_status||{})[s]||0)).join('<br>')}</p>
     ${harianHtml}
     <hr>
-    <p><b>Stok${jenisF?(' — '+esc(jenisF)):''}:</b> ${esc(sp.length)} item • Nilai HPP ${fmtRp(stokHpp)} • Nilai Jual ${fmtRp(stokJual)} • ${esc(stokLow)} menipis<br>
+    <p><b>Stok${jenisF?(' — '+esc(jenisF)):''}:</b> ${esc(sp.length)} item${hppOk?' • Nilai HPP '+fmtRp(stokHpp):''} • Nilai Jual ${fmtRp(stokJual)} • ${esc(stokLow)} menipis<br>
     ${sp.slice(0,60).map(x=>esc(x.sku)+' '+esc(x.nama)+' — stok '+esc(x.stok)).join('<br>')}${sp.length>60?'<br>... +'+(sp.length-60)+' item lain':''}</p>
   </div>`;
   window.print();
