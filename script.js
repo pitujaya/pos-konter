@@ -1136,10 +1136,12 @@ function filtered(){
 function renderAll(){ renderStats(); renderOmzetChart(); renderRecent(); renderData(); renderQueue(); renderSettingUI(); refreshPreview(); renderUsers(); renderHeadbar(); renderSlideManager(); renderSpareparts(); try{ renderSales(); }catch{} try{ renderExpenses(); }catch{} try{ renderLaporan(); }catch{} try{ renderKasUI(); }catch{} }
 
 function renderStats(){
-  // Dashboard = akumulasi bulan berjalan (mulai tanggal 1), bukan semua waktu.
-  const now=new Date(), pad=n=>String(n).padStart(2,'0');
-  const dari=`${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
-  const sampai=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  // Dashboard mengikuti bulan yang dipilih pada grafik Performa Penjualan.
+  const pad=n=>String(n).padStart(2,'0');
+  const cur=omzetCursor();
+  const dari=`${cur.y}-${pad(cur.m+1)}-01`;
+  const sampai=`${cur.y}-${pad(cur.m+1)}-${pad(new Date(cur.y, cur.m+1, 0).getDate())}`;
+  if($('dashSub')) $('dashSub').textContent='Ringkasan operasional '+bulanLabel(cur.y, cur.m);
   const day=DB.filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
   const c=(s)=>day.filter(x=>normStatus(x.status)===s).length;
   $('stTotal').textContent=day.length;
@@ -1147,13 +1149,10 @@ function renderStats(){
   $('stProses').textContent=c('Selesai');
   $('stSelesai').textContent=c('Diambil');
   if($('stCancel')) $('stCancel').textContent=c('Cancel');
-  // Omzet hanya dari service yang SUDAH DIAMBIL (bulan berjalan)
+  // Omzet hanya dari service yang SUDAH DIAMBIL (bulan terpilih)
   $('stOmzet').textContent=fmtRp(day.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
-  // Ringkasan Penjualan Digital (bulan ini)
+  // Ringkasan Penjualan Digital (bulan terpilih)
   try{
-    const now=new Date(), pad=n=>String(n).padStart(2,'0');
-    const dari=`${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
-    const sampai=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
     let dl = Array.isArray(DIG_LIST)?DIG_LIST:[];
     dl = dl.filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
     $('stDigCount').textContent = dl.reduce((a,b)=>a+1,0);
@@ -1162,11 +1161,8 @@ function renderStats(){
     if($('stDigOmzet')) $('stDigOmzet').textContent=fmtRp(digOm);
     if($('stDigLaba')) $('stDigLaba').textContent=fmtRp(digLb);
   }catch{}
-  // Ringkasan Penjualan Barang
+  // Ringkasan Penjualan Barang (bulan terpilih)
   try{
-    const now=new Date(), pad=n=>String(n).padStart(2,'0');
-    const dari=`${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
-    const sampai=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
     const jual = (typeof SALES!=='undefined'?SALES:[]).filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
     let unit=0;
     jual.forEach(s=>{
@@ -3585,7 +3581,7 @@ try{ bindLaporan(); }catch{}
 try{
   if($('btnOmPrev')) $('btnOmPrev').onclick=()=>omzetGeser(-1);
   if($('btnOmNext')) $('btnOmNext').onclick=()=>omzetGeser(1);
-  if($('btnOmNow')) $('btnOmNow').onclick=()=>{ omzetY=null; omzetM=null; renderOmzetChart(); };
+  if($('btnOmNow')) $('btnOmNow').onclick=()=>{ omzetY=null; omzetM=null; renderOmzetChart(); renderStats(); };
   let omzetRsz;
   window.addEventListener('resize', ()=>{ clearTimeout(omzetRsz); omzetRsz=setTimeout(renderOmzetChart,150); });
 }catch{}
@@ -3684,6 +3680,7 @@ function omzetGeser(k){
   if(d.getFullYear()>now.getFullYear()||(d.getFullYear()===now.getFullYear()&&d.getMonth()>now.getMonth())) return;
   omzetY=d.getFullYear(); omzetM=d.getMonth();
   renderOmzetChart();
+  renderStats();
 }
 
 // init (dengan guard login + auto backend)
