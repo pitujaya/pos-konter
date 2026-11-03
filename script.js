@@ -1144,6 +1144,7 @@ function renderStats(){
   $('stAntri').textContent=c('Dikerjakan');
   $('stProses').textContent=c('Selesai');
   $('stSelesai').textContent=c('Diambil');
+  if($('stCancel')) $('stCancel').textContent=c('Cancel');
   // Omzet hanya dari service yang SUDAH DIAMBIL (bulan berjalan)
   $('stOmzet').textContent=fmtRp(day.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
   // Ringkasan Penjualan Digital (bulan ini)

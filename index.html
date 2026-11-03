@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="ServisHP Pro" />
 <meta name="mobile-web-app-capable" content="yes" />
 <title>ServisHP Pro - Management Service HP</title>
-<link rel="stylesheet" href="style.css?v=2610301600" />
+<link rel="stylesheet" href="style.css?v=2611031501" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -218,6 +218,7 @@
           <div class="stat linkable" onclick="goto('data','Dikerjakan')" title="Lihat yg Dikerjakan"><div class="stat-icon purple">🔧</div><div><small>Dikerjakan</small><h3 id="stAntri">0</h3></div></div>
           <div class="stat linkable" onclick="goto('data','Selesai')" title="Lihat yg Selesai"><div class="stat-icon yellow">⏳</div><div><small>Selesai</small><h3 id="stProses">0</h3></div></div>
           <div class="stat linkable" onclick="goto('data','Diambil')" title="Lihat yg Diambil"><div class="stat-icon green">✅</div><div><small>Diambil</small><h3 id="stSelesai">0</h3></div></div>
+          <div class="stat linkable" onclick="goto('data','Cancel')" title="Lihat yg Cancel"><div class="stat-icon red">❌</div><div><small>Cancel</small><h3 id="stCancel">0</h3></div></div>
           <div class="stat money linkable" onclick="goto('laporan')" title="Lihat laporan"><div class="stat-icon money-i">💰</div><div><small>Omzet Service (Diambil)</small><h3 id="stOmzet">Rp 0</h3></div></div>
         </div>
       </div>
@@ -1139,7 +1140,7 @@
 
 <script src="config.js?v=2610291603"></script>
 <script src="api.js?v=2610291603"></script>
-<script src="script-2611031154.js?v=2611031415"></script>
+<script src="script-2611031154.js?v=2611031501"></script>
 <script>
 // Daftarkan Service Worker supaya aplikasi bisa dipasang (PWA) & cache shell.
 if('serviceWorker' in navigator && location.protocol !== 'file:'){
