@@ -1661,6 +1661,8 @@ function applyAksesUI(){
   document.querySelectorAll('[data-ltab="jual"]').forEach(b=>b.classList.toggle('hidden', !bolehJual));
   const pLaba=$('ltab-laba'); if(pLaba) pLaba.classList.toggle('hidden', !bolehLaba);
   const pJual=$('ltab-jual'); if(pJual) pJual.classList.toggle('hidden', !bolehJual);
+  document.querySelectorAll('[data-ltab="biaya"]').forEach(b=>b.classList.toggle('hidden', !bolehBiaya));
+  const pBiaya=$('ltab-biaya'); if(pBiaya) pBiaya.classList.toggle('hidden', !bolehBiaya);
   const sel=$('j_metode');
   if(sel){
     const bolehTempo=!isKasir || aksesOn('kasir_penjualan_tempo');
@@ -1671,6 +1673,7 @@ function applyAksesUI(){
   if(isKasir){
     if(!bolehLaba && typeof curLtab!=='undefined' && curLtab==='laba'){ try{ gotoLtab('service'); }catch(e){} }
     if(!bolehJual && typeof curLtab!=='undefined' && curLtab==='jual'){ try{ gotoLtab('service'); }catch(e){} }
+    if(!bolehBiaya && typeof curLtab!=='undefined' && curLtab==='biaya'){ try{ gotoLtab('service'); }catch(e){} }
   }
 }
 // Tandai form pengaturan "berubah" saat user mengetik, supaya render tidak menimpa.
@@ -2855,6 +2858,33 @@ function renderExpenses(){
     <td style="text-align:right"><b style="${inc?'color:#16a34a':''}">${inc?'+':'−'}${fmtRp(x.jumlah)}</b></td>
     <td><div class="act-btns">${admin?`<button class="icon-btn" onclick="exEdit(${jsStr(x.id)})" title="Edit">✏️</button><button class="icon-btn" onclick="exHapus(${jsStr(x.id)})" title="Hapus">🗑</button>`:'<small class="muted">—</small>'}</div></td></tr>`; }).join('');
 }
+function renderLaporanBiaya(){
+  const body=$('lbTable'); if(!body) return;
+  const {dari,sampai,kasir}=lpRange();
+  const jenis=(($('lb_jenis')||{}).value||'').trim();
+  const q=(($('lb_search')||{}).value||'').toLowerCase().trim();
+  let rows=[...EXPENSES];
+  if(dari||sampai) rows=rows.filter(x=>inPeriode(x.tanggal||'',dari,sampai));
+  if(kasir) rows=rows.filter(x=>matchKasir(x.dicatat_oleh,kasir));
+  if(jenis) rows=rows.filter(x=>exJenis(x)===jenis);
+  if(q) rows=rows.filter(x=>[(x.kategori||''),(x.keterangan||''),(x.dicatat_oleh||''),exJenis(x)].join(' ').toLowerCase().includes(q));
+  rows.sort((a,b)=>String(b.tanggal||'').localeCompare(String(a.tanggal||'')) || (b.id||0)-(a.id||0));
+  const sum=a=>a.reduce((t,x)=>t+Number(x.jumlah||0),0);
+  const biaya=sum(rows.filter(x=>exJenis(x)==='biaya'));
+  const income=sum(rows.filter(x=>exJenis(x)==='pendapatan'));
+  if($('lbBiaya')) $('lbBiaya').textContent=fmtRp(biaya);
+  if($('lbIncome')) $('lbIncome').textContent=fmtRp(income);
+  if($('lbSaldo')) $('lbSaldo').textContent=fmtRp(income-biaya);
+  if($('lbCount')) $('lbCount').textContent=rows.length;
+  if($('lbInfo')) $('lbInfo').textContent=(dari||sampai)?((dari||'…')+' s/d '+(sampai||'…')):'Semua periode';
+  const admin=isAdminUp();
+  body.innerHTML=rows.slice(0,500).map(x=>{ const inc=exJenis(x)==='pendapatan'; return `<tr>
+    <td><b>${fmtTgl(x.tanggal)}</b><br><small class="muted">${esc(x.dicatat_oleh||'-')}</small></td>
+    <td><b style="${inc?'color:#16a34a':''}">${inc?'💰 Pendapatan':'💸 Biaya'}</b> • ${esc(x.kategori||'Lainnya')}<br><small class="muted">${esc(x.keterangan||'-')}</small></td>
+    <td style="text-align:right"><b style="${inc?'color:#16a34a':''}">${inc?'+':'−'}${fmtRp(x.jumlah)}</b></td>
+    <td><div class="act-btns">${admin?`<button class="icon-btn" onclick="exEdit(${jsStr(x.id)})" title="Edit">✏️</button><button class="icon-btn" onclick="exHapus(${jsStr(x.id)})" title="Hapus">🗑</button>`:'<small class="muted">—</small>'}</div></td>
+  </tr>`;}).join('') || '<tr><td colspan="4">Belum ada biaya atau pendapatan lain pada periode ini.</td></tr>';
+}
 function setExTab(name){
   exTab = name==='pendapatan' ? 'pendapatan' : 'biaya';
   const isB = exTab==='biaya';
@@ -2925,9 +2955,8 @@ window.exHapus=async function(id){
 };
 function bindExpenses(){
   const today=new Date().toISOString().slice(0,10);
-  // Default riwayat Biaya/Pendapatan = HARI INI (bukan semua tanggal).
-  if($('ex_dari') && !$('ex_dari').value) $('ex_dari').value=today;
-  if($('ex_sampai') && !$('ex_sampai').value) $('ex_sampai').value=today;
+  if($('ex_tanggal') && !$('ex_tanggal').value) $('ex_tanggal').value=today;
+  if($('in_tanggal') && !$('in_tanggal').value) $('in_tanggal').value=today;
   document.querySelectorAll('#exTabs .ltab').forEach(b=>b.onclick=()=>{
     setExTab(b.dataset.extab);
     try{ navSyncActive('pengeluaran', b.dataset.extab, 'biaya-pendapatan'); }catch{}
@@ -3227,6 +3256,7 @@ async function renderLaporan(){
     try{ renderStokLaporan(); }catch(e){ console.warn('renderStokLaporan:', e); }
     try{ renderRekapKasir(dariF,sampaiF); }catch(e){ console.warn('renderRekapKasir:', e); }
     try{ renderRekapHarian(dariF,sampaiF,kasir); }catch(e){ console.warn('renderRekapHarian:', e); }
+    try{ renderLaporanBiaya(); }catch(e){ console.warn('renderLaporanBiaya:', e); }
     const diambilList = Array.isArray(r.service_diambil) ? r.service_diambil : [];
     if($('lpServiceCount')) $('lpServiceCount').textContent = r.service_masuk || 0;
     if($('lpServiceBody')){
@@ -3420,6 +3450,8 @@ function bindLaporan(){
   if($('lp_sampai')) $('lp_sampai').onchange=renderLaporan;
   if($('lp_kasir')) $('lp_kasir').onchange=()=>renderLaporan();
   if($('lpResetKasir')) $('lpResetKasir').onclick=()=>{ if($('lp_kasir'))$('lp_kasir').value=''; renderLaporan(); toast('Filter kasir direset ↺'); };
+  if($('lb_jenis')) $('lb_jenis').onchange=()=>{ try{ renderLaporanBiaya(); }catch(e){} };
+  if($('lb_search')) $('lb_search').addEventListener('input',()=>{ try{ renderLaporanBiaya(); }catch(e){} });
   // Filter jenis stok (Laporan > Stok Produk)
   if($('lp_jenis')){
     $('lp_jenis').value=lpJenis();
@@ -3441,11 +3473,13 @@ function syncLpFilterRows(name){
 window.gotoLtab=function(name){
   if(name==='laba' && !bolehAkses('kasir_lihat_laba')){ toast('⛔ Hak akses: Laba Rugi dimatikan'); return; }
   if(name==='jual' && !bolehAkses('kasir_laporan_penjualan_detail')){ toast('⛔ Hak akses: laporan penjualan dimatikan'); return; }
+  if(name==='biaya' && !bolehAkses('kasir_biaya_pendapatan')){ toast('⛔ Hak akses: menu Biaya & Pendapatan dimatikan'); return; }
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.ltab===name));
   document.querySelectorAll('.ltab-pane').forEach(p=>p.classList.toggle('active', p.id==='ltab-'+name));
   curLtab=name;
   NAVLTAB.laporan=name;
   try{ syncLpFilterRows(name); }catch{}
+  if(name==='biaya'){ try{ renderLaporanBiaya(); }catch(e){} }
   try{ navSyncActive('laporan', name, 'laporan'); }catch{}
 };
 function exportLaporanCSV(){
