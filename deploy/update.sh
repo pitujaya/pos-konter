@@ -81,7 +81,20 @@ else
   echo "    Update tersedia: ${LOCAL:0:7} -> ${REMOTE:0:7}"
   # Amankan perubahan lokal tak disengaja (selain file penting), lalu pull
   git stash push -m "auto-update-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
-  git pull --ff-only origin "$BRANCH"
+  AHEAD="$(git rev-list --count "origin/$BRANCH..HEAD" 2>/dev/null || echo 0)"
+  if [[ "$AHEAD" -gt 0 ]]; then
+    # Server punya commit lokal (biasanya "chore: bump asset version" dari
+    # auto-update cron). Rebase dulu; kalau bentrok, reset ke upstream karena
+    # commit bump itu memang dibuang dan diulang di step cache busting.
+    echo "    Ada $AHEAD commit lokal, rebase ke origin/$BRANCH..."
+    if ! git pull --rebase origin "$BRANCH"; then
+      echo "    WARN: rebase gagal, reset ke origin/$BRANCH (bump versi diulang)."
+      git rebase --abort 2>/dev/null || true
+      git reset --hard "origin/$BRANCH"
+    fi
+  else
+    git pull --ff-only origin "$BRANCH"
+  fi
   echo "    Kode terbaru: $(git log --oneline -1)"
 fi
 chmod +x deploy/*.sh 2>/dev/null || true
