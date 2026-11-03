@@ -3405,9 +3405,9 @@ function bindLaporan(){
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.onclick=()=>gotoLtab(b.dataset.ltab));
   const setD=(d,s)=>{ if($('lp_dari'))$('lp_dari').value=d; if($('lp_sampai'))$('lp_sampai').value=s; renderLaporan(); };
   const today=new Date().toISOString().slice(0,10);
-  // Default laporan = SEMUA periode agar data lama langsung terlihat.
-  if($('lp_dari') && !$('lp_dari').value) $('lp_dari').value='';
-  if($('lp_sampai') && !$('lp_sampai').value) $('lp_sampai').value='';
+  // Default laporan = HARI INI (bukan semua periode).
+  if($('lp_dari') && !$('lp_dari').value) $('lp_dari').value=today;
+  if($('lp_sampai') && !$('lp_sampai').value) $('lp_sampai').value=today;
   if($('lpToday')) $('lpToday').onclick=()=>setD(today,today);
   if($('lp7')) $('lp7').onclick=()=>setD(new Date(Date.now()-6*864e5).toISOString().slice(0,10),today);
   if($('lp30')) $('lp30').onclick=()=>setD(new Date(Date.now()-29*864e5).toISOString().slice(0,10),today);
