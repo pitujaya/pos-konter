@@ -202,35 +202,21 @@ let DB = loadData();
 const AKSES_DEF = {
   admin_ubah_produk: true,
   admin_hapus_penjualan: true,
-  admin_hapus_pembelian: true,
-  kasir_ganti_harga: true,
   kasir_lihat_laba: true,
-  kasir_diskon: true,
   kasir_biaya_pendapatan: true,
-  kasir_pelanggan_baru: true,
   kasir_penjualan_tempo: true,
-  kasir_saldo_kipa: true,
-  kasir_detail_produk: true,
   kasir_laporan_penjualan_detail: true,
-  kasir_laporan_per_produk: true,
 };
 const AKSES_GRUP = [
   { judul: 'ADMIN', items: [
     ['admin_ubah_produk', 'Izinkan mengubah produk'],
     ['admin_hapus_penjualan', 'Izinkan menghapus penjualan'],
-    ['admin_hapus_pembelian', 'Izinkan menghapus pembelian'],
   ]},
   { judul: '2. KASIR', items: [
-    ['kasir_ganti_harga', 'Izinkan mengganti harga produk di penjualan?'],
     ['kasir_lihat_laba', 'Izinkan melihat Laba Rugi?'],
-    ['kasir_diskon', 'Izinkan menambahkan diskon penjualan?'],
     ['kasir_biaya_pendapatan', 'Izinkan mengakses menu Biaya dan Pendapatan?'],
-    ['kasir_pelanggan_baru', 'Izinkan menambahkan pelanggan baru?'],
     ['kasir_penjualan_tempo', 'Izinkan menambahkan penjualan tempo?'],
-    ['kasir_saldo_kipa', 'Izinkan melihat riwayat penggunaan Saldo Kipa?'],
-    ['kasir_detail_produk', 'Izinkan melihat detail produk?'],
     ['kasir_laporan_penjualan_detail', 'Izinkan melihat laporan penjualan detail'],
-    ['kasir_laporan_per_produk', 'Izinkan melihat laporan penjualan per produk'],
   ]},
 ];
 function normAkses(a){
