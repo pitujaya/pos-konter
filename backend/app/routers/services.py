@@ -48,6 +48,7 @@ def to_out(s: models.Service) -> dict:
         "metode_bayar": getattr(s, "metode_bayar", "tunai") or "tunai",
         "wa_terkirim_at": (s.wa_terkirim_at.isoformat() if getattr(s, "wa_terkirim_at", None) else ""),
         "wa_terkirim_oleh": getattr(s, "wa_terkirim_oleh", "") or "",
+        "created_at": (s.created_at.isoformat() if getattr(s, "created_at", None) else ""),
         "riwayat": [{"t": (x.created_at.isoformat() if x.created_at else ""), "s": x.status} for x in h],
     }
 

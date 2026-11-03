@@ -140,6 +140,7 @@ class ServiceOut(BaseModel):
     # ISO string ("" = belum dikirim notifikasi WA)
     wa_terkirim_at: str = ""
     wa_terkirim_oleh: str = ""
+    created_at: str = ""
     riwayat: list[dict] = []
 
     model_config = {"from_attributes": False}
@@ -280,6 +281,7 @@ class SaleOut(BaseModel):
     metode: str = "Tunai"
     catatan: str = ""
     kasir: str = ""
+    created_at: str = ""
     items: list[SaleItemOut] = []
 
     model_config = {"from_attributes": False}

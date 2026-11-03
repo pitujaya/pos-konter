@@ -44,6 +44,7 @@ def _sale_to_out(s: models.Sale) -> dict:
         "total": s.total or 0, "hpp_total": s.hpp_total or 0, "laba": s.laba or 0,
         "metode": s.metode or "Tunai", "catatan": s.catatan or "",
         "kasir": s.kasir or "",
+        "created_at": (s.created_at.isoformat() if getattr(s, "created_at", None) else ""),
         "items": [
             {"sparepart_id": i.sparepart_id, "sku": i.sku or "", "nama": i.nama or "",
              "hpp": i.hpp or 0, "harga": i.harga or 0, "qty": i.qty or 0,

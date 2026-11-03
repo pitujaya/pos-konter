@@ -74,9 +74,9 @@ function build() {
     ${extract('renderStokLaporan')}
     return {lpJenis, lpSetJenis, renderStokLaporan};
   `;
-  return new Function('SPARE', '$', 'esc', 'fmtRp', 'localStorage', code)(
+  return new Function('SPARE', '$', 'esc', 'fmtRp', 'localStorage', 'bolehHpp', code)(
     SPARE, (id) => els[id] || null, (s) => String(s ?? ''),
-    (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID'), localStorage);
+    (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID'), localStorage, () => true);
 }
 
 console.log('=== 1. Dropdown filter jenis ada di HTML ===');
@@ -139,7 +139,7 @@ ok('setelah reload: tabel 2 item', els.lpStokCount.textContent === 2, String(els
 
 console.log('=== 4. CSV & cetak ikut filter ===');
 ok('CSV pakai lpJenis()', /L\.push\('STOK'\+\(lpJenis\(\)/.test(js));
-ok('CSV punya kolom Jenis', /'SKU,Nama,Merk,Kategori,Jenis,HPP,Jual,Stok,Nilai HPP'/.test(js));
+ok('CSV punya kolom Jenis', /'SKU,Nama,Merk,Kategori,Jenis'/.test(js));
 ok('cetak pakai filter jenis', /const jenisF=lpJenis\(\);/.test(js) && /Stok\$\{jenisF\?/.test(js));
 
 console.log('\n=== RINGKASAN ===');

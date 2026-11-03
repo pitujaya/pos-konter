@@ -411,6 +411,31 @@ function kasOpenLocal(){
   return loadKasLocal().find(x => x.status === 'open' && (String(x.user_id) === String(me.id) || x.kasir === me.nama)) || null;
 }
 function kasSesiAktif(){ return !!(KAS && KAS.status === 'open'); }
+// ===== Dashboard per sesi kasir (khusus role kasir) =====
+function dashNormKasir(s){ return String(s||'').trim().split(/\s+/).join(' ').toLowerCase(); }
+function dashboardSesi(){
+  if(myRole() !== 'kasir') return null;
+  const open = kasSesiAktif();
+  return {
+    open,
+    t0: open ? parseTs(KAS.opened_at) : 0,
+    t1: open ? Date.now() + 2*60*1000 : 0,
+    kasir: open ? dashNormKasir(KAS.kasir || '') : '',
+  };
+}
+function dalamSesi(t, sesi){ return !!(sesi && sesi.open && t >= sesi.t0 && t <= sesi.t1); }
+function tsServiceCreated(x){
+  if(x && x.created_at){ const t=parseTs(x.created_at); if(t) return t; }
+  const list = Array.isArray(x && x.riwayat) ? x.riwayat : [];
+  let min = 0;
+  list.forEach(r=>{ const t=parseTs(r && r.t); if(t && (!min || t<min)) min=t; });
+  return min || tsRecord(x);
+}
+function tsServiceStatus(x, status){
+  const list = Array.isArray(x && x.riwayat) ? x.riwayat : [];
+  for(let i=list.length-1; i>=0; i--){ if(list[i] && list[i].s === status){ const t=parseTs(list[i].t); if(t) return t; } }
+  return 0;
+}
 
 async function syncSesi(){
   try{
@@ -426,6 +451,7 @@ async function syncSesi(){
     KAS = kasOpenLocal();
   }
   renderKasUI();
+  try{ renderStats(); renderOmzetChart(); }catch(e){}
   return KAS;
 }
 
@@ -604,6 +630,7 @@ async function kasBuka(){
   if($('kas_catatan')) $('kas_catatan').value = '';
   $('modalKasBuka').classList.add('hidden');
   renderKasUI();
+  try{ renderStats(); renderOmzetChart(); }catch(e){}
   toast('🔓 Sesi kasir dibuka • kas awal ' + fmtRp(modalAwal));
 }
 
@@ -638,6 +665,7 @@ async function kasTutup(){
   KAS = null;
   $('modalKasTutup').classList.add('hidden');
   renderKasUI();
+  try{ renderStats(); renderOmzetChart(); }catch(e){}
   const sel2 = Number((hasil && hasil.selisih) || 0);
   toast('🔒 Sesi ditutup • selisih ' + fmtRp(sel2) + (sel2 === 0 ? ' cocok ✅' : ' ⚠️ perhatian'));
 }
@@ -824,7 +852,7 @@ function goto(page, filter){
     }
     if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); }
   }
-  if(page==='dashboard'){ try{ renderOmzetChart(); }catch{} if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); try{ DIG_SYNCED=false; loadDigitalSales(false,true); }catch{} } }
+  if(page==='dashboard'){ if(myRole()==='kasir' && !kasSesiAktif()){ try{ syncSesi(); }catch(e){} } try{ renderOmzetChart(); }catch{} if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); try{ DIG_SYNCED=false; loadDigitalSales(false,true); }catch{} } }
   if(page==='produk'){ try{ renderSpareparts(); }catch{} if(useBackend()){ pullSpareparts().then(()=>{ renderAll(); }).catch(()=>{}); } }
   if(page==='penjualan'){ try{ renderSales(); }catch{} if(useBackend()){ pullSales().then(()=>{ try{renderSales();}catch{} }).catch(()=>{}); } }
   if(page==='pengeluaran'){ try{ renderExpenses(); }catch{} if(useBackend()){ pullExpenses().then(()=>{ try{renderExpenses();}catch{} try{renderLaporan();}catch{} }).catch(()=>{}); } }
@@ -1149,34 +1177,52 @@ function filtered(){
 function renderAll(){ renderStats(); renderOmzetChart(); renderRecent(); renderData(); renderQueue(); renderSettingUI(); refreshPreview(); renderUsers(); renderHeadbar(); renderSlideManager(); renderSpareparts(); try{ renderSales(); }catch{} try{ renderExpenses(); }catch{} try{ renderLaporan(); }catch{} try{ renderKasUI(); }catch{} }
 
 function renderStats(){
-  // Dashboard mengikuti bulan yang dipilih pada grafik Performa Penjualan.
+  // Kasir: dashboard mengikuti sesi kas aktif (input sesi ini).
+  // Admin/Super Admin: tetap mengikuti bulan pada grafik Performa Penjualan.
+  const sesi=dashboardSesi();
   const pad=n=>String(n).padStart(2,'0');
   const cur=omzetCursor();
-  const dari=`${cur.y}-${pad(cur.m+1)}-01`;
-  const sampai=`${cur.y}-${pad(cur.m+1)}-${pad(new Date(cur.y, cur.m+1, 0).getDate())}`;
-  if($('dashSub')) $('dashSub').textContent='Ringkasan operasional '+bulanLabel(cur.y, cur.m);
-  const day=DB.filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
+  let dari='', sampai='';
+  let day=[], jual=[];
+  if(sesi){
+    if($('dashSub')) $('dashSub').textContent = sesi.open
+      ? ('Sesi kasir #'+(KAS.id||'-')+' • buka '+fmtJam(KAS.opened_at))
+      : 'Kas belum dibuka • buka kas untuk mulai mencatat';
+    if(sesi.open){
+      day=DB.filter(x=>dalamSesi(tsServiceCreated(x),sesi) && dashNormKasir(x.kasir)===sesi.kasir);
+      jual=(typeof SALES!=='undefined'?SALES:[]).filter(x=>dalamSesi(tsRecord(x),sesi) && dashNormKasir(x.kasir)===sesi.kasir);
+    }
+  } else {
+    dari=`${cur.y}-${pad(cur.m+1)}-01`;
+    sampai=`${cur.y}-${pad(cur.m+1)}-${pad(new Date(cur.y, cur.m+1, 0).getDate())}`;
+    if($('dashSub')) $('dashSub').textContent='Ringkasan operasional '+bulanLabel(cur.y, cur.m);
+    day=DB.filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
+    jual=(typeof SALES!=='undefined'?SALES:[]).filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
+  }
   const c=(s)=>day.filter(x=>normStatus(x.status)===s).length;
   $('stTotal').textContent=day.length;
   $('stAntri').textContent=c('Dikerjakan');
   $('stProses').textContent=c('Selesai');
   $('stSelesai').textContent=c('Diambil');
   if($('stCancel')) $('stCancel').textContent=c('Cancel');
-  // Omzet hanya dari service yang SUDAH DIAMBIL (bulan terpilih)
+  // Omzet hanya dari service yang SUDAH DIAMBIL
   $('stOmzet').textContent=fmtRp(day.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
-  // Ringkasan Penjualan Digital (bulan terpilih)
+  // Ringkasan Penjualan Digital
   try{
-    let dl = Array.isArray(DIG_LIST)?DIG_LIST:[];
-    dl = dl.filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
-    $('stDigCount').textContent = dl.reduce((a,b)=>a+1,0);
-    const digOm = dl.reduce((a,b)=>a+Number(b.harga_jual||0),0);
-    const digLb = dl.reduce((a,b)=>a+Number(b.margin||0)||Number(b.harga_jual||0)-Number(b.hpp||0),0);
-    if($('stDigOmzet')) $('stDigOmzet').textContent=fmtRp(digOm);
-    if($('stDigLaba')) $('stDigLaba').textContent=fmtRp(digLb);
+    if(sesi){
+      ['stDigCount','stDigOmzet','stDigLaba'].forEach(id=>{ if($(id)) $(id).textContent='—'; });
+    } else {
+      let dl = Array.isArray(DIG_LIST)?DIG_LIST:[];
+      dl = dl.filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
+      $('stDigCount').textContent = dl.reduce((a,b)=>a+1,0);
+      const digOm = dl.reduce((a,b)=>a+Number(b.harga_jual||0),0);
+      const digLb = dl.reduce((a,b)=>a+Number(b.margin||0)||Number(b.harga_jual||0)-Number(b.hpp||0),0);
+      if($('stDigOmzet')) $('stDigOmzet').textContent=fmtRp(digOm);
+      if($('stDigLaba')) $('stDigLaba').textContent=fmtRp(digLb);
+    }
   }catch{}
-  // Ringkasan Penjualan Barang (bulan terpilih)
+  // Ringkasan Penjualan Barang
   try{
-    const jual = (typeof SALES!=='undefined'?SALES:[]).filter(x=>inPeriode(String(x.tanggal||'').slice(0,10),dari,sampai));
     let unit=0;
     jual.forEach(s=>{
       (s.items||[]).forEach(it=>{ unit += Number(it.qty||0); });
@@ -3713,8 +3759,80 @@ function fmtRingkas(v){
   if(a>=1e3) return f(Math.round(v/1e3),'rb');
   return String(v);
 }
+function sesiHourlyData(sesi){
+  const openD=new Date(sesi.t0), nowD=new Date();
+  const sameDay=openD.toDateString()===nowD.toDateString();
+  let hours;
+  if(sameDay){
+    const a=openD.getHours(), b=nowD.getHours();
+    hours=[]; for(let h=a; h<=Math.max(a,b); h++) hours.push(h);
+  } else {
+    hours=[...Array(24).keys()];
+  }
+  const bucket=new Map(hours.map(h=>[h,{h, svc:0, jual:0, total:0}]));
+  const svcArr=(typeof DB!=='undefined'?DB:[]).filter(x=>dalamSesi(tsServiceCreated(x),sesi) && dashNormKasir(x.kasir)===sesi.kasir);
+  svcArr.forEach(x=>{
+    if(normStatus(x.status)!=='Diambil') return;
+    const t=tsServiceStatus(x,'Diambil')||tsServiceCreated(x);
+    const b=bucket.get(new Date(t).getHours());
+    if(b) b.svc+=Number(x.biaya||0);
+  });
+  const salesArr=(typeof SALES!=='undefined'?SALES:[]).filter(x=>dalamSesi(tsRecord(x),sesi) && dashNormKasir(x.kasir)===sesi.kasir);
+  salesArr.forEach(x=>{
+    const b=bucket.get(new Date(tsRecord(x)).getHours());
+    if(b) b.jual+=Number(x.total||0);
+  });
+  const data=hours.map(h=>bucket.get(h));
+  data.forEach(d=>d.total=d.svc+d.jual);
+  return data;
+}
+function renderOmzetChartSesi(box, sesi){
+  if($('omzetTitle')) $('omzetTitle').textContent='📈 Performa Penjualan Sesi Ini';
+  if($('omzetNote')) $('omzetNote').textContent='Garis = total omzet per jam selama sesi kasir (service Diambil + penjualan barang).';
+  ['btnOmPrev','btnOmNow','btnOmNext'].forEach(id=>{ const b=$(id); if(b) b.style.display='none'; });
+  if(!sesi.open){
+    box.innerHTML='<div class="empty" style="padding:24px">Kas belum dibuka. Buka kas untuk mulai mencatat penjualan sesi ini.</div>';
+    if($('omzetInfo')) $('omzetInfo').textContent='Belum ada sesi kasir aktif.';
+    return;
+  }
+  const data=sesiHourlyData(sesi);
+  const max=niceMax(Math.max(...data.map(d=>d.total), 0));
+  const n=data.length;
+  const avail=Math.round(box.getBoundingClientRect().width||box.clientWidth||340);
+  const narrow=avail<520;
+  const padL=narrow?46:66, padR=narrow?8:12, padT=16, padB=28;
+  const step=Math.max(6, (avail-padL-padR)/Math.max(n,1));
+  const W=Math.round(padL+padR+n*step), H=narrow?210:260, ch=H-padT-padB, baseY=padT+ch;
+  const fs=Math.max(10, Math.min(13, Math.round(step*0.45)));
+  const fx=Math.max(8, Math.min(11, Math.round(step*0.35)));
+  const X=(i)=>padL+i*step+step/2;
+  const Y=(v)=>padT+ch*(1-Math.min(v,max)/max);
+  let grid='';
+  for(let g=0;g<=4;g++){
+    const v=max*g/4, gy=Y(v);
+    grid+=`<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#e2e8f0"/><text x="${padL-6}" y="${gy+4}" text-anchor="end" font-size="${fs}" fill="#64748b">${narrow?fmtRingkas(v):Math.round(v).toLocaleString('id-ID')}</text>`;
+  }
+  grid+='<line x1="'+padL+'" y1="'+baseY+'" x2="'+(W-padR)+'" y2="'+baseY+'" stroke="#cbd5e1"/>';
+  const pts=data.map((d,i)=>({x:X(i), y:Y(d.total)}));
+  const line=smoothPath(pts);
+  const area=line+` L ${X(n-1)},${baseY} L ${X(0)},${baseY} Z`;
+  const dotR=narrow?7:10;
+  const dots=data.map((d,i)=>d.total?`<circle cx="${X(i)}" cy="${Y(d.total)}" r="${dotR}" fill="transparent"><title>Jam ${String(d.h).padStart(2,'0')}:00 — Total ${fmtRp(d.total)} (service ${fmtRp(d.svc)} + barang ${fmtRp(d.jual)})</title></circle>`:'').join('');
+  const every=Math.max(1, Math.ceil((fx*1.9)/Math.max(step,1)));
+  const xl=data.map((d,i)=>i%every?'' : `<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="${fx}" fill="#64748b">${String(d.h).padStart(2,'0')}</text>`).join('');
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img"><defs><linearGradient id="omzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6366f1" stop-opacity=".45"/><stop offset="1" stop-color="#6366f1" stop-opacity=".05"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#omzGrad)"/><path d="${line}" fill="none" stroke="#4f46e5" stroke-width="${narrow?2:2.5}" stroke-linejoin="round" stroke-linecap="round"/>${dots}${xl}</svg>`;
+  const tot=data.reduce((a,b)=>a+b.total,0);
+  const peak=data.reduce((a,b)=>b.total>a.total?b:a, data[0]||{h:0,total:0});
+  if($('omzetInfo')) $('omzetInfo').textContent = tot
+    ? ('Total sesi: '+fmtRp(tot)+' • Puncak jam '+String(peak.h).padStart(2,'0')+':00 ('+fmtRp(peak.total)+')')
+    : 'Belum ada transaksi pada sesi ini.';
+}
 function renderOmzetChart(){
   const box=$('omzetChart'); if(!box) return;
+  const sesi=dashboardSesi();
+  if(sesi){ renderOmzetChartSesi(box, sesi); return; }
+  ['btnOmPrev','btnOmNow','btnOmNext'].forEach(id=>{ const b=$(id); if(b) b.style.display=''; });
+  if($('omzetNote')) $('omzetNote').textContent='Garis = total omzet harian (service Diambil + penjualan barang).';
   const {y, m}=omzetCursor();
   const data=omzetBulan();
   if($('omzetTitle')) $('omzetTitle').textContent='Performa Penjualan Bulan '+bulanLabel(y, m);

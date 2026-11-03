@@ -183,7 +183,7 @@ function makeAkses(role, akses) {
   return api;
 }
 const sa = makeAkses('superadmin', { kasir_lihat_laba: false, admin_ubah_produk: false });
-ok('13 izin didefinisikan', Object.keys(sa.AKSES_DEF).length === 13);
+ok('11 izin didefinisikan', Object.keys(sa.AKSES_DEF).length === 11);
 ok('default semua izin aktif', Object.values(sa.normAkses({})).every(v => v === true));
 ok('override false dihormati', sa.normAkses({ kasir_lihat_laba: false }).kasir_lihat_laba === false);
 ok('key tak dikenal diabaikan', !('xyz' in sa.normAkses({ xyz: false })));
@@ -194,6 +194,41 @@ ok('admin tidak terkena izin kasir_*', ad.bolehAkses('kasir_lihat_laba') === tru
 const ks = makeAkses('kasir', { kasir_penjualan_tempo: false, admin_hapus_penjualan: false });
 ok('kasir terkena izin kasir_*', ks.bolehAkses('kasir_penjualan_tempo') === false);
 ok('kasir tetap tidak punya izin admin_*', ks.bolehAkses('admin_hapus_penjualan') === false);
+
+console.log('\n=== dashboard per sesi kasir ===');
+const dashCode = [
+  extract('dashNormKasir'), extract('dashboardSesi'), extract('dalamSesi'),
+  extract('tsServiceCreated'), extract('tsServiceStatus')
+].join('\n');
+function makeDash(role, kas) {
+  const fn = new Function('KAS', 'myRole', 'kasSesiAktif', 'parseTs',
+    dashCode + '\nreturn {dashNormKasir, dashboardSesi, dalamSesi, tsServiceCreated, tsServiceStatus};');
+  const parseTs = (s) => {
+    if (!s) return 0;
+    let str = String(s).trim().replace(' ', 'T');
+    if (!/(Z|[+-]\d{2}:?\d{2})$/.test(str)) str += 'Z';
+    const t = Date.parse(str);
+    return isNaN(t) ? 0 : t;
+  };
+  return fn(kas, () => role, () => !!(kas && kas.status === 'open'), parseTs);
+}
+const kasOpen = { status: 'open', opened_at: '2026-11-03T10:00:00', kasir: 'Kasir A' };
+const dk = makeDash('kasir', kasOpen);
+ok('kasir: sesi terdeteksi', dk.dashboardSesi().open && dk.dashboardSesi().kasir === 'kasir a');
+ok('kasir: window memakai opened_at', dk.dashboardSesi().t0 === Date.parse('2026-11-03T10:00:00Z'));
+ok('di luar window ditolak', !dk.dalamSesi(Date.parse('2026-11-03T09:59:00Z'), dk.dashboardSesi()));
+ok('di dalam window diterima', dk.dalamSesi(Date.parse('2026-11-03T10:01:00Z'), dk.dashboardSesi()));
+ok('bukan kasir -> global', makeDash('admin', kasOpen).dashboardSesi() === null);
+ok('kas tutup -> open false', makeDash('kasir', null).dashboardSesi().open === false);
+const svcUnsorted = { created_at: '', riwayat: [
+  { t: '2026-11-03T10:05:00', s: 'Selesai' },
+  { t: '2026-11-03T10:00:00', s: 'Dikerjakan' },
+] };
+ok('created dari riwayat paling awal', dk.tsServiceCreated(svcUnsorted) === Date.parse('2026-11-03T10:00:00Z'));
+ok('status Diambil terakhir', dk.tsServiceStatus({ riwayat: [
+  { t: '2026-11-03T10:00:00', s: 'Diambil' },
+  { t: '2026-11-03T11:00:00', s: 'Diambil' },
+] }, 'Diambil') === Date.parse('2026-11-03T11:00:00Z'));
 
 console.log('\n=== RINGKASAN ===');
 console.log(`  ${pass} lulus, ${fail} gagal`);
