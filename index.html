@@ -141,10 +141,16 @@
           <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="stok">📦 Stok Produk</button>
     <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="kasir">👥 Rekap Kasir</button>
     <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="harian">📅 Rekap Harian</button>
-    <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="arus">💵 Arus Kas</button>
-    <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="neraca">🏦 Posisi Keuangan</button>
-    <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="kategori">🏷️ Digital &amp; Kategori</button>
-  </div>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="laporan-keuangan">
+        <button type="button" class="nav-btn nav-head" data-page="laporan" aria-expanded="false">📊 <span>Laporan Keuangan</span><i class="nav-chev">▸</i></button>
+        <div class="nav-sub">
+          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="arus">💵 Arus Kas</button>
+          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="neraca">🏦 Posisi Keuangan</button>
+          <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="kategori">🏷️ Digital &amp; Kategori</button>
+        </div>
       </div>
 
       <div class="nav-group" data-group="pengaturan">
@@ -1236,12 +1242,12 @@
 
 <script src="config.js?v=2610291603"></script>
 <script src="api.js?v=2610291603"></script>
-<script src="script-2611041449.js?v=2611041449"></script>
+<script src="script-2611041559.js?v=2611041559"></script>
 <script>
 // Daftarkan Service Worker supaya aplikasi bisa dipasang (PWA) & cache shell.
 if('serviceWorker' in navigator && location.protocol !== 'file:'){
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw-2611041449.js').catch(function(e){ console.warn('SW gagal:', e && e.message); });
+    navigator.serviceWorker.register('sw-2611041559.js').catch(function(e){ console.warn('SW gagal:', e && e.message); });
   });
 }
 </script>

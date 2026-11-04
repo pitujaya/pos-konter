@@ -689,7 +689,7 @@ try{ bindKas(); }catch(e){ console.warn('bindKas:', e); }
 // ===== NAVIGASI =====
 let curLtab='laba';
 // tab aktif per grup menu (laporan & produk punya tab sendiri)
-const NAVLTAB = { laporan:'laba', produk:'sparepart', 'biaya-pendapatan':'biaya' };
+const NAVLTAB = { laporan:'laba', 'laporan-keuangan':'arus', produk:'sparepart', 'biaya-pendapatan':'biaya' };
 function navSetGroup(grp, open){
   if(!grp) return;
   grp.classList.toggle('open', !!open);
@@ -707,14 +707,30 @@ function scrollNavGroup(grp){
     }
   }catch{}
 }
+function navGroupForTab(page, tab){
+  if(!tab) return null;
+  let found=null;
+  document.querySelectorAll('.nav-group').forEach(grp=>{
+    if(found) return;
+    const kids=[].slice.call(grp.querySelectorAll('.nav-sub-btn'));
+    if(kids.some(k=>k.dataset.page===page && (k.dataset.ltab||k.dataset.extab||'')===tab)) found=grp;
+  });
+  return found;
+}
 function navSyncActive(page, ltab, group){
   if(ltab && group) NAVLTAB[group]=ltab;
+  // Beberapa grup bisa menuju halaman yang sama (Laporan & Laporan Keuangan).
+  // Hanya grup yang memiliki tab aktif yang boleh dianggap aktif/terbuka.
+  const effTab = ltab || (page==='laporan' ? curLtab : '');
+  const owner = navGroupForTab(page, effTab);
+  if(owner && effTab) NAVLTAB[owner.dataset.group||'']=effTab;
   document.querySelectorAll('.nav-group').forEach(grp=>{
     const kids=[].slice.call(grp.querySelectorAll('.nav-sub-btn'));
     const head=grp.querySelector('.nav-head');
     const gkey=grp.dataset.group||'';
     const tab = gkey ? (NAVLTAB[gkey]||'') : '';
-    const onPage=kids.some(k=>k.dataset.page===page) || !!(head && head.dataset.page && head.dataset.page===page);
+    const pageMatch=kids.some(k=>k.dataset.page===page) || !!(head && head.dataset.page && head.dataset.page===page);
+    const onPage = owner ? (grp===owner) : pageMatch;
     if(head) head.classList.toggle('active', onPage);
     if(onPage && kids.length){
       document.querySelectorAll('.nav-group.open').forEach(g=>{ if(g!==grp) navSetGroup(g,false); });
@@ -725,7 +741,8 @@ function navSyncActive(page, ltab, group){
       const samePage=k.dataset.page===page;
       const ktab=k.dataset.ltab||k.dataset.extab||'';
       const sameTab=!ktab || !tab || ktab===tab;
-      k.classList.toggle('active', samePage && sameTab);
+      const owned = !owner || grp===owner || !ktab;
+      k.classList.toggle('active', samePage && sameTab && owned);
     });
   });
 }
@@ -3854,7 +3871,7 @@ function bindLaporan(){
   if($('btnLpPrint')) $('btnLpPrint').onclick=printLaporan;
   syncLpKasirOptions();
   // Handler tombol digital sudah dipasang oleh IIFE di bagian bawah.
-  try{ syncLpFilterRows(NAVLTAB.laporan||'laba'); }catch{}
+  try{ syncLpFilterRows(curLtab||'laba'); }catch{}
 }
 // Filter mengikuti tab: kasir umum, jenis stok di tab Stok, kategori di tab Penjualan.
 function syncLpFilterRows(name){
@@ -3871,7 +3888,9 @@ window.gotoLtab=function(name){
   document.querySelectorAll('#lpTabs .ltab').forEach(b=>b.classList.toggle('active', b.dataset.ltab===name));
   document.querySelectorAll('.ltab-pane').forEach(p=>p.classList.toggle('active', p.id==='ltab-'+name));
   curLtab=name;
-  NAVLTAB.laporan=name;
+  const owner=navGroupForTab('laporan', name);
+  const gkey=owner ? (owner.dataset.group||'laporan') : 'laporan';
+  NAVLTAB[gkey]=name;
   try{ syncLpFilterRows(name); }catch{}
   if(name==='biaya'){ try{ renderLaporanBiaya(); }catch(e){} }
   try{
@@ -3880,7 +3899,7 @@ window.gotoLtab=function(name){
     if(name==='neraca') renderNeraca(rr.sampai,rr.kasir).catch(e=>console.warn('renderNeraca:', e));
     if(name==='kategori') renderKategori(rr.dari,rr.sampai,rr.kasir).catch(e=>console.warn('renderKategori:', e));
   }catch(e){}
-  try{ navSyncActive('laporan', name, 'laporan'); }catch{}
+  try{ navSyncActive('laporan', name, gkey); }catch{}
 };
 function exportLaporanCSV(){
   const r=LAPORAN_CACHE||computeReportLocal(...Object.values(lpRange()));
