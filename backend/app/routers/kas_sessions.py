@@ -137,16 +137,23 @@ def _summary(db: Session, sess: models.CashSession) -> dict:
     tunai = sum(int(s.total or 0) for s in sales if _is_tunai(s.metode))
     biaya = [e for e in expenses
              if str(getattr(e, "jenis", "biaya") or "biaya").strip().lower() != "pendapatan"]
-    pendapatan_lain = sum(int(e.jumlah or 0) for e in expenses
-                          if str(getattr(e, "jenis", "biaya") or "biaya").strip().lower() == "pendapatan")
+    income = [e for e in expenses
+              if str(getattr(e, "jenis", "biaya") or "biaya").strip().lower() == "pendapatan"]
+    pendapatan_lain = sum(int(e.jumlah or 0) for e in income)
     pengeluaran = sum(int(e.jumlah or 0) for e in biaya)
+    # Hanya transaksi tunai yang mengubah isi laci kas. Non-tunai tetap
+    # dicatat di total laporan, tapi tidak boleh ikut kas_sistem.
+    pengeluaran_tunai = sum(int(e.jumlah or 0) for e in biaya
+                            if _is_tunai(getattr(e, "metode", "tunai")))
+    pendapatan_tunai = sum(int(e.jumlah or 0) for e in income
+                           if _is_tunai(getattr(e, "metode", "tunai")))
     service_omzet = sum(int(s.biaya or 0) for s in svcs)
     # Service dibayar tunai -> uang masuk laci kas, harus ikut kas_sistem.
     # Kalau tidak, setiap shift yang ada pembayaran service cash selalu
     # nampil "selisih" palsu sebesar total service.
     service_tunai = sum(int(s.biaya or 0) for s in svcs
                         if _is_tunai(getattr(s, "metode_bayar", "tunai")))
-    kas_sistem = int(sess.modal_awal or 0) + tunai + service_tunai + pendapatan_lain - pengeluaran
+    kas_sistem = int(sess.modal_awal or 0) + tunai + service_tunai + pendapatan_tunai - pengeluaran_tunai
 
     return {
         "jml_transaksi": len(sales) + len(svcs) + len(expenses),

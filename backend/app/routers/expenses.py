@@ -14,6 +14,11 @@ def _norm_jenis(jenis: str | None) -> str:
     return "pendapatan" if str(jenis or "").strip().lower() == "pendapatan" else "biaya"
 
 
+def _norm_metode(metode: str | None) -> str:
+    m = str(metode or "").strip().lower()
+    return "non-tunai" if m in ("non-tunai", "non tunai", "nontunai", "transfer", "qris", "debit") else "tunai"
+
+
 def _expense_to_out(e: models.Expense) -> dict:
     return {
         "id": e.id,
@@ -22,6 +27,7 @@ def _expense_to_out(e: models.Expense) -> dict:
         "kategori": e.kategori or "Lainnya",
         "keterangan": e.keterangan or "",
         "jumlah": int(e.jumlah or 0),
+        "metode": _norm_metode(getattr(e, "metode", "tunai")),
         "dicatat_oleh": e.dicatat_oleh or "",
     }
 
@@ -52,6 +58,7 @@ def create_expense(body: schemas.ExpenseIn, db: Session = Depends(get_db),
         kategori=kategori,
         keterangan=(body.keterangan or "").strip(),
         jumlah=jumlah,
+        metode=_norm_metode(getattr(body, "metode", "tunai")),
         dicatat_oleh=user.nama or "",
     )
     db.add(e)
@@ -104,6 +111,8 @@ def update_expense(expense_id: int, body: schemas.ExpenseUpdateIn,
         e.tanggal = str(data["tanggal"])[:10]
     if "jenis" in data and data["jenis"]:
         e.jenis = _norm_jenis(data["jenis"])
+    if "metode" in data and data["metode"]:
+        e.metode = _norm_metode(data["metode"])
     if "kategori" in data and data["kategori"]:
         e.kategori = str(data["kategori"]).strip() or e.kategori
     if "keterangan" in data and data["keterangan"] is not None:

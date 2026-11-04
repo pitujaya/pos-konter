@@ -158,7 +158,10 @@ try:
         "diskon": "INTEGER DEFAULT 0",
         "diskon_persen": "INTEGER DEFAULT 0",
     })
-    _ensure_columns("expenses", {"jenis": "VARCHAR(20) DEFAULT 'biaya'"})
+    _ensure_columns("expenses", {
+        "jenis": "VARCHAR(20) DEFAULT 'biaya'",
+        "metode": "VARCHAR(30) DEFAULT 'tunai'",
+    })
     _ensure_index("expenses", "ix_expenses_jenis", "jenis")
     _ensure_columns("cash_sessions", {"service_tunai": "INTEGER DEFAULT 0"})
     _ensure_columns("settings", {"akses": "JSON DEFAULT '{}'"})

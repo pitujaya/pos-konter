@@ -141,6 +141,9 @@
           <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="stok">📦 Stok Produk</button>
     <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="kasir">👥 Rekap Kasir</button>
     <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="harian">📅 Rekap Harian</button>
+    <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="arus">💵 Arus Kas</button>
+    <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="neraca">🏦 Posisi Keuangan</button>
+    <button type="button" class="nav-sub-btn" data-page="laporan" data-ltab="kategori">🏷️ Digital &amp; Kategori</button>
   </div>
       </div>
 
@@ -607,6 +610,10 @@
           </div>
           <label>Keterangan *<input id="ex_ket" placeholder="cth: Bayar listrik bulan Oktober" /></label>
           <label>Jumlah (Rp) *<input id="ex_jumlah" type="number" min="0" value="0" placeholder="cth: 150000" /></label>
+          <label>Metode Pembayaran<select id="ex_metode">
+            <option value="tunai" selected>Tunai (mengurangi kas)</option>
+            <option value="non-tunai">Non-tunai (transfer/QRIS)</option>
+          </select></label>
           <div class="form-actions">
             <button type="button" class="btn ghost" id="btnBatalEx">Batal</button>
             <button type="button" class="btn primary big" id="btnSimpanEx">💾 Simpan Biaya</button>
@@ -628,6 +635,10 @@
           </div>
           <label>Keterangan *<input id="in_ket" placeholder="cth: Bunga bank bulan Oktober" /></label>
           <label>Jumlah (Rp) *<input id="in_jumlah" type="number" min="0" value="0" placeholder="cth: 50000" /></label>
+          <label>Metode Pembayaran<select id="in_metode">
+            <option value="tunai" selected>Tunai (menambah kas)</option>
+            <option value="non-tunai">Non-tunai (transfer/QRIS)</option>
+          </select></label>
           <div class="form-actions">
             <button type="button" class="btn ghost" id="btnBatalIn">Batal</button>
             <button type="button" class="btn primary big" id="btnSimpanIn">💰 Simpan Pendapatan</button>
@@ -690,6 +701,9 @@
         <button class="ltab" data-ltab="stok">📦 <span>Stok Produk</span></button>
     <button class="ltab" data-ltab="kasir">👥 <span>Rekap Kasir</span></button>
     <button class="ltab" data-ltab="harian">📅 <span>Rekap Harian</span></button>
+    <button class="ltab" data-ltab="arus">💵 <span>Arus Kas</span></button>
+    <button class="ltab" data-ltab="neraca">🏦 <span>Posisi Keuangan</span></button>
+    <button class="ltab" data-ltab="kategori">🏷️ <span>Digital &amp; Kategori</span></button>
   </div>
 
       <!-- SUB: LAPORAN LABA RUGI -->
@@ -712,7 +726,7 @@
           <thead><tr><th>Keterangan</th><th style="text-align:right">Nilai</th></tr></thead>
           <tbody id="lpLabaBody"></tbody>
         </table></div>
-        <p class="muted" style="margin-top:8px">* Laba service = omzet jasa (belum dikurangi biaya sparepart service karena tidak tercatat per-service). Laba penjualan = harga jual − HPP. <b>Laba bersih = service + laba jual + pendapatan lain − biaya.</b></p>
+        <p class="muted" style="margin-top:8px">* Laba service = omzet jasa penuh (pembelian sparepart dicatat sebagai biaya operasional). Laba penjualan = harga jual − HPP. <b>Laba kotor = pendapatan − HPP. Laba bersih = laba kotor − beban operasional.</b></p>
       </div>
       </div>
 
@@ -829,9 +843,75 @@
         </table></div>
       </div>
       </div>
-    </section>
 
-    <!-- LACAK -->
+      <!-- SUB: ARUS KAS -->
+      <div class="ltab-pane" id="ltab-arus">
+      <div class="stats lp-stats lp-stats-4">
+        <div class="stat"><div class="stat-icon blue">🏁</div><div><small>Kas Awal</small><h3 id="akKasAwal">Rp 0</h3></div></div>
+        <div class="stat money"><div class="stat-icon money-i">📥</div><div><small>Penerimaan Tunai</small><h3 id="akMasuk">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon yellow">📤</div><div><small>Pengeluaran Tunai</small><h3 id="akKeluar">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon green">🧮</div><div><small>Arus Kas Bersih</small><h3 id="akBersih">Rp 0</h3></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>💵 Laporan Arus Kas</h3><small class="muted" id="akPeriode">-</small></div>
+        <div class="table-wrap"><table style="min-width:0">
+          <thead><tr><th>Keterangan</th><th style="text-align:right">Tunai</th></tr></thead>
+          <tbody id="akBody"></tbody>
+        </table></div>
+        <p class="muted" style="margin-top:8px">Hanya transaksi <b>tunai</b> yang memengaruhi kas fisik. Transaksi non-tunai ditampilkan terpisah.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>📋 Sesi Kasir</h3></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Kasir</th><th>Buka</th><th>Tutup</th><th style="text-align:right">Modal</th><th style="text-align:right">Tunai Masuk</th><th style="text-align:right">Non-tunai</th><th style="text-align:right">Pengeluaran</th><th style="text-align:right">Kas Sistem</th><th style="text-align:right">Kas Fisik</th><th style="text-align:right">Selisih</th></tr></thead>
+          <tbody id="akSesiBody"></tbody>
+        </table></div>
+      </div>
+      </div>
+
+      <!-- SUB: POSISI KEUANGAN -->
+      <div class="ltab-pane" id="ltab-neraca">
+      <div class="stats lp-stats lp-stats-4">
+        <div class="stat"><div class="stat-icon blue">🏦</div><div><small>Total Aset</small><h3 id="nrAset">Rp 0</h3></div></div>
+        <div class="stat money"><div class="stat-icon money-i">💵</div><div><small>Kas</small><h3 id="nrKas">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon purple">📦</div><div><small>Nilai Stok (HPP)</small><h3 id="nrStok">Rp 0</h3></div></div>
+        <div class="stat"><div class="stat-icon green">🧾</div><div><small>Total Ekuitas</small><h3 id="nrEkuitas">Rp 0</h3></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>🏦 Posisi Keuangan Ringkas</h3><small class="muted" id="nrPeriode">-</small></div>
+        <div class="table-wrap"><table style="min-width:0">
+          <thead><tr><th>Keterangan</th><th style="text-align:right">Nilai</th></tr></thead>
+          <tbody id="nrBody"></tbody>
+        </table></div>
+        <p class="muted" style="margin-top:8px" id="nrCatatan"></p>
+      </div>
+      </div>
+
+      <!-- SUB: DIGITAL & PER KATEGORI -->
+      <div class="ltab-pane" id="ltab-kategori">
+      <div class="card">
+        <div class="card-head"><h3>🏷️ Laba per Kategori Produk</h3><small class="muted" id="ktPeriode">-</small></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Kategori</th><th style="text-align:right">Qty</th><th style="text-align:right">Omzet</th><th style="text-align:right">HPP</th><th style="text-align:right">Laba</th></tr></thead>
+          <tbody id="ktProdukBody"></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>💳 Laba Penjualan Digital per Kode</h3></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Kode</th><th style="text-align:right">Qty</th><th style="text-align:right">Omzet</th><th style="text-align:right">HPP</th><th style="text-align:right">Laba</th></tr></thead>
+          <tbody id="ktDigitalBody"></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>📲 Omzet Service per Merk</h3></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Merk</th><th style="text-align:right">Unit</th><th style="text-align:right">Omzet</th></tr></thead>
+          <tbody id="ktServiceBody"></tbody>
+        </table></div>
+      </div>
+      </div>
+    </section>
     <section class="page" id="page-lacak">
       <h1 class="page-title">Lacak Service</h1>
       <p class="page-sub">Cek status perbaikan berdasarkan nomor service / nama / No. HP</p>
@@ -1075,6 +1155,10 @@
       </select></label></div>
       <label>Keterangan<input id="mex_ket" /></label>
       <label>Jumlah (Rp)<input id="mex_jumlah" type="number" min="0" /></label>
+      <label>Metode Pembayaran<select id="mex_metode">
+        <option value="tunai">Tunai</option>
+        <option value="non-tunai">Non-tunai (transfer/QRIS)</option>
+      </select></label>
     </div>
     <div class="modal-foot"><button class="btn ghost" data-close>Batal</button><button class="btn primary" id="btnSaveExEdit">Simpan Perubahan</button></div>
   </div>
@@ -1152,12 +1236,12 @@
 
 <script src="config.js?v=2610291603"></script>
 <script src="api.js?v=2610291603"></script>
-<script src="script-2611031154.js?v=2611032345"></script>
+<script src="script-2611041449.js?v=2611041449"></script>
 <script>
 // Daftarkan Service Worker supaya aplikasi bisa dipasang (PWA) & cache shell.
 if('serviceWorker' in navigator && location.protocol !== 'file:'){
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw-2610291603.js').catch(function(e){ console.warn('SW gagal:', e && e.message); });
+    navigator.serviceWorker.register('sw-2611041449.js').catch(function(e){ console.warn('SW gagal:', e && e.message); });
   });
 }
 </script>

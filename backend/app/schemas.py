@@ -294,6 +294,7 @@ class ExpenseIn(BaseModel):
     kategori: str | None = "Lainnya"
     keterangan: str | None = ""
     jumlah: int = Field(ge=0)
+    metode: str | None = "tunai"
 
 
 class ExpenseUpdateIn(BaseModel):
@@ -302,6 +303,7 @@ class ExpenseUpdateIn(BaseModel):
     kategori: str | None = None
     keterangan: str | None = None
     jumlah: int | None = Field(default=None, ge=0)
+    metode: str | None = None
 
 
 class ExpenseOut(BaseModel):
@@ -311,6 +313,7 @@ class ExpenseOut(BaseModel):
     kategori: str = "Lainnya"
     keterangan: str = ""
     jumlah: int = 0
+    metode: str = "tunai"
     dicatat_oleh: str = ""
 
     model_config = {"from_attributes": False}
@@ -323,6 +326,8 @@ class ReportOut(BaseModel):
     service_masuk: int = 0
     service_selesai: int = 0
     service_omzet: int = 0
+    service_hpp: int = 0
+    service_laba: int = 0
     service_per_status: dict = {}
     service_diambil: list = []
     penjualan_count: int = 0
@@ -331,12 +336,23 @@ class ReportOut(BaseModel):
     penjualan_omzet: int = 0
     penjualan_hpp: int = 0
     penjualan_laba: int = 0
+    digital_count: int = 0
+    digital_omzet: int = 0
+    digital_hpp: int = 0
+    digital_laba: int = 0
     expense_count: int = 0
     expense_total: int = 0
     income_count: int = 0
     income_total: int = 0
+    total_hpp: int = 0
     total_pendapatan: int = 0
+    laba_kotor: int = 0
+    laba_operasional: int = 0
     total_laba: int = 0
+    laba_bersih: int = 0
+    margin_persen: float = 0.0
+    beban_per_kategori: list = []
+    pendapatan_per_kategori: list = []
     stok_item: int = 0
     stok_nilai_hpp: int = 0
     stok_nilai_jual: int = 0

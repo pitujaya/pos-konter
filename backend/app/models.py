@@ -191,6 +191,8 @@ class Expense(Base):
     kategori: Mapped[str] = mapped_column(String(80), default="Lainnya", index=True)
     keterangan: Mapped[str] = mapped_column(Text, default="")
     jumlah: Mapped[int] = mapped_column(Integer, default=0)
+    # tunai/non-tunai -> menentukan apakah transaksi memengaruhi kas fisik.
+    metode: Mapped[str] = mapped_column(String(30), default="tunai")
     dicatat_oleh: Mapped[str] = mapped_column(String(120), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

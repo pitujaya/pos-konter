@@ -80,6 +80,72 @@ def _match_kasir(nama: str | None, kasir: str) -> bool:
     return n == " ".join(kasir.split()).casefold()
 
 
+def _is_tunai_metode(metode: str | None) -> bool:
+    m = (metode or "").strip().lower()
+    return m in ("", "tunai", "cash", "tunai/lunas")
+
+
+def _collect_periode(db: Session, dari: str, sampai: str, kasir: str):
+    """Ambil transaksi yang sudah difilter periode & kasir (dipakai semua laporan)."""
+    services = db.query(models.Service).all()
+    sales = db.query(models.Sale).all()
+    try:
+        expenses = db.query(models.Expense).all()
+    except Exception:
+        expenses = []
+    try:
+        digital = db.query(models.DigitalSale).all()
+    except Exception:
+        digital = []
+    if dari or sampai:
+        services = [r for r in services if _in_range(r.tanggal or "", dari, sampai)]
+        sales = [r for r in sales if _in_range(r.tanggal or "", dari, sampai)]
+        expenses = [r for r in expenses if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
+        digital = [r for r in digital if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
+    kasir = (kasir or "").strip()
+    if kasir:
+        services = [r for r in services if _match_kasir(getattr(r, "kasir", ""), kasir)]
+        sales = [r for r in sales if _match_kasir(r.kasir, kasir)]
+        expenses = [r for r in expenses if _match_kasir(getattr(r, "dicatat_oleh", ""), kasir)]
+        # Penjualan digital tidak punya kolom kasir.
+        digital = []
+    return services, sales, expenses, digital
+
+
+def _group_uang(rows: list) -> list[dict]:
+    """Kelompokkan expense/pendapatan per kategori (jumlah & transaksi)."""
+    data: dict[str, dict] = {}
+    for r in rows:
+        kat = (getattr(r, "kategori", "") or "Lainnya").strip() or "Lainnya"
+        row = data.setdefault(kat, {"kategori": kat, "jumlah": 0, "count": 0})
+        row["jumlah"] += int(getattr(r, "jumlah", 0) or 0)
+        row["count"] += 1
+    return sorted(data.values(), key=lambda x: (-x["jumlah"], x["kategori"].lower()))
+
+
+def _sessions_periode(db: Session, dari: str, sampai: str, kasir: str) -> list:
+    rows = db.query(models.CashSession).all()
+    if dari or sampai:
+        rows = [r for r in rows if _in_range(
+            (r.opened_at.date().isoformat() if r.opened_at else ""), dari, sampai)]
+    kasir = (kasir or "").strip()
+    if kasir:
+        rows = [r for r in rows if _match_kasir(r.kasir, kasir)]
+    rows.sort(key=lambda r: (r.opened_at or datetime.min))
+    return rows
+
+
+def _opening_cash(sessions: list) -> int:
+    """Modal awal per kasir (sesi paling awal), bukan dijumlah semua shift."""
+    first: dict[str, object] = {}
+    for s in sessions:
+        key = " ".join((s.kasir or "").split()).casefold() or "-"
+        t = s.opened_at or datetime.min
+        if key not in first or t < first[key][0]:
+            first[key] = (t, int(s.modal_awal or 0))
+    return sum(v[1] for v in first.values())
+
+
 @router.post("/sales", response_model=schemas.SaleOut, status_code=201)
 def create_sale(body: schemas.SaleIn, db: Session = Depends(get_db),
                 user: models.User = Depends(get_current_user)):
@@ -216,31 +282,15 @@ def report(
     kasir: str = Query("", description="filter laporan per kasir (nama), kosong = semua"),
     db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
 ):
-    services = db.query(models.Service).all()
-    sales = db.query(models.Sale).all()
+    services, sales, expenses, digital = _collect_periode(db, dari, sampai, kasir)
     spares = db.query(models.Sparepart).all()
-    try:
-        expenses = db.query(models.Expense).all()
-    except Exception:
-        expenses = []
-    try:
-        digital = db.query(models.DigitalSale).all()
-    except Exception:
-        digital = []
-    if dari or sampai:
-        services = [r for r in services if _in_range(r.tanggal or "", dari, sampai)]
-        sales = [r for r in sales if _in_range(r.tanggal or "", dari, sampai)]
-        expenses = [r for r in expenses if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
-        digital = [r for r in digital if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
-    kasir = (kasir or "").strip()
-    if kasir:
-        services = [r for r in services if _match_kasir(getattr(r, "kasir", ""), kasir)]
-        sales = [r for r in sales if _match_kasir(r.kasir, kasir)]
-        expenses = [r for r in expenses if _match_kasir(getattr(r, "dicatat_oleh", ""), kasir)]
-        digital = []
-    # Omzet service HANYA dari status Diambil
+    # Omzet service HANYA dari status Diambil.
     diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
     service_omzet = sum(int(r.biaya or 0) for r in diambil)
+    # Kebijakan konter: pembelian sparepart dicatat sebagai biaya, jadi laba
+    # service = omzet penuh (tidak ada HPP per-service).
+    service_hpp = 0
+    service_laba = service_omzet
     penjualan_subtotal = sum(_sale_subtotal(r) for r in sales)
     penjualan_diskon = sum(_sale_diskon(r) for r in sales)
     # Omzet penjualan = subtotal - diskon (total bersih yang dibayar pembeli).
@@ -250,7 +300,10 @@ def report(
     # Penjualan Digital
     digital_omzet = sum(int(getattr(r, "harga_jual", 0) or 0) for r in digital)
     digital_hpp = sum(int(getattr(r, "hpp", 0) or 0) for r in digital)
-    digital_laba = sum(int(getattr(r, "margin", 0) or (int(getattr(r, "harga_jual", 0) or 0) - int(getattr(r, "hpp", 0) or 0))) for r in digital)
+    digital_laba = sum(
+        int(getattr(r, "margin", 0) or (int(getattr(r, "harga_jual", 0) or 0) - int(getattr(r, "hpp", 0) or 0)))
+        for r in digital
+    )
     penjualan_omzet_total = penjualan_omzet + digital_omzet
     penjualan_hpp_total = penjualan_hpp + digital_hpp
     penjualan_laba_total = penjualan_laba + digital_laba
@@ -258,15 +311,21 @@ def report(
     biaya = [r for r in expenses if not _is_income(r)]
     expense_total = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya)
     income_total = sum(int(getattr(r, "jumlah", 0) or 0) for r in income)
-    # Laba service dianggap = omzet jasa (tanpa HPP tercatat).
+    total_pendapatan = service_omzet + penjualan_omzet_total + income_total
+    total_hpp = penjualan_hpp_total + service_hpp
+    laba_kotor = total_pendapatan - total_hpp
+    laba_operasional = laba_kotor - expense_total
     # Total laba (bersih) = omzet service + laba penjualan + pendapatan lain - biaya.
-    total_laba = service_omzet + penjualan_laba_total + income_total - expense_total
+    total_laba = laba_operasional
+    margin_persen = round((total_laba / total_pendapatan) * 100, 2) if total_pendapatan else 0.0
     diambil_sorted = sorted(diambil, key=lambda r: r.id or 0, reverse=True)[:50]
     return {
         "dari": dari or "", "sampai": sampai or "", "kasir": kasir,
         "service_masuk": len(services),
         "service_selesai": len(diambil),
         "service_omzet": service_omzet,
+        "service_hpp": service_hpp,
+        "service_laba": service_laba,
         "service_per_status": {st: sum(1 for r in services if _norm_status(r.status) == st) for st in STATUS_SERVICE},
         "service_diambil": [
             {"noService": r.no_service or "", "tanggal": r.tanggal or "", "nama": r.nama or "",
@@ -289,13 +348,205 @@ def report(
         "expense_total": expense_total,
         "income_count": len(income),
         "income_total": income_total,
-        "total_pendapatan": service_omzet + penjualan_omzet_total + income_total,
+        "total_hpp": total_hpp,
+        "total_pendapatan": total_pendapatan,
+        "laba_kotor": laba_kotor,
+        "laba_operasional": laba_operasional,
         "total_laba": total_laba,
+        "laba_bersih": total_laba,
+        "margin_persen": margin_persen,
+        "beban_per_kategori": _group_uang(biaya),
+        "pendapatan_per_kategori": _group_uang(income),
         "stok_item": len(spares),
         "stok_nilai_hpp": sum(int(s.hpp or 0) * int(s.stok or 0) for s in spares),
         "stok_nilai_jual": sum(int(s.harga_jual or 0) * int(s.stok or 0) for s in spares),
         "stok_menipis": sum(1 for s in spares if int(s.stok or 0) <= int(s.stok_min or 0)),
     }
+
+
+@router.get("/stats/arus-kas")
+def arus_kas(
+    dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
+    sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),
+    kasir: str = Query("", description="filter per kasir (nama), kosong = semua"),
+    db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
+):
+    """Arus kas sederhana (cash basis): hanya transaksi tunai yang dihitung."""
+    services, sales, expenses, _digital = _collect_periode(db, dari, sampai, kasir)
+    diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
+    service_tunai = sum(int(r.biaya or 0) for r in diambil
+                        if _is_tunai_metode(getattr(r, "metode_bayar", "tunai")))
+    service_non = sum(int(r.biaya or 0) for r in diambil
+                      if not _is_tunai_metode(getattr(r, "metode_bayar", "tunai")))
+    penjualan_tunai = sum(int(r.total or 0) for r in sales if _is_tunai_metode(r.metode))
+    penjualan_non = sum(int(r.total or 0) for r in sales if not _is_tunai_metode(r.metode))
+    biaya = [r for r in expenses if not _is_income(r)]
+    income = [r for r in expenses if _is_income(r)]
+    biaya_tunai = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya
+                      if _is_tunai_metode(getattr(r, "metode", "tunai")))
+    biaya_non = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya
+                    if not _is_tunai_metode(getattr(r, "metode", "tunai")))
+    income_tunai = sum(int(getattr(r, "jumlah", 0) or 0) for r in income
+                       if _is_tunai_metode(getattr(r, "metode", "tunai")))
+    income_non = sum(int(getattr(r, "jumlah", 0) or 0) for r in income
+                     if not _is_tunai_metode(getattr(r, "metode", "tunai")))
+    penerimaan_total = service_tunai + penjualan_tunai + income_tunai
+    arus_bersih = penerimaan_total - biaya_tunai
+
+    # Sesi kasir dalam periode (untuk modal awal & selisih kas fisik).
+    from .kas_sessions import _to_out as _kas_to_out
+    sessions = _sessions_periode(db, dari, sampai, kasir)
+    kas_awal = _opening_cash(sessions)
+    sesi = [_kas_to_out(s, db) for s in sessions]
+    kas_akhir_sistem = kas_awal + arus_bersih
+    return {
+        "dari": dari or "", "sampai": sampai or "", "kasir": kasir,
+        "kas_awal": kas_awal,
+        "penerimaan": {
+            "service_tunai": service_tunai,
+            "penjualan_tunai": penjualan_tunai,
+            "pendapatan_lain_tunai": income_tunai,
+            "total": penerimaan_total,
+        },
+        "pengeluaran": {"biaya_tunai": biaya_tunai, "total": biaya_tunai},
+        "arus_kas_bersih": arus_bersih,
+        "kas_akhir_sistem": kas_akhir_sistem,
+        "non_tunai": {
+            "service": service_non,
+            "penjualan": penjualan_non,
+            "pendapatan_lain": income_non,
+            "pengeluaran": biaya_non,
+        },
+        "sesi": sesi,
+    }
+
+
+@router.get("/stats/neraca")
+def neraca(
+    tanggal: str = Query("", description="YYYY-MM-DD, kosong = hari ini"),
+    kasir: str = Query("", description="filter per kasir (nama), kosong = semua"),
+    db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
+):
+    """Posisi keuangan ringkas per tanggal (bukan neraca double-entry)."""
+    sampai = (tanggal or "").strip()[:10] or datetime.now().date().isoformat()
+    services, sales, expenses, digital = _collect_periode(db, "", sampai, kasir)
+    spares = db.query(models.Sparepart).all()
+    diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
+    service_omzet = sum(int(r.biaya or 0) for r in diambil)
+    penjualan_omzet = sum(int(r.total or 0) for r in sales)
+    penjualan_hpp = sum(int(r.hpp_total or 0) for r in sales)
+    digital_omzet = sum(int(getattr(r, "harga_jual", 0) or 0) for r in digital)
+    digital_hpp = sum(int(getattr(r, "hpp", 0) or 0) for r in digital)
+    digital_laba = sum(
+        int(getattr(r, "margin", 0) or (int(getattr(r, "harga_jual", 0) or 0) - int(getattr(r, "hpp", 0) or 0)))
+        for r in digital
+    )
+    income_total = sum(int(getattr(r, "jumlah", 0) or 0) for r in expenses if _is_income(r))
+    expense_total = sum(int(getattr(r, "jumlah", 0) or 0) for r in expenses if not _is_income(r))
+    laba_ditahan = (service_omzet + (penjualan_omzet - penjualan_hpp)
+                    + digital_laba + income_total - expense_total)
+
+    sessions = _sessions_periode(db, "", sampai, kasir)
+    from .kas_sessions import _to_out as _kas_to_out
+    latest: dict[str, dict] = {}
+    for s in sessions:
+        key = " ".join((s.kasir or "").split()).casefold() or "-"
+        if key not in latest or (s.opened_at or datetime.min) > (latest[key]["_t"]):
+            latest[key] = {"_t": s.opened_at or datetime.min, "row": _kas_to_out(s, db)}
+    kas = sum(int(r["row"].get("kas_akhir" if r["row"].get("status") == "closed" else "kas_sistem", 0) or 0)
+              for r in latest.values())
+    if not latest:
+        # Belum ada sesi: pakai arus kas kumulatif sebagai perkiraan kas.
+        service_tunai = sum(int(r.biaya or 0) for r in diambil
+                            if _is_tunai_metode(getattr(r, "metode_bayar", "tunai")))
+        penjualan_tunai = sum(int(r.total or 0) for r in sales if _is_tunai_metode(r.metode))
+        income_tunai = sum(int(getattr(r, "jumlah", 0) or 0) for r in expenses
+                           if _is_income(r) and _is_tunai_metode(getattr(r, "metode", "tunai")))
+        biaya_tunai = sum(int(getattr(r, "jumlah", 0) or 0) for r in expenses
+                          if not _is_income(r) and _is_tunai_metode(getattr(r, "metode", "tunai")))
+        kas = service_tunai + penjualan_tunai + income_tunai - biaya_tunai
+
+    modal = _opening_cash(sessions)
+    stok_hpp = sum(int(s.hpp or 0) * int(s.stok or 0) for s in spares)
+    total_aset = kas + stok_hpp
+    total_ekuitas = modal + laba_ditahan
+    return {
+        "sampai": sampai, "kasir": kasir,
+        "aset": {
+            "kas": kas,
+            "stok_hpp": stok_hpp,
+            "total": total_aset,
+        },
+        "kewajiban": {"total": 0},
+        "ekuitas": {
+            "modal": modal,
+            "laba_ditahan": laba_ditahan,
+            "total": total_ekuitas,
+        },
+        "selisih": total_aset - total_ekuitas,
+        "catatan": (
+            "Posisi keuangan ringkas. Pembelian stok dicatat sebagai biaya, "
+            "sehingga nilai stok di aset bisa membuat selisih terhadap ekuitas."
+        ),
+    }
+
+
+@router.get("/stats/per-kategori")
+def per_kategori(
+    dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
+    sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),
+    kasir: str = Query("", description="filter per kasir (nama), kosong = semua"),
+    db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
+):
+    """Laba per kategori produk, per kode digital, dan per merk service."""
+    services, sales, _expenses, digital = _collect_periode(db, dari, sampai, kasir)
+    sp_by_id = {s.id: s for s in db.query(models.Sparepart).all()}
+
+    produk: dict[str, dict] = {}
+    for sale in sales:
+        items = sale.items or []
+        gross = sum(int(it.subtotal or (int(it.harga or 0) * int(it.qty or 0))) for it in items)
+        ratio = (int(sale.total or 0) / gross) if gross else 1
+        for it in items:
+            sp = sp_by_id.get(it.sparepart_id)
+            kat = ((getattr(sp, "kategori", "") or "Lainnya").strip() or "Lainnya") if sp else "Lainnya"
+            row = produk.setdefault(kat, {"kategori": kat, "qty": 0, "omzet": 0, "hpp": 0, "laba": 0})
+            qty = int(it.qty or 0)
+            omzet = int(round(int(it.subtotal or (int(it.harga or 0) * qty)) * ratio))
+            hpp = int(it.hpp or 0) * qty
+            row["qty"] += qty
+            row["omzet"] += omzet
+            row["hpp"] += hpp
+            row["laba"] += omzet - hpp
+
+    digital_rows: dict[str, dict] = {}
+    for d in digital:
+        kode = (getattr(d, "kode", "") or "Lainnya").strip() or "Lainnya"
+        row = digital_rows.setdefault(kode, {"kode": kode, "qty": 0, "omzet": 0, "hpp": 0, "laba": 0})
+        omzet = int(getattr(d, "harga_jual", 0) or 0)
+        hpp = int(getattr(d, "hpp", 0) or 0)
+        laba = int(getattr(d, "margin", 0) or (omzet - hpp))
+        row["qty"] += 1
+        row["omzet"] += omzet
+        row["hpp"] += hpp
+        row["laba"] += laba
+
+    service_rows: dict[str, dict] = {}
+    for s in services:
+        if _norm_status(s.status) != "Diambil":
+            continue
+        merk = (s.merk or "Lainnya").strip() or "Lainnya"
+        row = service_rows.setdefault(merk, {"merk": merk, "jumlah": 0, "omzet": 0})
+        row["jumlah"] += 1
+        row["omzet"] += int(s.biaya or 0)
+
+    return {
+        "dari": dari or "", "sampai": sampai or "", "kasir": kasir,
+        "produk": sorted(produk.values(), key=lambda x: (-x["laba"], x["kategori"].lower())),
+        "digital": sorted(digital_rows.values(), key=lambda x: (-x["laba"], x["kode"].lower())),
+        "service": sorted(service_rows.values(), key=lambda x: (-x["omzet"], x["merk"].lower())),
+    }
+
 
 
 @router.get("/stats/harian")

@@ -2973,25 +2973,26 @@ async function simpanExLike(jenis){
   const kategori=val(p+'kategori','Lainnya')||'Lainnya';
   const keterangan=val(p+'ket').trim();
   const jumlah=Number(($(p+'jumlah')||{}).value||0);
+  const metode=(val(p+'metode','tunai')||'tunai');
   if(!keterangan){ toast('Keterangan wajib diisi'); return; }
   if(!(jumlah>0)){ toast('Jumlah harus lebih dari 0'); return; }
   if(useBackend() && window.API.createExpense){
     try{
-      const created=await window.API.createExpense({tanggal, jenis, kategori, keterangan, jumlah});
+      const created=await window.API.createExpense({tanggal, jenis, kategori, keterangan, jumlah, metode});
       if(isInc && created && created.jenis!=='pendapatan'){
         toast('Server belum mendukung pendapatan lain — update backend dulu ⚠️');
       }
       await pullExpenses(); renderAll();
-      if($(p+'ket'))$(p+'ket').value=''; if($(p+'jumlah'))$(p+'jumlah').value=0;
+      if($(p+'ket'))$(p+'ket').value=''; if($(p+'jumlah'))$(p+'jumlah').value=0; if($(p+'metode'))$(p+'metode').value='tunai';
       renderExpenses();
       toast(isInc?'Pendapatan lain tersimpan, pendapatan & laba bertambah 💰':'Biaya tersimpan, laba berkurang 💸');
       return;
     }catch(err){ if(handleSesiError(err.message)) return; toast(err.message); return; }
   }
   const me=currentUser();
-  EXPENSES.unshift({id:Date.now(), tanggal, jenis, kategori, keterangan, jumlah, dicatat_oleh:me?me.nama:''});
+  EXPENSES.unshift({id:Date.now(), tanggal, jenis, kategori, keterangan, jumlah, metode, dicatat_oleh:me?me.nama:''});
   saveExpensesLocal();
-  if($(p+'ket'))$(p+'ket').value=''; if($(p+'jumlah'))$(p+'jumlah').value=0;
+  if($(p+'ket'))$(p+'ket').value=''; if($(p+'jumlah'))$(p+'jumlah').value=0; if($(p+'metode'))$(p+'metode').value='tunai';
   renderAll(); toast(isInc?'Pendapatan lain tersimpan, pendapatan & laba bertambah 💰':'Biaya tersimpan, laba berkurang 💸');
 }
 function simpanExpense(){ return simpanExLike('biaya'); }
@@ -3005,6 +3006,7 @@ window.exEdit=function(id){
   if($('mex_kategori'))$('mex_kategori').value=x.kategori||'Lainnya';
   if($('mex_ket'))$('mex_ket').value=x.keterangan||'';
   if($('mex_jumlah'))$('mex_jumlah').value=x.jumlah||0;
+  if($('mex_metode'))$('mex_metode').value=(x.metode||'tunai');
   $('modalExpense').classList.remove('hidden');
 };
 window.exHapus=async function(id){
@@ -3043,13 +3045,14 @@ function bindExpenses(){
     const kategori=(($('mex_kategori')||{}).value||x.kategori||'Lainnya');
     const keterangan=(($('mex_ket')||{}).value||'').trim();
     const jumlah=Number(($('mex_jumlah')||{}).value||0);
+    const metode=(($('mex_metode')||{}).value||x.metode||'tunai');
     if(!keterangan){ toast('Keterangan wajib diisi'); return; }
     if(!(jumlah>0)){ toast('Jumlah harus lebih dari 0'); return; }
     if(useBackend() && window.API.updateExpense){
-      try{ await window.API.updateExpense(x.id,{tanggal,jenis,kategori,keterangan,jumlah}); await pullExpenses(); renderAll(); $('modalExpense').classList.add('hidden'); toast('Transaksi diperbarui ✅'); return; }
+      try{ await window.API.updateExpense(x.id,{tanggal,jenis,kategori,keterangan,jumlah,metode}); await pullExpenses(); renderAll(); $('modalExpense').classList.add('hidden'); toast('Transaksi diperbarui ✅'); return; }
       catch(err){ toast(err.message); return; }
     }
-    Object.assign(x,{tanggal,jenis,kategori,keterangan,jumlah});
+    Object.assign(x,{tanggal,jenis,kategori,keterangan,jumlah,metode});
     saveExpensesLocal();
     $('modalExpense').classList.add('hidden');
     renderAll(); toast('Transaksi diperbarui ✅');
@@ -3114,16 +3117,34 @@ function computeReportLocal(dari, sampai, kasir){
   const inList=exAll.filter(x=>exJenis(x)==='pendapatan');
   const exTot=exList.reduce((a,b)=>a+Number(b.jumlah||0),0);
   const inTot=inList.reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const groupUang=(arr)=>{
+    const m={};
+    arr.forEach(x=>{
+      const k=String(x.kategori||'Lainnya').trim()||'Lainnya';
+      if(!m[k]) m[k]={kategori:k,jumlah:0,count:0};
+      m[k].jumlah+=Number(x.jumlah||0); m[k].count++;
+    });
+    return Object.values(m).sort((a,b)=>b.jumlah-a.jumlah);
+  };
+  const totalPendapatan=sOm+jOm+inTot;
+  const labaKotor=totalPendapatan-jHpp;
+  const labaOperasional=labaKotor-exTot;
   return {
     dari: dari||'', sampai: sampai||'', kasir: kasir,
     service_masuk: svc.length,
     service_selesai: diambil.length,
-    service_omzet: sOm, service_per_status: per,
+    service_omzet: sOm, service_hpp: 0, service_laba: sOm, service_per_status: per,
     service_diambil: [...diambil].sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,50).map(x=>({noService:x.noService,tanggal:x.tanggal,nama:x.nama,telp:x.telp,merk:x.merk,tipe:x.tipe,biaya:x.biaya,teknisi:x.teknisi,kasir:x.kasir})),
     penjualan_count: jual.length, penjualan_subtotal: jSub, penjualan_diskon: jDisc, penjualan_omzet: jOm, penjualan_hpp: jHpp, penjualan_laba: jLb,
+    digital_count: 0, digital_omzet: 0, digital_hpp: 0, digital_laba: 0,
     expense_count: exList.length, expense_total: exTot,
     income_count: inList.length, income_total: inTot,
-    total_pendapatan: sOm+jOm+inTot, total_laba: sOm+jLb+inTot-exTot,
+    total_hpp: jHpp,
+    total_pendapatan: totalPendapatan, laba_kotor: labaKotor,
+    laba_operasional: labaOperasional, total_laba: labaOperasional, laba_bersih: labaOperasional,
+    margin_persen: totalPendapatan?Math.round((labaOperasional/totalPendapatan)*10000)/100:0,
+    beban_per_kategori: groupUang(exList),
+    pendapatan_per_kategori: groupUang(inList),
     stok_item: sp.length,
     stok_nilai_hpp: sp.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0),
     stok_nilai_jual: sp.reduce((a,b)=>a+Number(b.harga_jual||0)*Number(b.stok||0),0),
@@ -3132,6 +3153,7 @@ function computeReportLocal(dari, sampai, kasir){
   };
 }
 let LAPORAN_CACHE=null;
+let ARUS_CACHE=null, NERACA_CACHE=null, KATEGORI_CACHE=null;
 let DIG_LIST=[];
 let DIG_SYNCED=false;
 
@@ -3201,6 +3223,233 @@ function jualItemsHTML(x){
     return '<div style="font-size:12px;line-height:1.35">'+nama+' <b>×'+esc(qty)+'</b> <small class="muted">'+fmtRp(sub)+'</small></div>';
   }).join('');
 }
+function _laporanApiUrl(path){
+  let url=String((window.API&&window.API.base)||'/api').replace(/\/$/,'');
+  if(!/\/api$/i.test(url)) url+='/api';
+  return url+path;
+}
+function _laporanHeaders(){
+  const t=(typeof backendToken==='function')?backendToken():null;
+  return t?{Authorization:'Bearer '+t}:{};
+}
+async function _laporanGet(path, params){
+  const qs=new URLSearchParams(params||{}).toString();
+  const res=await fetch(_laporanApiUrl(path)+(qs?('?'+qs):''), {headers:_laporanHeaders(), cache:'no-store'});
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  return await res.json();
+}
+function _isTunaiMetode(m){
+  const v=String(m||'').trim().toLowerCase();
+  return v===''||v==='tunai'||v==='cash'||v==='tunai/lunas';
+}
+function computeArusKasLocal(dari,sampai,kasir){
+  const svc=(typeof DB!=='undefined'?DB:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.kasir,kasir));
+  const sales=(typeof SALES!=='undefined'?SALES:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.kasir,kasir));
+  const ex=(typeof EXPENSES!=='undefined'?EXPENSES:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.dicatat_oleh,kasir));
+  const diambil=svc.filter(x=>normStatus(x.status)==='Diambil');
+  const svcT=diambil.filter(x=>_isTunaiMetode(x.metode_bayar)).reduce((a,b)=>a+Number(b.biaya||0),0);
+  const svcN=diambil.filter(x=>!_isTunaiMetode(x.metode_bayar)).reduce((a,b)=>a+Number(b.biaya||0),0);
+  const jualT=sales.filter(x=>_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.total||0),0);
+  const jualN=sales.filter(x=>!_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.total||0),0);
+  const biaya=ex.filter(x=>exJenis(x)!=='pendapatan');
+  const income=ex.filter(x=>exJenis(x)==='pendapatan');
+  const biayaT=biaya.filter(x=>_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const biayaN=biaya.filter(x=>!_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const incomeT=income.filter(x=>_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const incomeN=income.filter(x=>!_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const sessions=(typeof KAS_RIWAYAT!=='undefined'?KAS_RIWAYAT:[]).filter(s=>{
+    const t=String(s.opened_at||'').slice(0,10);
+    return inPeriode(t,dari,sampai)&&matchKasir(s.kasir,kasir);
+  });
+  const first={};
+  sessions.forEach(s=>{ const k=normKasir(s.kasir)||'-'; const t=String(s.opened_at||''); if(!first[k]||t<first[k].t) first[k]={t,modal:Number(s.modal_awal||0)}; });
+  const kasAwal=Object.values(first).reduce((a,b)=>a+b.modal,0);
+  const penerimaan=svcT+jualT+incomeT;
+  return {
+    dari:dari||'', sampai:sampai||'', kasir:kasir||'',
+    kas_awal:kasAwal,
+    penerimaan:{service_tunai:svcT, penjualan_tunai:jualT, pendapatan_lain_tunai:incomeT, total:penerimaan},
+    pengeluaran:{biaya_tunai:biayaT, total:biayaT},
+    arus_kas_bersih:penerimaan-biayaT,
+    kas_akhir_sistem:kasAwal+penerimaan-biayaT,
+    non_tunai:{service:svcN, penjualan:jualN, pendapatan_lain:incomeN, pengeluaran:biayaN},
+    sesi:sessions,
+  };
+}
+async function renderArusKas(dari,sampai,kasir){
+  if(!$('akBody')) return;
+  let r=null;
+  if(useBackend()){
+    try{ r=await _laporanGet('/stats/arus-kas',{dari:dari||'',sampai:sampai||'',kasir:kasir||''}); }
+    catch(e){ console.warn('arus-kas:', e.message); }
+  }
+  if(!r) r=computeArusKasLocal(dari,sampai,kasir);
+  ARUS_CACHE=r;
+  const p=r.penerimaan||{}, k=r.pengeluaran||{}, n=r.non_tunai||{};
+  if($('akKasAwal')) $('akKasAwal').textContent=fmtRp(r.kas_awal||0);
+  if($('akMasuk')) $('akMasuk').textContent=fmtRp(p.total||0);
+  if($('akKeluar')) $('akKeluar').textContent=fmtRp(k.total||0);
+  if($('akBersih')) $('akBersih').textContent=fmtRp(r.arus_kas_bersih||0);
+  if($('akPeriode')) $('akPeriode').textContent=(dari||sampai)?`${dari||'…'} s/d ${sampai||'…'}`:'Semua periode';
+  const row=(label,val,strong)=>`<tr><td>${strong?'<b>'+label+'</b>':label}</td><td style="text-align:right">${strong?'<b>'+fmtRp(val)+'</b>':fmtRp(val)}</td></tr>`;
+  if($('akBody')) $('akBody').innerHTML=[
+    row('Kas awal (modal sesi)', r.kas_awal||0, true),
+    '<tr><td colspan="2"><b>Penerimaan Tunai</b></td></tr>',
+    row('Service (Diambil)', p.service_tunai||0),
+    row('Penjualan barang', p.penjualan_tunai||0),
+    row('Pendapatan lain', p.pendapatan_lain_tunai||0),
+    row('Total penerimaan', p.total||0, true),
+    '<tr><td colspan="2"><b>Pengeluaran Tunai</b></td></tr>',
+    row('Biaya operasional', k.biaya_tunai||0),
+    row('Arus kas bersih', r.arus_kas_bersih||0, true),
+    row('Kas akhir (sistem)', r.kas_akhir_sistem||0, true),
+    '<tr><td colspan="2"><b>Non-tunai (tidak masuk kas)</b></td></tr>',
+    row('Service', n.service||0),
+    row('Penjualan barang', n.penjualan||0),
+    row('Pendapatan lain', n.pendapatan_lain||0),
+    row('Pengeluaran', n.pengeluaran||0),
+  ].join('');
+  const sesi=Array.isArray(r.sesi)?r.sesi:[];
+  if($('akSesiBody')) $('akSesiBody').innerHTML=sesi.map(s=>`<tr>
+    <td><b>${esc(s.kasir||'-')}</b><br><small class="muted">${esc(s.status||'')}</small></td>
+    <td>${fmtTgl(String(s.opened_at||'').slice(0,10))}</td>
+    <td>${s.closed_at?fmtTgl(String(s.closed_at).slice(0,10)):'—'}</td>
+    <td style="text-align:right">${fmtRp(s.modal_awal||0)}</td>
+    <td style="text-align:right">${fmtRp(s.tunai_masuk||0)}</td>
+    <td style="text-align:right">${fmtRp(s.non_tunai||0)}</td>
+    <td style="text-align:right">(${fmtRp(s.pengeluaran_total||0)})</td>
+    <td style="text-align:right"><b>${fmtRp(s.kas_sistem||0)}</b></td>
+    <td style="text-align:right">${s.status==='closed'?fmtRp(s.kas_akhir||0):'—'}</td>
+    <td style="text-align:right"><b>${s.status==='closed'?fmtRp(s.selisih||0):'—'}</b></td></tr>`).join('')
+    || '<tr><td colspan="10">Belum ada sesi kasir pada periode ini.</td></tr>';
+}
+function computeNeracaLocal(sampai,kasir){
+  const r=computeReportLocal('',sampai,kasir);
+  const sp=(typeof SPARE!=='undefined'?SPARE:[]);
+  const stok=sp.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0);
+  const sessions=(typeof KAS_RIWAYAT!=='undefined'?KAS_RIWAYAT:[]).filter(s=>matchKasir(s.kasir,kasir));
+  const latest={}, first={};
+  sessions.forEach(s=>{
+    const k=normKasir(s.kasir)||'-'; const t=String(s.opened_at||'');
+    if(!latest[k]||t>latest[k].t) latest[k]={t,row:s};
+    if(!first[k]||t<first[k].t) first[k]={t,modal:Number(s.modal_awal||0)};
+  });
+  let kas=0;
+  Object.values(latest).forEach(x=>{ kas+=Number((x.row.status==='closed'?x.row.kas_akhir:x.row.kas_sistem)||0); });
+  if(!Object.keys(latest).length){
+    const a=computeArusKasLocal('',sampai,kasir);
+    kas=Number(a.kas_akhir_sistem||0);
+  }
+  const modal=Object.values(first).reduce((a,b)=>a+b.modal,0);
+  const laba=Number(r.total_laba||0);
+  return {
+    sampai:sampai||'', kasir:kasir||'',
+    aset:{kas, stok_hpp:stok, total:kas+stok},
+    kewajiban:{total:0},
+    ekuitas:{modal, laba_ditahan:laba, total:modal+laba},
+    selisih:(kas+stok)-(modal+laba),
+    catatan:'Posisi keuangan ringkas. Pembelian stok dicatat sebagai biaya, sehingga nilai stok di aset bisa membuat selisih terhadap ekuitas.',
+  };
+}
+async function renderNeraca(sampai,kasir){
+  if(!$('nrBody')) return;
+  let r=null;
+  if(useBackend()){
+    try{ r=await _laporanGet('/stats/neraca',{tanggal:sampai||'',kasir:kasir||''}); }
+    catch(e){ console.warn('neraca:', e.message); }
+  }
+  if(!r) r=computeNeracaLocal(sampai,kasir);
+  NERACA_CACHE=r;
+  const a=r.aset||{}, e=r.ekuitas||{};
+  if($('nrAset')) $('nrAset').textContent=fmtRp(a.total||0);
+  if($('nrKas')) $('nrKas').textContent=fmtRp(a.kas||0);
+  if($('nrStok')) $('nrStok').textContent=fmtRp(a.stok_hpp||0);
+  if($('nrEkuitas')) $('nrEkuitas').textContent=fmtRp(e.total||0);
+  if($('nrPeriode')) $('nrPeriode').textContent='Per '+(r.sampai||sampai||'hari ini');
+  const row=(label,val,strong)=>`<tr><td>${strong?'<b>'+label+'</b>':label}</td><td style="text-align:right">${strong?'<b>'+fmtRp(val)+'</b>':fmtRp(val)}</td></tr>`;
+  if($('nrBody')) $('nrBody').innerHTML=[
+    '<tr><td colspan="2"><b>ASET</b></td></tr>',
+    row('Kas', a.kas||0),
+    row('Nilai stok (HPP)', a.stok_hpp||0),
+    row('Total aset', a.total||0, true),
+    '<tr><td colspan="2"><b>KEWAJIBAN</b></td></tr>',
+    row('Total kewajiban', (r.kewajiban||{}).total||0, true),
+    '<tr><td colspan="2"><b>EKUITAS</b></td></tr>',
+    row('Modal disetor', e.modal||0),
+    row('Laba ditahan', e.laba_ditahan||0),
+    row('Total ekuitas', e.total||0, true),
+    row('Selisih (aset − kewajiban − ekuitas)', r.selisih||0, true),
+  ].join('');
+  if($('nrCatatan')) $('nrCatatan').textContent=r.catatan||'';
+}
+function computeKategoriLocal(dari,sampai,kasir){
+  const sales=(typeof SALES!=='undefined'?SALES:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.kasir,kasir));
+  const svc=(typeof DB!=='undefined'?DB:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.kasir,kasir)&&normStatus(x.status)==='Diambil');
+  const dig=(typeof DIG_LIST!=='undefined'?DIG_LIST:[]).filter(x=>inPeriode(x.tanggal||'',dari,sampai));
+  const prod={};
+  sales.forEach(sale=>{
+    const items=Array.isArray(sale.items)?sale.items:[];
+    const gross=items.reduce((a,it)=>a+Number(it.subtotal!=null?it.subtotal:(Number(it.harga||0)*Number(it.qty||0))),0);
+    const ratio=gross?(Number(sale.total||0)/gross):1;
+    items.forEach(it=>{
+      const sp=(typeof findSpare==='function'?findSpare(it.sparepart_id):null)
+        || (typeof SPARE!=='undefined'?(SPARE||[]).find(x=>it.sku&&String(x.sku)===String(it.sku)):null);
+      const kat=String((sp&&sp.kategori)||'Lainnya').trim()||'Lainnya';
+      const qty=Number(it.qty||0);
+      const om=Math.round(Number(it.subtotal!=null?it.subtotal:(Number(it.harga||0)*qty))*ratio);
+      const hpp=Number(it.hpp||0)*qty;
+      if(!prod[kat]) prod[kat]={kategori:kat,qty:0,omzet:0,hpp:0,laba:0};
+      prod[kat].qty+=qty; prod[kat].omzet+=om; prod[kat].hpp+=hpp; prod[kat].laba+=om-hpp;
+    });
+  });
+  const digRows={};
+  dig.forEach(x=>{
+    const kode=String(x.kode||'Lainnya').trim()||'Lainnya';
+    const om=Number(x.harga_jual||0), hpp=Number(x.hpp||0), laba=Number(x.margin||0)||(om-hpp);
+    if(!digRows[kode]) digRows[kode]={kode,qty:0,omzet:0,hpp:0,laba:0};
+    digRows[kode].qty++; digRows[kode].omzet+=om; digRows[kode].hpp+=hpp; digRows[kode].laba+=laba;
+  });
+  const svcRows={};
+  svc.forEach(x=>{
+    const merk=String(x.merk||'Lainnya').trim()||'Lainnya';
+    if(!svcRows[merk]) svcRows[merk]={merk,jumlah:0,omzet:0};
+    svcRows[merk].jumlah++; svcRows[merk].omzet+=Number(x.biaya||0);
+  });
+  return {
+    dari:dari||'', sampai:sampai||'', kasir:kasir||'',
+    produk:Object.values(prod).sort((a,b)=>b.laba-a.laba),
+    digital:Object.values(digRows).sort((a,b)=>b.laba-a.laba),
+    service:Object.values(svcRows).sort((a,b)=>b.omzet-a.omzet),
+  };
+}
+async function renderKategori(dari,sampai,kasir){
+  if(!$('ktProdukBody')) return;
+  let r=null;
+  if(useBackend()){
+    try{ r=await _laporanGet('/stats/per-kategori',{dari:dari||'',sampai:sampai||'',kasir:kasir||''}); }
+    catch(e){ console.warn('per-kategori:', e.message); }
+  }
+  if(!r) r=computeKategoriLocal(dari,sampai,kasir);
+  KATEGORI_CACHE=r;
+  if($('ktPeriode')) $('ktPeriode').textContent=(dari||sampai)?`${dari||'…'} s/d ${sampai||'…'}`:'Semua periode';
+  const prod=Array.isArray(r.produk)?r.produk:[];
+  if($('ktProdukBody')){
+    const t=prod.reduce((o,x)=>({qty:o.qty+Number(x.qty||0),omzet:o.omzet+Number(x.omzet||0),hpp:o.hpp+Number(x.hpp||0),laba:o.laba+Number(x.laba||0)}),{qty:0,omzet:0,hpp:0,laba:0});
+    $('ktProdukBody').innerHTML=(prod.map(x=>`<tr><td><b>${esc(x.kategori)}</b></td><td style="text-align:right">${esc(x.qty||0)}</td><td style="text-align:right">${fmtRp(x.omzet||0)}</td><td style="text-align:right">${fmtRp(x.hpp||0)}</td><td style="text-align:right"><b>${fmtRp(x.laba||0)}</b></td></tr>`).join('')
+      + `<tr><td><b>TOTAL</b></td><td style="text-align:right"><b>${esc(t.qty)}</b></td><td style="text-align:right"><b>${fmtRp(t.omzet)}</b></td><td style="text-align:right"><b>${fmtRp(t.hpp)}</b></td><td style="text-align:right"><b>${fmtRp(t.laba)}</b></td></tr>`)
+      || '<tr><td colspan="5">Belum ada penjualan pada periode ini.</td></tr>';
+  }
+  const dig=Array.isArray(r.digital)?r.digital:[];
+  if($('ktDigitalBody')){
+    $('ktDigitalBody').innerHTML=dig.map(x=>`<tr><td><b>${esc(x.kode)}</b></td><td style="text-align:right">${esc(x.qty||0)}</td><td style="text-align:right">${fmtRp(x.omzet||0)}</td><td style="text-align:right">${fmtRp(x.hpp||0)}</td><td style="text-align:right"><b>${fmtRp(x.laba||0)}</b></td></tr>`).join('')
+      || '<tr><td colspan="5">Belum ada penjualan digital pada periode ini.</td></tr>';
+  }
+  const svc=Array.isArray(r.service)?r.service:[];
+  if($('ktServiceBody')){
+    $('ktServiceBody').innerHTML=svc.map(x=>`<tr><td><b>${esc(x.merk)}</b></td><td style="text-align:right">${esc(x.jumlah||0)}</td><td style="text-align:right"><b>${fmtRp(x.omzet||0)}</b></td></tr>`).join('')
+      || '<tr><td colspan="3">Belum ada service Diambil pada periode ini.</td></tr>';
+  }
+}
 async function renderLaporan(){
   if(!$('page-laporan').classList.contains('active')) return;
   show('lpLoading',true); hide('lpWrap');
@@ -3264,6 +3513,37 @@ async function renderLaporan(){
     }catch(e){}
     
     LAPORAN_CACHE=r;
+    if($('lpLabaBody')){
+      const hppOk=bolehHpp();
+      const hpp=Number(r.total_hpp!=null?r.total_hpp:(r.penjualan_hpp||0));
+      const pendapatan=Number(r.total_pendapatan||0);
+      const labaKotor=Number(r.laba_kotor!=null?r.laba_kotor:(pendapatan-hpp));
+      const beban=Number(r.expense_total||0);
+      const labaBersih=Number(r.total_laba||0);
+      const margin=(r.margin_persen!=null)?Number(r.margin_persen):(pendapatan?Math.round((labaBersih/pendapatan)*10000)/100:0);
+      const rows=[];
+      const add=(label,val,strong,neg)=>rows.push(`<tr><td${strong?' style="font-weight:700"':''}>${label}</td><td style="text-align:right${strong?';font-weight:700':''}">${neg?'('+fmtRp(val)+')':fmtRp(val)}</td></tr>`);
+      add('Pendapatan Service (Diambil)', r.service_omzet||0);
+      add('Pendapatan Penjualan (net)', r.penjualan_omzet||0);
+      add('Pendapatan Lain', r.income_total||0);
+      add('Total Pendapatan', pendapatan, true);
+      if(hppOk) add('HPP Barang Terjual', hpp, false, true);
+      add('Laba Kotor', labaKotor, true);
+      add('Beban Operasional', beban, false, true);
+      add('Laba Bersih', labaBersih, true);
+      add('Margin', margin+'%');
+      const bk=Array.isArray(r.beban_per_kategori)?r.beban_per_kategori:[];
+      if(bk.length){
+        rows.push('<tr><td colspan="2" style="padding-top:10px"><b>Rincian Beban per Kategori</b></td></tr>');
+        bk.forEach(x=>rows.push(`<tr><td>&nbsp;&nbsp;${esc(x.kategori)} <small class="muted">(${esc(x.count||0)}x)</small></td><td style="text-align:right">${fmtRp(x.jumlah||0)}</td></tr>`));
+      }
+      const pk=Array.isArray(r.pendapatan_per_kategori)?r.pendapatan_per_kategori:[];
+      if(pk.length){
+        rows.push('<tr><td colspan="2" style="padding-top:10px"><b>Rincian Pendapatan Lain per Kategori</b></td></tr>');
+        pk.forEach(x=>rows.push(`<tr><td>&nbsp;&nbsp;${esc(x.kategori)} <small class="muted">(${esc(x.count||0)}x)</small></td><td style="text-align:right">${fmtRp(x.jumlah||0)}</td></tr>`));
+      }
+      $('lpLabaBody').innerHTML=rows.join('');
+    }
     const periode=(r.dari||r.sampai)?`Periode: ${r.dari||'…'} s/d ${r.sampai||'…'}`:'Semua periode';
     const kasirTag=(r.kasir||kasir)?` • Kasir: ${r.kasir||kasir}`:'';
     if($('lpInfo')) $('lpInfo').textContent=periode+kasirTag+` • ${r.service_masuk} service • ${Number(r.penjualan_count||0)+Number(r.digital_count||0)} nota • ${r.expense_count||0} biaya • ${r.income_count||0} pendapatan lain`;
@@ -3364,6 +3644,9 @@ async function renderLaporan(){
     try{ renderRekapKasir(dariF,sampaiF); }catch(e){ console.warn('renderRekapKasir:', e); }
     try{ renderRekapHarian(dariF,sampaiF,kasir); }catch(e){ console.warn('renderRekapHarian:', e); }
     try{ renderLaporanBiaya(); }catch(e){ console.warn('renderLaporanBiaya:', e); }
+    try{ renderArusKas(dariF,sampaiF,kasir).catch(e=>console.warn('renderArusKas:', e)); }catch(e){}
+    try{ renderNeraca(sampaiF,kasir).catch(e=>console.warn('renderNeraca:', e)); }catch(e){}
+    try{ renderKategori(dariF,sampaiF,kasir).catch(e=>console.warn('renderKategori:', e)); }catch(e){}
     const diambilList = Array.isArray(r.service_diambil) ? r.service_diambil : [];
     if($('lpServiceCount')) $('lpServiceCount').textContent = r.service_masuk || 0;
     if($('lpServiceBody')){
@@ -3591,6 +3874,12 @@ window.gotoLtab=function(name){
   NAVLTAB.laporan=name;
   try{ syncLpFilterRows(name); }catch{}
   if(name==='biaya'){ try{ renderLaporanBiaya(); }catch(e){} }
+  try{
+    const rr=lpRange();
+    if(name==='arus') renderArusKas(rr.dari,rr.sampai,rr.kasir).catch(e=>console.warn('renderArusKas:', e));
+    if(name==='neraca') renderNeraca(rr.sampai,rr.kasir).catch(e=>console.warn('renderNeraca:', e));
+    if(name==='kategori') renderKategori(rr.dari,rr.sampai,rr.kasir).catch(e=>console.warn('renderKategori:', e));
+  }catch(e){}
   try{ navSyncActive('laporan', name, 'laporan'); }catch{}
 };
 function exportLaporanCSV(){
@@ -3609,10 +3898,18 @@ function exportLaporanCSV(){
   L.push('Pendapatan penjualan,'+r.penjualan_omzet);
   L.push('Pendapatan lain ('+(r.income_count||0)+' transaksi),'+(r.income_total||0));
   L.push('Total pendapatan,'+r.total_pendapatan);
-  if(hppOk) L.push('HPP barang terjual,'+r.penjualan_hpp);
+  const hpp=Number(r.total_hpp!=null?r.total_hpp:(r.penjualan_hpp||0));
+  const labaKotor=Number(r.laba_kotor!=null?r.laba_kotor:(Number(r.total_pendapatan||0)-hpp));
+  const labaOps=Number(r.laba_operasional!=null?r.laba_operasional:(labaKotor-Number(r.expense_total||0)));
+  if(hppOk) L.push('HPP barang terjual,'+hpp);
   L.push('Laba penjualan,'+r.penjualan_laba);
+  L.push('Laba kotor,'+labaKotor);
   L.push('Pengeluaran/biaya ('+(r.expense_count||0)+' transaksi),'+(r.expense_total||0));
-  L.push('Laba bersih (service + laba jual + pendapatan lain - biaya),'+r.total_laba);
+  L.push('Laba operasional,'+labaOps);
+  L.push('Laba bersih,'+r.total_laba);
+  L.push('Margin (%),'+(r.margin_persen!=null?r.margin_persen:0));
+  (r.beban_per_kategori||[]).forEach(x=>L.push('Beban '+(x.kategori||'Lainnya')+','+(x.jumlah||0)));
+  (r.pendapatan_per_kategori||[]).forEach(x=>L.push('Pendapatan lain '+(x.kategori||'Lainnya')+','+(x.jumlah||0)));
   L.push('');
   L.push('SERVICE PER STATUS');
   L.push('Status,Jumlah');
@@ -3657,6 +3954,56 @@ function exportLaporanCSV(){
     if(hppOk) L.push(['TOTAL','','','','','','',spF.length,spF.reduce((a,b)=>a+Number(b.hpp||0)*Number(b.stok||0),0)].join(','));
     else L.push(['TOTAL','','','','','',spF.length].join(','));
   }
+  L.push('');
+  L.push('ARUS KAS (TUNAI)');
+  L.push('Keterangan,Nilai');
+  {
+    const a=ARUS_CACHE||computeArusKasLocal(r.dari||'',r.sampai||'',r.kasir||'');
+    const p=a.penerimaan||{}, k=a.pengeluaran||{}, n=a.non_tunai||{};
+    L.push('Kas awal,'+(a.kas_awal||0));
+    L.push('Penerimaan service tunai,'+(p.service_tunai||0));
+    L.push('Penerimaan penjualan tunai,'+(p.penjualan_tunai||0));
+    L.push('Pendapatan lain tunai,'+(p.pendapatan_lain_tunai||0));
+    L.push('Total penerimaan tunai,'+(p.total||0));
+    L.push('Pengeluaran tunai,'+(k.total||0));
+    L.push('Arus kas bersih,'+(a.arus_kas_bersih||0));
+    L.push('Kas akhir sistem,'+(a.kas_akhir_sistem||0));
+    L.push('');
+    L.push('Non-tunai service,'+(n.service||0));
+    L.push('Non-tunai penjualan,'+(n.penjualan||0));
+    L.push('Non-tunai pendapatan lain,'+(n.pendapatan_lain||0));
+    L.push('Non-tunai pengeluaran,'+(n.pengeluaran||0));
+  }
+  L.push('');
+  L.push('POSISI KEUANGAN RINGKAS');
+  L.push('Keterangan,Nilai');
+  {
+    const nr=NERACA_CACHE||computeNeracaLocal(r.sampai||'',r.kasir||'');
+    const as=nr.aset||{}, ek=nr.ekuitas||{};
+    L.push('Kas,'+(as.kas||0));
+    L.push('Nilai stok (HPP),'+(as.stok_hpp||0));
+    L.push('Total aset,'+(as.total||0));
+    L.push('Total kewajiban,'+((nr.kewajiban||{}).total||0));
+    L.push('Modal,'+(ek.modal||0));
+    L.push('Laba ditahan,'+(ek.laba_ditahan||0));
+    L.push('Total ekuitas,'+(ek.total||0));
+    L.push('Selisih aset - ekuitas,'+(nr.selisih||0));
+  }
+  L.push('');
+  L.push('LABA PER KATEGORI');
+  L.push('Kategori,Qty,Omzet,HPP,Laba');
+  {
+    const kt=KATEGORI_CACHE||computeKategoriLocal(r.dari||'',r.sampai||'',r.kasir||'');
+    (kt.produk||[]).forEach(x=>L.push(['"'+String(x.kategori||'').replace(/"/g,'""')+'"',x.qty||0,x.omzet||0,x.hpp||0,x.laba||0].join(',')));
+    L.push('');
+    L.push('PENJUALAN DIGITAL PER KODE');
+    L.push('Kode,Qty,Omzet,HPP,Laba');
+    (kt.digital||[]).forEach(x=>L.push(['"'+String(x.kode||'').replace(/"/g,'""')+'"',x.qty||0,x.omzet||0,x.hpp||0,x.laba||0].join(',')));
+    L.push('');
+    L.push('OMZET SERVICE PER MERK');
+    L.push('Merk,Unit,Omzet');
+    (kt.service||[]).forEach(x=>L.push(['"'+String(x.merk||'').replace(/"/g,'""')+'"',x.jumlah||0,x.omzet||0].join(',')));
+  }
   download('laporan-'+(r.dari||'semua')+'-sd-'+(r.sampai||'semua')+'.csv','\uFEFF'+L.join('\n'),'text/csv');
   toast('CSV laporan diunduh ⬇');
 }
@@ -3677,6 +4024,37 @@ function printLaporan(){
     <p><b>Rekap Harian per Kasir</b> (${esc((h.rows||[]).length)} baris)<br>
     ${rows.map(x=>esc(x.tanggal)+' • '+esc(x.kasir)+' — svc '+esc(x.svc_diambil||0)+' • '+fmtRp(x.svc_omzet||0)+' • laba '+fmtRp(x.total_laba||0)+(x.wa_terkirim?(' • WA '+esc(x.wa_terkirim)):'')).join('<br>')||'-'}</p>`;
   }catch{}
+  let arusHtml='', neracaHtml='', kategoriHtml='';
+  try{
+    const a=ARUS_CACHE||computeArusKasLocal(r.dari||'',r.sampai||'',r.kasir||'');
+    const p=a.penerimaan||{}, k=a.pengeluaran||{}, n=a.non_tunai||{};
+    arusHtml=`<hr><p><b>Arus Kas (Tunai)</b><br>
+    Kas awal: ${fmtRp(a.kas_awal||0)}<br>
+    Penerimaan service: ${fmtRp(p.service_tunai||0)} • penjualan: ${fmtRp(p.penjualan_tunai||0)} • lain: ${fmtRp(p.pendapatan_lain_tunai||0)}<br>
+    <b>Total penerimaan: ${fmtRp(p.total||0)}</b><br>
+    Pengeluaran tunai: ${fmtRp(k.total||0)}<br>
+    <b>Arus kas bersih: ${fmtRp(a.arus_kas_bersih||0)}</b> • Kas akhir sistem: ${fmtRp(a.kas_akhir_sistem||0)}<br>
+    <small>Non-tunai — service ${fmtRp(n.service||0)} • penjualan ${fmtRp(n.penjualan||0)} • lain ${fmtRp(n.pendapatan_lain||0)} • pengeluaran ${fmtRp(n.pengeluaran||0)}</small></p>`;
+    const nr=NERACA_CACHE||computeNeracaLocal(r.sampai||'',r.kasir||'');
+    const as=nr.aset||{}, ek=nr.ekuitas||{};
+    neracaHtml=`<hr><p><b>Posisi Keuangan Ringkas</b> (per ${esc(nr.sampai||r.sampai||'—')})<br>
+    Kas: ${fmtRp(as.kas||0)} • Nilai stok (HPP): ${fmtRp(as.stok_hpp||0)}<br>
+    <b>Total aset: ${fmtRp(as.total||0)}</b><br>
+    Kewajiban: ${fmtRp((nr.kewajiban||{}).total||0)}<br>
+    Modal: ${fmtRp(ek.modal||0)} • Laba ditahan: ${fmtRp(ek.laba_ditahan||0)}<br>
+    <b>Total ekuitas: ${fmtRp(ek.total||0)}</b> • Selisih: ${fmtRp(nr.selisih||0)}<br>
+    <small>${esc(nr.catatan||'')}</small></p>`;
+    const kt=KATEGORI_CACHE||computeKategoriLocal(r.dari||'',r.sampai||'',r.kasir||'');
+    kategoriHtml=`<hr><p><b>Laba per Kategori</b><br>
+    ${(kt.produk||[]).map(x=>esc(x.kategori)+': '+esc(x.qty)+' pcs • '+fmtRp(x.omzet||0)+' • laba '+fmtRp(x.laba||0)).join('<br>')||'-'}<br>
+    <b>Digital per kode</b><br>
+    ${(kt.digital||[]).map(x=>esc(x.kode)+': '+esc(x.qty)+' • '+fmtRp(x.omzet||0)+' • laba '+fmtRp(x.laba||0)).join('<br>')||'-'}<br>
+    <b>Service per merk</b><br>
+    ${(kt.service||[]).map(x=>esc(x.merk)+': '+esc(x.jumlah)+' unit • '+fmtRp(x.omzet||0)).join('<br>')||'-'}</p>`;
+  }catch{}
+  const hppVal=Number(r.total_hpp!=null?r.total_hpp:(r.penjualan_hpp||0));
+  const labaKotor=Number(r.laba_kotor!=null?r.laba_kotor:(Number(r.total_pendapatan||0)-hppVal));
+  const labaOps=Number(r.laba_operasional!=null?r.laba_operasional:(labaKotor-Number(r.expense_total||0)));
   $('printArea').innerHTML=`<div class="nota">
     <h2>${esc(SET.nama)}</h2>
     <p style="text-align:center">${esc(SET.alamat)}<br>Telp: ${esc(SET.telp)}</p>
@@ -3688,12 +4066,16 @@ function printLaporan(){
     Pendapatan penjualan: ${fmtRp(r.penjualan_omzet)} (${esc(r.penjualan_count)} nota)<br>
     Pendapatan lain: ${fmtRp(r.income_total||0)} (${esc(r.income_count||0)} transaksi)<br>
     <b>Total pendapatan: ${fmtRp(r.total_pendapatan)}</b><br>
-    ${hppOk?'HPP terjual: '+fmtRp(r.penjualan_hpp)+'<br>':''}
+    ${hppOk?'HPP terjual: '+fmtRp(hppVal)+'<br>':''}
+    <b>Laba kotor: ${fmtRp(labaKotor)}</b><br>
     Pengeluaran: ${fmtRp(r.expense_total||0)} (${esc(r.expense_count||0)} transaksi)<br>
-    <b>Laba bersih: ${fmtRp(r.total_laba)}</b></p>
+    <b>Laba bersih: ${fmtRp(r.total_laba)}</b> • Margin: ${esc(r.margin_persen!=null?r.margin_persen:0)}%</p>
     <hr>
     <p><b>Service per status:</b><br>${STATUS.map(s=>esc(s)+': '+esc((r.service_per_status||{})[s]||0)).join('<br>')}</p>
     ${harianHtml}
+    ${arusHtml}
+    ${neracaHtml}
+    ${kategoriHtml}
     <hr>
     <p><b>Stok${jenisF?(' — '+esc(jenisF)):''}:</b> ${esc(sp.length)} item${hppOk?' • Nilai HPP '+fmtRp(stokHpp):''} • Nilai Jual ${fmtRp(stokJual)} • ${esc(stokLow)} menipis<br>
     ${sp.slice(0,60).map(x=>esc(x.sku)+' '+esc(x.nama)+' — stok '+esc(x.stok)).join('<br>')}${sp.length>60?'<br>... +'+(sp.length-60)+' item lain':''}</p>
