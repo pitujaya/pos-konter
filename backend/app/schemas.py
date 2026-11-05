@@ -315,6 +315,7 @@ class ExpenseOut(BaseModel):
     jumlah: int = 0
     metode: str = "tunai"
     dicatat_oleh: str = ""
+    created_at: str = ""
 
     model_config = {"from_attributes": False}
 
@@ -323,6 +324,7 @@ class ReportOut(BaseModel):
     dari: str = ""
     sampai: str = ""
     kasir: str = ""
+    sesi_id: int = 0
     service_masuk: int = 0
     service_selesai: int = 0
     service_omzet: int = 0

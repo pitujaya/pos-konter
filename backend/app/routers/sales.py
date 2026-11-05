@@ -85,6 +85,95 @@ def _is_tunai_metode(metode: str | None) -> bool:
     return m in ("", "tunai", "cash", "tunai/lunas")
 
 
+ADMIN_ROLES = ("admin", "superadmin")
+
+
+def _session_or_404(db: Session, sesi_id: int, user: models.User) -> models.CashSession:
+    """Ambil sesi kasir + pastikan user berhak melihatnya."""
+    sess = db.get(models.CashSession, int(sesi_id or 0))
+    if sess is None:
+        raise HTTPException(404, "Sesi kasir tidak ditemukan")
+    if user.role not in ADMIN_ROLES:
+        same_user = sess.user_id is not None and sess.user_id == user.id
+        same_name = bool((sess.kasir or "").strip()) and _match_kasir(sess.kasir, user.nama or "")
+        if not (same_user or same_name):
+            raise HTTPException(403, "Tidak berhak melihat sesi kasir lain")
+    return sess
+
+
+def _session_window(sess: models.CashSession) -> tuple[datetime, datetime]:
+    t0 = sess.opened_at or datetime.utcnow()
+    t1 = sess.closed_at or datetime.utcnow()
+    return t0, t1
+
+
+def _in_window(ts: datetime | None, t0: datetime, t1: datetime) -> bool:
+    return ts is not None and t0 <= ts <= t1
+
+
+def _collect_session(db: Session, sess: models.CashSession):
+    """Transaksi selama satu sesi kasir (lintas tanggal).
+
+    - Service "masuk" = service yang dibuat di dalam rentang sesi.
+    - Service "diambil"/omzet = service yang status Diambil di dalam rentang sesi
+      (sama seperti rekap sesi kasir, termasuk fallback data legacy).
+    - Penjualan & biaya difilter dari created_at, bukan tanggal nota.
+    - Digital tidak punya kolom kasir -> tidak diikutkan pada laporan per sesi.
+    """
+    from .kas_sessions import _services_for_session
+
+    t0, t1 = _session_window(sess)
+    kasir = (sess.kasir or "").strip()
+
+    services_created = [
+        r for r in db.query(models.Service).all()
+        if _in_window(getattr(r, "created_at", None), t0, t1)
+        and (not kasir or _match_kasir(getattr(r, "kasir", ""), kasir))
+    ]
+    sales = [
+        r for r in db.query(models.Sale).all()
+        if _in_window(getattr(r, "created_at", None), t0, t1)
+        and (not kasir or _match_kasir(getattr(r, "kasir", ""), kasir))
+    ]
+    try:
+        expenses = [
+            r for r in db.query(models.Expense).all()
+            if _in_window(getattr(r, "created_at", None), t0, t1)
+            and (not kasir or _match_kasir(getattr(r, "dicatat_oleh", ""), kasir))
+        ]
+    except Exception:
+        expenses = []
+    services_diambil = _services_for_session(db, sess)
+    return services_created, services_diambil, sales, expenses
+
+
+def _collect_until(db: Session, t1: datetime, kasir: str):
+    """Transaksi kumulatif sampai akhir sesi (untuk snapshot posisi keuangan)."""
+    kasir = (kasir or "").strip()
+    services = [
+        r for r in db.query(models.Service).all()
+        if getattr(r, "created_at", None) is not None
+        and getattr(r, "created_at") <= t1
+        and (not kasir or _match_kasir(getattr(r, "kasir", ""), kasir))
+    ]
+    sales = [
+        r for r in db.query(models.Sale).all()
+        if getattr(r, "created_at", None) is not None
+        and getattr(r, "created_at") <= t1
+        and (not kasir or _match_kasir(getattr(r, "kasir", ""), kasir))
+    ]
+    try:
+        expenses = [
+            r for r in db.query(models.Expense).all()
+            if getattr(r, "created_at", None) is not None
+            and getattr(r, "created_at") <= t1
+            and (not kasir or _match_kasir(getattr(r, "dicatat_oleh", ""), kasir))
+        ]
+    except Exception:
+        expenses = []
+    return services, sales, expenses
+
+
 def _collect_periode(db: Session, dari: str, sampai: str, kasir: str):
     """Ambil transaksi yang sudah difilter periode & kasir (dipakai semua laporan)."""
     services = db.query(models.Service).all()
@@ -280,12 +369,21 @@ def report(
     dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     kasir: str = Query("", description="filter laporan per kasir (nama), kosong = semua"),
-    db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
+    sesi_id: int = Query(0, description="ID sesi kasir; >0 = laporan per sesi (lintas tanggal)"),
+    db: Session = Depends(get_db), user: models.User = Depends(get_current_user),
 ):
-    services, sales, expenses, digital = _collect_periode(db, dari, sampai, kasir)
+    sess = _session_or_404(db, sesi_id, user) if sesi_id else None
+    if sess is not None:
+        services, diambil, sales, expenses = _collect_session(db, sess)
+        digital = []
+        dari = sess.opened_at.date().isoformat() if sess.opened_at else dari
+        sampai = (sess.closed_at or datetime.utcnow()).date().isoformat()
+        kasir = (sess.kasir or "").strip()
+    else:
+        services, sales, expenses, digital = _collect_periode(db, dari, sampai, kasir)
+        # Omzet service HANYA dari status Diambil.
+        diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
     spares = db.query(models.Sparepart).all()
-    # Omzet service HANYA dari status Diambil.
-    diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
     service_omzet = sum(int(r.biaya or 0) for r in diambil)
     # Kebijakan konter: pembelian sparepart dicatat sebagai biaya, jadi laba
     # service = omzet penuh (tidak ada HPP per-service).
@@ -321,6 +419,7 @@ def report(
     diambil_sorted = sorted(diambil, key=lambda r: r.id or 0, reverse=True)[:50]
     return {
         "dari": dari or "", "sampai": sampai or "", "kasir": kasir,
+        "sesi_id": int(sess.id) if sess is not None else 0,
         "service_masuk": len(services),
         "service_selesai": len(diambil),
         "service_omzet": service_omzet,
@@ -369,11 +468,19 @@ def arus_kas(
     dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     kasir: str = Query("", description="filter per kasir (nama), kosong = semua"),
-    db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
+    sesi_id: int = Query(0, description="ID sesi kasir; >0 = arus kas per sesi"),
+    db: Session = Depends(get_db), user: models.User = Depends(get_current_user),
 ):
     """Arus kas sederhana (cash basis): hanya transaksi tunai yang dihitung."""
-    services, sales, expenses, _digital = _collect_periode(db, dari, sampai, kasir)
-    diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
+    sess = _session_or_404(db, sesi_id, user) if sesi_id else None
+    if sess is not None:
+        _services_created, diambil, sales, expenses = _collect_session(db, sess)
+        dari = sess.opened_at.date().isoformat() if sess.opened_at else dari
+        sampai = (sess.closed_at or datetime.utcnow()).date().isoformat()
+        kasir = (sess.kasir or "").strip()
+    else:
+        services, sales, expenses, _digital = _collect_periode(db, dari, sampai, kasir)
+        diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
     service_tunai = sum(int(r.biaya or 0) for r in diambil
                         if _is_tunai_metode(getattr(r, "metode_bayar", "tunai")))
     service_non = sum(int(r.biaya or 0) for r in diambil
@@ -395,12 +502,17 @@ def arus_kas(
 
     # Sesi kasir dalam periode (untuk modal awal & selisih kas fisik).
     from .kas_sessions import _to_out as _kas_to_out
-    sessions = _sessions_periode(db, dari, sampai, kasir)
-    kas_awal = _opening_cash(sessions)
+    if sess is not None:
+        sessions = [sess]
+        kas_awal = int(sess.modal_awal or 0)
+    else:
+        sessions = _sessions_periode(db, dari, sampai, kasir)
+        kas_awal = _opening_cash(sessions)
     sesi = [_kas_to_out(s, db) for s in sessions]
     kas_akhir_sistem = kas_awal + arus_bersih
     return {
         "dari": dari or "", "sampai": sampai or "", "kasir": kasir,
+        "sesi_id": int(sess.id) if sess is not None else 0,
         "kas_awal": kas_awal,
         "penerimaan": {
             "service_tunai": service_tunai,
@@ -425,11 +537,20 @@ def arus_kas(
 def neraca(
     tanggal: str = Query("", description="YYYY-MM-DD, kosong = hari ini"),
     kasir: str = Query("", description="filter per kasir (nama), kosong = semua"),
-    db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
+    sesi_id: int = Query(0, description="ID sesi kasir; >0 = snapshot akhir sesi"),
+    db: Session = Depends(get_db), user: models.User = Depends(get_current_user),
 ):
-    """Posisi keuangan ringkas per tanggal (bukan neraca double-entry)."""
-    sampai = (tanggal or "").strip()[:10] or datetime.now().date().isoformat()
-    services, sales, expenses, digital = _collect_periode(db, "", sampai, kasir)
+    """Posisi keuangan ringkas per tanggal / akhir sesi (bukan double-entry)."""
+    sess = _session_or_404(db, sesi_id, user) if sesi_id else None
+    if sess is not None:
+        t0, t1 = _session_window(sess)
+        services, sales, expenses = _collect_until(db, t1, sess.kasir or "")
+        digital = []
+        sampai = t1.date().isoformat()
+        kasir = (sess.kasir or "").strip()
+    else:
+        sampai = (tanggal or "").strip()[:10] or datetime.now().date().isoformat()
+        services, sales, expenses, digital = _collect_periode(db, "", sampai, kasir)
     spares = db.query(models.Sparepart).all()
     diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
     service_omzet = sum(int(r.biaya or 0) for r in diambil)
@@ -446,7 +567,14 @@ def neraca(
     laba_ditahan = (service_omzet + (penjualan_omzet - penjualan_hpp)
                     + digital_laba + income_total - expense_total)
 
-    sessions = _sessions_periode(db, "", sampai, kasir)
+    if sess is not None:
+        sessions = [
+            s for s in db.query(models.CashSession).all()
+            if (s.opened_at or datetime.min) <= t1
+            and (not kasir or _match_kasir(s.kasir, kasir))
+        ]
+    else:
+        sessions = _sessions_periode(db, "", sampai, kasir)
     from .kas_sessions import _to_out as _kas_to_out
     latest: dict[str, dict] = {}
     for s in sessions:
@@ -472,6 +600,7 @@ def neraca(
     total_ekuitas = modal + laba_ditahan
     return {
         "sampai": sampai, "kasir": kasir,
+        "sesi_id": int(sess.id) if sess is not None else 0,
         "aset": {
             "kas": kas,
             "stok_hpp": stok_hpp,
@@ -496,10 +625,19 @@ def per_kategori(
     dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     kasir: str = Query("", description="filter per kasir (nama), kosong = semua"),
-    db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
+    sesi_id: int = Query(0, description="ID sesi kasir; >0 = laba per kategori per sesi"),
+    db: Session = Depends(get_db), user: models.User = Depends(get_current_user),
 ):
     """Laba per kategori produk, per kode digital, dan per merk service."""
-    services, sales, _expenses, digital = _collect_periode(db, dari, sampai, kasir)
+    sess = _session_or_404(db, sesi_id, user) if sesi_id else None
+    if sess is not None:
+        _services_created, services, sales, _expenses = _collect_session(db, sess)
+        digital = []
+        dari = sess.opened_at.date().isoformat() if sess.opened_at else dari
+        sampai = (sess.closed_at or datetime.utcnow()).date().isoformat()
+        kasir = (sess.kasir or "").strip()
+    else:
+        services, sales, _expenses, digital = _collect_periode(db, dari, sampai, kasir)
     sp_by_id = {s.id: s for s in db.query(models.Sparepart).all()}
 
     produk: dict[str, dict] = {}
@@ -542,6 +680,7 @@ def per_kategori(
 
     return {
         "dari": dari or "", "sampai": sampai or "", "kasir": kasir,
+        "sesi_id": int(sess.id) if sess is not None else 0,
         "produk": sorted(produk.values(), key=lambda x: (-x["laba"], x["kategori"].lower())),
         "digital": sorted(digital_rows.values(), key=lambda x: (-x["laba"], x["kode"].lower())),
         "service": sorted(service_rows.values(), key=lambda x: (-x["omzet"], x["merk"].lower())),
@@ -554,7 +693,8 @@ def report_harian(
     dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     kasir: str = Query("", description="filter per kasir (nama), kosong = semua"),
-    db: Session = Depends(get_db), _: models.User = Depends(get_current_user),
+    sesi_id: int = Query(0, description="ID sesi kasir; >0 = rekap harian per sesi"),
+    db: Session = Depends(get_db), user: models.User = Depends(get_current_user),
 ):
     """Rekap HARIAN per kasir: satu baris per (tanggal, kasir).
 
@@ -562,27 +702,40 @@ def report_harian(
     berapa yang Diambil (+omzetnya), berapa nota penjualan, pengeluaran, laba,
     dan berapa notifikasi WhatsApp yang sudah dikirim.
     """
-    services = db.query(models.Service).all()
-    sales = db.query(models.Sale).all()
-    try:
-        expenses = db.query(models.Expense).all()
-    except Exception:
-        expenses = []
-    try:
-        digital = db.query(models.DigitalSale).all()
-    except Exception:
+    sess = _session_or_404(db, sesi_id, user) if sesi_id else None
+    picked_ids: set[int] = set()
+    created_ids: set[int] = set()
+    if sess is not None:
+        services_created, services_diambil, sales, expenses = _collect_session(db, sess)
+        created_ids = {s.id for s in services_created}
+        picked_ids = {s.id for s in services_diambil}
+        services = services_created + [s for s in services_diambil if s.id not in created_ids]
         digital = []
-    if dari or sampai:
-        services = [r for r in services if _in_range(r.tanggal or "", dari, sampai)]
-        sales = [r for r in sales if _in_range(r.tanggal or "", dari, sampai)]
-        expenses = [r for r in expenses if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
-        digital = [r for r in digital if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
-    kasir = (kasir or "").strip()
-    if kasir:
-        services = [r for r in services if _match_kasir(getattr(r, "kasir", ""), kasir)]
-        sales = [r for r in sales if _match_kasir(r.kasir, kasir)]
-        expenses = [r for r in expenses if _match_kasir(getattr(r, "dicatat_oleh", ""), kasir)]
-        digital = []
+        dari = sess.opened_at.date().isoformat() if sess.opened_at else dari
+        sampai = (sess.closed_at or datetime.utcnow()).date().isoformat()
+        kasir = (sess.kasir or "").strip()
+    else:
+        services = db.query(models.Service).all()
+        sales = db.query(models.Sale).all()
+        try:
+            expenses = db.query(models.Expense).all()
+        except Exception:
+            expenses = []
+        try:
+            digital = db.query(models.DigitalSale).all()
+        except Exception:
+            digital = []
+        if dari or sampai:
+            services = [r for r in services if _in_range(r.tanggal or "", dari, sampai)]
+            sales = [r for r in sales if _in_range(r.tanggal or "", dari, sampai)]
+            expenses = [r for r in expenses if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
+            digital = [r for r in digital if _in_range(getattr(r, "tanggal", "") or "", dari, sampai)]
+        kasir = (kasir or "").strip()
+        if kasir:
+            services = [r for r in services if _match_kasir(getattr(r, "kasir", ""), kasir)]
+            sales = [r for r in sales if _match_kasir(r.kasir, kasir)]
+            expenses = [r for r in expenses if _match_kasir(getattr(r, "dicatat_oleh", ""), kasir)]
+            digital = []
 
     rows: dict[tuple[str, str], dict] = {}
 
@@ -603,8 +756,10 @@ def report_harian(
         tgl = (s.tanggal or "")[:10]
         nama = (getattr(s, "kasir", "") or "").strip() or "-"
         r = _row(tgl, nama)
-        r["svc_masuk"] += 1
-        if _norm_status(s.status) == "Diambil":
+        if sess is None or s.id in created_ids:
+            r["svc_masuk"] += 1
+        diambil_now = (_norm_status(s.status) == "Diambil") if sess is None else (s.id in picked_ids)
+        if diambil_now:
             r["svc_diambil"] += 1
             r["svc_omzet"] += int(s.biaya or 0)
         if getattr(s, "wa_terkirim_at", None):
@@ -665,4 +820,5 @@ def report_harian(
         "total_laba": sum(r["total_laba"] for r in out),
     }
     return {"dari": dari or "", "sampai": sampai or "", "kasir": kasir,
+            "sesi_id": int(sess.id) if sess is not None else 0,
             "rows": out, "ringkasan": ringkasan}

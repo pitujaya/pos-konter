@@ -388,15 +388,17 @@
     createExpense(payload) { return this.req("/expenses", { method: "POST", body: payload }); },
     updateExpense(id, payload) { return this.req("/expenses/" + id, { method: "PUT", body: payload }); },
     deleteExpense(id) { return this.req("/expenses/" + id, { method: "DELETE" }); },
-    report(dari = "", sampai = "", kasir = "") {
+    report(dari = "", sampai = "", kasir = "", sesiId = "") {
       const qs = new URLSearchParams({
         dari: dari || "", sampai: sampai || "", kasir: kasir || "",
+        sesi_id: String(sesiId || "0"),
       }).toString();
       return this.req("/stats/report?" + qs);
     },
-    reportHarian(dari = "", sampai = "", kasir = "") {
+    reportHarian(dari = "", sampai = "", kasir = "", sesiId = "") {
       const qs = new URLSearchParams({
         dari: dari || "", sampai: sampai || "", kasir: kasir || "",
+        sesi_id: String(sesiId || "0"),
       }).toString();
       return this.req("/stats/harian?" + qs);
     },

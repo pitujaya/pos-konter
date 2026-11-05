@@ -123,6 +123,73 @@ class TestLaporanKeuangan:
         assert row[0]["jumlah"] == 2
         assert row[0]["omzet"] == 100000
 
+    def _session_id(self, client, h):
+        r = client.get("/api/kas/current", headers=h)
+        assert r.status_code == 200, r.text
+        return r.json()["id"]
+
+    def test_report_per_sesi_mengabaikan_tanggal(self, client):
+        h, kasir = self._user(client, modal=50000)
+        sid = self._session_id(client, h)
+        self._service(client, h, 100000)
+        self._expense(client, h, 30000)
+
+        r = client.get("/api/stats/report", headers=h, params={
+            "sesi_id": sid, "dari": "2000-01-01", "sampai": "2000-01-01",
+        })
+        assert r.status_code == 200, r.text
+        b = r.json()
+        assert b["sesi_id"] == sid
+        assert b["service_masuk"] == 1
+        assert b["service_selesai"] == 1
+        assert b["service_omzet"] == 100000
+        assert b["expense_total"] == 30000
+        assert b["total_laba"] == 70000
+
+    def test_report_per_sesi_isolasi_kasir(self, client):
+        h1, _ = self._user(client)
+        sid1 = self._session_id(client, h1)
+        h2, _ = self._user(client)
+        sid2 = self._session_id(client, h2)
+        self._service(client, h1, 100000)
+
+        r = client.get("/api/stats/report", headers=h2, params={"sesi_id": sid1})
+        assert r.status_code == 403, r.text
+        b = client.get("/api/stats/report", headers=h2, params={"sesi_id": sid2}).json()
+        assert b["sesi_id"] == sid2
+        assert b["service_omzet"] == 0
+
+    def test_report_harian_per_sesi(self, client):
+        h, kasir = self._user(client)
+        sid = self._session_id(client, h)
+        self._service(client, h, 100000)
+        self._expense(client, h, 30000)
+
+        r = client.get("/api/stats/harian", headers=h, params={"sesi_id": sid})
+        assert r.status_code == 200, r.text
+        b = r.json()
+        rows = b["rows"]
+        assert sum(x["svc_masuk"] for x in rows) == 1
+        assert sum(x["svc_diambil"] for x in rows) == 1
+        assert sum(x["svc_omzet"] for x in rows) == 100000
+        assert sum(x["exp"] for x in rows) == 30000
+
+    def test_neraca_per_sesi_kumulatif(self, client):
+        h, kasir = self._user(client, modal=50000)
+        sid = self._session_id(client, h)
+        self._service(client, h, 100000)
+        closed = client.post(f"/api/kas/{sid}/close", headers=h, json={"kas_akhir": 150000})
+        assert closed.status_code == 200, closed.text
+        reopened = client.post("/api/kas/open", headers=h, json={"modal_awal": 0})
+        assert reopened.status_code in (200, 201), reopened.text
+        self._expense(client, h, 30000)
+
+        b = client.get("/api/stats/neraca", headers=h, params={"sesi_id": sid}).json()
+        assert b["sesi_id"] == sid
+        assert b["ekuitas"]["laba_ditahan"] == 100000
+        assert b["aset"]["kas"] == 150000
+        assert b["ekuitas"]["total"] == 150000
+
     def test_requires_auth(self, client):
         assert client.get("/api/stats/arus-kas").status_code == 401
         assert client.get("/api/stats/neraca").status_code == 401

@@ -170,6 +170,38 @@ const hKosong = computeHarianLocal('2020-01-01', '2020-01-02', '');
 ok('periode tanpa data -> rows kosong', hKosong.rows.length === 0);
 ok('periode kosong -> ringkasan nol', hKosong.ringkasan.total_laba === 0);
 
+console.log('\n=== laporan per sesi kasir ===');
+const LP_SESI_LIST = [{
+  id: 1, kasir: 'Kasir A', status: 'closed',
+  opened_at: '2026-10-18T00:00:00', closed_at: '2026-10-19T23:59:59',
+}];
+const DB_SESI = [
+  ...DB,
+  { id: 4, tanggal: '2026-10-20', kasir: 'Kasir A', status: 'Diambil', biaya: 999999 },
+];
+const sandbox3 = new Function(
+  'DB', 'SALES', 'EXPENSES', 'LP_SESI_LIST', 'normStatus',
+  extract('parseTs') + '\n' + extract('tsRecord') + '\n' +
+  extract('tsServiceCreated') + '\n' + extract('tsServiceStatus') + '\n' +
+  extract('normKasir') + '\n' + extract('matchKasir') + '\n' +
+  extract('inPeriode') + '\n' + extract('lpSessionById') + '\n' +
+  extract('lpSesiWindow') + '\n' + extract('lpInWindow') + '\n' +
+  extract('computeHarianLocal') + '\n' +
+  'return {computeHarianLocal};'
+);
+const { computeHarianLocal: computeHarianSesi } = sandbox3(
+  DB_SESI, SALES, EXPENSES, LP_SESI_LIST, normStatus
+);
+const hs = computeHarianSesi('2000-01-01', '2000-01-01', '', 1);
+ok('sesi lintas tanggal: 2 baris', hs.rows.length === 2, JSON.stringify(hs.rows.map(r => r.tanggal)));
+ok('sesi: svc_masuk = 3', hs.ringkasan.svc_masuk === 3, hs.ringkasan.svc_masuk);
+ok('sesi: svc_diambil = 2', hs.ringkasan.svc_diambil === 2, hs.ringkasan.svc_diambil);
+ok('sesi: omzet service = 170000', hs.ringkasan.svc_omzet === 170000, hs.ringkasan.svc_omzet);
+ok('sesi: penjualan = 200000', hs.ringkasan.jual_omzet === 200000);
+ok('sesi: biaya = 30000', hs.ringkasan.exp === 30000);
+ok('sesi: pendapatan lain = 20000', hs.ringkasan.inc === 20000);
+ok('transaksi di luar sesi tidak ikut', hs.ringkasan.svc_omzet !== 1169999);
+
 console.log('\n=== hak akses (normAkses & bolehAkses) ===');
 const aksesStart = js.indexOf('const AKSES_DEF');
 const aksesEnd = js.indexOf('let SET = loadSetting();');

@@ -29,6 +29,7 @@ def _expense_to_out(e: models.Expense) -> dict:
         "jumlah": int(e.jumlah or 0),
         "metode": _norm_metode(getattr(e, "metode", "tunai")),
         "dicatat_oleh": e.dicatat_oleh or "",
+        "created_at": (e.created_at.isoformat() if getattr(e, "created_at", None) else ""),
     }
 
 
