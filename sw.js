@@ -10,12 +10,12 @@
  *
  * Catatan: service worker hanya aktif di origin https (atau localhost).
  */
-const CACHE = 'servishp-shell-v5';
+const CACHE = 'servishp-shell-v6';
 const SHELL = [
   './',
   './index.html',
   './style.css',
-  './script-2611051308.js',
+  './script-2611051529.js',
   './api.js',
   './config.js',
   './manifest.json',

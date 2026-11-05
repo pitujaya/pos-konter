@@ -156,6 +156,7 @@ function showApp(user){
   try{ var bn=$('bottomNav'); if(bn&&bn.parentNode) bn.parentNode.removeChild(bn); }catch{}
   applyRoleUI(); renderUsers();
   try{ syncSesi(); }catch(e){ console.warn('syncSesi:', e); }
+  try{ loadLpSesi(true).catch(e=>console.warn('loadLpSesi:', e)); }catch(e){ console.warn('loadLpSesi:', e); }
 }
 function showAuth(){
   $('authScreen').classList.remove('hidden');
@@ -164,7 +165,7 @@ function showAuth(){
   const ov=$('sidebarOverlay'); if(ov) ov.classList.remove('show');
   const sb=$('sidebar'); if(sb) sb.classList.remove('open');
 }
-function doLogout(){ clearSession(); KAS=null; try{ renderKasUI(); }catch{} showAuth(); toast('Berhasil keluar 👋'); }
+function doLogout(){ clearSession(); KAS=null; LP_SESI_LIST=[]; LP_SESI_FROM_BACKEND=false; try{ renderKasUI(); }catch{} showAuth(); toast('Berhasil keluar 👋'); }
 
 const $ = (id) => document.getElementById(id);
 // helper aman: ambil value walau elemen sudah dihapus (DP/IMEI/Warna)
@@ -3083,6 +3084,7 @@ try{ bindExpenses(); }catch{}
 // ===== LAPORAN (stok + service masuk + penjualan + laba rugi) =====
 const LS_LP_MODE='servishp_lp_mode_v1';
 let LP_SESI_LIST=[];
+let LP_SESI_FROM_BACKEND=false;
 function lpMode(){
   const el=$('lp_mode');
   if(el && (el.value==='tanggal'||el.value==='sesi')) return el.value;
@@ -3106,19 +3108,24 @@ function lpInWindow(t,sess){
   return !!(w && t && t>=w.t0 && t<=w.t1);
 }
 async function loadLpSesi(force=false){
-  if(!force && LP_SESI_LIST.length){ renderLpSesiOptions(); return LP_SESI_LIST; }
-  let list=[];
-  if(useBackend() && window.API && window.API.kasList){
-    try{ list=await window.API.kasList({scope:'auto', limit:200}); }catch(e){ list=[]; }
+  const canBackend=useBackend() && window.API && window.API.kasList;
+  if(!force && LP_SESI_LIST.length && (LP_SESI_FROM_BACKEND || !canBackend)){
+    renderLpSesiOptions(); return LP_SESI_LIST;
   }
-  if(!Array.isArray(list) || !list.length){
+  let list=null, fromBackend=false;
+  if(canBackend){
+    try{ list=await window.API.kasList({scope:'auto', limit:200}); fromBackend=Array.isArray(list); }
+    catch(e){ list=null; }
+  }
+  if(!Array.isArray(list)){
     const local=[
       ...(typeof loadKasLocal==='function'?loadKasLocal():[]),
       ...(typeof KAS!=='undefined'&&KAS?[KAS]:[]),
       ...(typeof KAS_RIWAYAT!=='undefined'?KAS_RIWAYAT:[]),
     ];
-    list=local;
+    list=LP_SESI_LIST.length?LP_SESI_LIST:local;
   }
+  LP_SESI_FROM_BACKEND=fromBackend;
   const map=new Map();
   (Array.isArray(list)?list:[]).forEach(s=>{
     if(s && s.id!=null && !map.has(String(s.id))) map.set(String(s.id), s);
@@ -3727,7 +3734,8 @@ async function renderLaporan(){
       const labaKotor=Number(r.laba_kotor!=null?r.laba_kotor:(pendapatan-hpp));
       const beban=Number(r.expense_total||0);
       const labaBersih=Number(r.total_laba||0);
-      const margin=(r.margin_persen!=null)?Number(r.margin_persen):(pendapatan?Math.round((labaBersih/pendapatan)*10000)/100:0);
+      const marginRaw=(r.margin_persen!=null)?Number(r.margin_persen):(pendapatan?Math.round((labaBersih/pendapatan)*10000)/100:0);
+      const margin=Number.isFinite(marginRaw)?marginRaw:0;
       const rows=[];
       const add=(label,val,strong,neg)=>rows.push(`<tr><td${strong?' style="font-weight:700"':''}>${label}</td><td style="text-align:right${strong?';font-weight:700':''}">${neg?'('+fmtRp(val)+')':fmtRp(val)}</td></tr>`);
       add('Pendapatan Service (Diambil)', r.service_omzet||0);
@@ -3738,7 +3746,7 @@ async function renderLaporan(){
       add('Laba Kotor', labaKotor, true);
       add('Beban Operasional', beban, false, true);
       add('Laba Bersih', labaBersih, true);
-      add('Margin', margin+'%');
+      rows.push(`<tr><td>Margin</td><td style="text-align:right">${margin}%</td></tr>`);
       const bk=Array.isArray(r.beban_per_kategori)?r.beban_per_kategori:[];
       if(bk.length){
         rows.push('<tr><td colspan="2" style="padding-top:10px"><b>Rincian Beban per Kategori</b></td></tr>');
