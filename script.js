@@ -1226,8 +1226,12 @@ function renderStats(){
   // Omzet hanya dari service yang SUDAH DIAMBIL
   $('stOmzet').textContent=fmtRp(day.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
   // Ringkasan Penjualan Digital
+  const bolehLabaView = bolehAkses("kasir_lihat_laba");
+  const digLabaCardEl = document.getElementById("stDigLaba");
+  const digLabaCard = digLabaCardEl ? digLabaCardEl.closest(".stat") : null;
+  if(digLabaCard) digLabaCard.classList.toggle("hidden", !bolehLabaView);
   try{
-    if(sesi){
+    if(sesi && sesi.open){
       ['stDigCount','stDigOmzet','stDigLaba'].forEach(id=>{ if($(id)) $(id).textContent='—'; });
     } else {
       let dl = Array.isArray(DIG_LIST)?DIG_LIST:[];
@@ -1240,6 +1244,9 @@ function renderStats(){
     }
   }catch{}
   // Ringkasan Penjualan Barang
+  const prodLabaCardEl = document.getElementById("stProdLaba");
+  const prodLabaCard = prodLabaCardEl ? prodLabaCardEl.closest(".stat") : null;
+  if(prodLabaCard) prodLabaCard.classList.toggle("hidden", !bolehLabaView);
   try{
     let unit=0;
     jual.forEach(s=>{
@@ -3321,6 +3328,7 @@ async function loadDigitalSales(auto=false, force=false){
     DIG_SYNCED=true;
     renderDigitalSales();
     try{ renderStats(); }catch{}
+    try{ renderOmzetChart(); }catch{}
     try{ renderLaporan(); }catch{}
   }catch(e){ console.warn('loadDigitalSales:', e.message); }
 }
@@ -3337,6 +3345,10 @@ function renderDigitalSales(){
   if(ql) rows=rows.filter(x=>[x.nomor_urut,x.kode,x.no_tujuan].join(' ').toLowerCase().includes(ql));
   const omzet=rows.reduce((a,b)=>a+Number(b.harga_jual||0),0);
   const laba=rows.reduce((a,b)=>a+Number(b.margin||b.harga_jual-b.hpp||0),0);
+  const labaOk=bolehAkses("kasir_lihat_laba");
+  const digLabaCardEl = document.getElementById("digLaba");
+  const digLabaCard = digLabaCardEl ? digLabaCardEl.closest(".stat") : null;
+  if(digLabaCard) digLabaCard.classList.toggle("hidden", !labaOk);
   const hppOk=bolehHpp();
   if($('digOmzet')) $('digOmzet').textContent=fmtRp(omzet);
   if($('digLaba')) $('digLaba').textContent=fmtRp(laba);
@@ -3348,7 +3360,7 @@ function renderDigitalSales(){
     <td>${esc(x.no_tujuan)}</td>
     <td>${hppOk?fmtRp(x.hpp):'—'}</td>
     <td><b>${fmtRp(x.harga_jual)}</b></td>
-    <td style="color:var(--green)"><b>${hppOk?fmtRp(x.margin):'—'}</b></td>
+    <td style="color:var(--green)"><b>${labaOk?fmtRp(x.margin):'—'}</b></td>
     <td>${esc(x.tanggal||'-')}</td>
   </tr>`).join('')||'';
 }
@@ -4368,12 +4380,14 @@ function omzetBulan(){
   const nDay=new Date(y, m+1, 0).getDate();
   const svcArr=(typeof DB!=='undefined'?DB:[]);
   const jualArr=(typeof SALES!=='undefined'?SALES:[]);
+  const digArr=(typeof DIG_LIST!=='undefined'?DIG_LIST:[]);
   const out=[];
   for(let d=1;d<=nDay;d++){
     const t=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
     const svc=svcArr.filter(x=>(x.tanggal||'').slice(0,10)===t && normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0);
     const jual=jualArr.filter(x=>(x.tanggal||'').slice(0,10)===t).reduce((a,b)=>a+Number(b.total||0),0);
-    out.push({d, t, svc, jual, total:svc+jual});
+    const dig=digArr.filter(x=>String(x.tanggal||'').slice(0,10)===t).reduce((a,b)=>a+Number(b.harga_jual||0),0);
+    out.push({d, t, svc, jual, dig, total:svc+jual+dig});
   }
   return out;
 }
@@ -4477,7 +4491,7 @@ function renderOmzetChart(){
   const sesi=dashboardSesi();
   if(sesi){ renderOmzetChartSesi(box, sesi); return; }
   ['btnOmPrev','btnOmNow','btnOmNext'].forEach(id=>{ const b=$(id); if(b) b.style.display=''; });
-  if($('omzetNote')) $('omzetNote').textContent='Garis = total omzet harian (service Diambil + penjualan barang).';
+  if($('omzetNote')) $('omzetNote').textContent='Garis = total omzet harian (service Diambil + penjualan barang + penjualan digital).';
   const {y, m}=omzetCursor();
   const data=omzetBulan();
   if($('omzetTitle')) $('omzetTitle').textContent='Performa Penjualan Bulan '+bulanLabel(y, m);
@@ -4503,7 +4517,7 @@ function renderOmzetChart(){
   const line=smoothPath(pts);
   const area=line+` L ${X(n-1)},${baseY} L ${X(0)},${baseY} Z`;
   const dotR=narrow?7:10;
-  const dots=data.map((d,i)=>d.total?`<circle cx="${X(i)}" cy="${Y(d.total)}" r="${dotR}" fill="transparent"><title>Tgl ${d.d} ${bulanLabel(y,m)} — Total ${fmtRp(d.total)} (service ${fmtRp(d.svc)} + barang ${fmtRp(d.jual)})</title></circle>`:'').join('');
+  const dots=data.map((d,i)=>d.total?`<circle cx="${X(i)}" cy="${Y(d.total)}" r="${dotR}" fill="transparent"><title>Tgl ${d.d} ${bulanLabel(y,m)} — Total ${fmtRp(d.total)} (service ${fmtRp(d.svc)} + barang ${fmtRp(d.jual)}${d.dig?' + digital '+fmtRp(d.dig):''})</title></circle>`:'').join('');
   const every=Math.max(1, Math.ceil((fx*1.9)/Math.max(step,1)));
   const xl=data.map((d,i)=>i%every?'' : `<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="${fx}" fill="#64748b">${narrow?d.d:String(d.d).padStart(2,'0')}</text>`).join('');
   box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img"><defs><linearGradient id="omzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6366f1" stop-opacity=".45"/><stop offset="1" stop-color="#6366f1" stop-opacity=".05"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#omzGrad)"/><path d="${line}" fill="none" stroke="#4f46e5" stroke-width="${narrow?2:2.5}" stroke-linejoin="round" stroke-linecap="round"/>${dots}${xl}</svg>`;
