@@ -1148,6 +1148,7 @@ $('serviceForm').addEventListener('submit', async (e)=>{
     teknisi:val('f_teknisi'), biaya:Number(val('f_biaya',0)||0), dp:0,
     estimasi:val('f_estimasi'), catatan:val('f_catatan').trim(),
     status:normStatus(val('f_status','Dikerjakan')),
+    metode_bayar: val('f_metode','tunai') || 'tunai',
     kasir:(currentUser()&&currentUser().nama)||''
   };
   let savedNo = '';
@@ -1478,6 +1479,7 @@ window.edit=function(id){
   $('e_nama').value=x.nama; $('e_telp').value=x.telp; $('e_merk').value=x.merk; $('e_tipe').value=x.tipe;
   $('e_keluhan').value=x.keluhan; $('e_biaya').value=x.biaya;
   $('e_catatan').value=x.catatan||''; $('e_status').value=x.status;
+  $('e_metode').value=x.metode_bayar||'tunai';
   fillTeknisi($('e_teknisi'), x.teknisi);
   $('modalEdit').classList.remove('hidden');
 };
@@ -1485,7 +1487,8 @@ $('btnSaveEdit').onclick=async ()=>{
   if(!bolehAkses('kasir_edit_service')){ toast('⛔ Hak akses edit service dimatikan'); return; }
   const payload={ nama:$('e_nama').value, telp:$('e_telp').value, merk:$('e_merk').value, tipe:$('e_tipe').value,
     keluhan:$('e_keluhan').value, biaya:Number($('e_biaya').value||0),
-    teknisi:$('e_teknisi').value, catatan:$('e_catatan').value, status:$('e_status').value };
+    teknisi:$('e_teknisi').value, catatan:$('e_catatan').value, status:$('e_status').value,
+    metode_bayar:$('e_metode').value||'tunai' };
   if(useBackend()){
     try{ await window.API.updateService(editId, payload); await pullServices(); renderAll(); $('modalEdit').classList.add('hidden'); toast('Perubahan disimpan ✅'); return; }
     catch(err){ toast('Backend gagal: '+err.message); return; }

@@ -381,14 +381,22 @@
               <label>Estimasi Selesai<input id="f_estimasi" type="date" /></label>
             </div>
             <label>Catatan Teknisi<textarea id="f_catatan" rows="1" placeholder="Catatan internal..."></textarea></label>
-            <label>Status Awal
-              <select id="f_status">
-                <option selected>Dikerjakan</option>
-                <option>Selesai</option>
-                <option>Diambil</option>
-                <option>Cancel</option>
-              </select>
-            </label>
+            <div class="row2">
+              <label>Status Awal
+                <select id="f_status">
+                  <option selected>Dikerjakan</option>
+                  <option>Selesai</option>
+                  <option>Diambil</option>
+                  <option>Cancel</option>
+                </select>
+              </label>
+              <label>Metode Pembayaran
+                <select id="f_metode">
+                  <option value="tunai" selected>Tunai</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </label>
+            </div>
           </fieldset>
         </div>
 
@@ -1128,10 +1136,16 @@
       <div class="row2"><label>Merk<input id="e_merk"/></label><label>Tipe<input id="e_tipe"/></label></div>
       <label>Keluhan<textarea id="e_keluhan" rows="2"></textarea></label>
       <div class="row2"><label>Biaya<input id="e_biaya" type="number"/></label><label>Teknisi<select id="e_teknisi"></select></label></div>
-      <label>Status<select id="e_status">
-        <option>Dikerjakan</option>
-        <option>Selesai</option><option>Diambil</option><option>Cancel</option>
-      </select></label>
+      <div class="row2">
+        <label>Status<select id="e_status">
+          <option>Dikerjakan</option>
+          <option>Selesai</option><option>Diambil</option><option>Cancel</option>
+        </select></label>
+        <label>Metode Pembayaran<select id="e_metode">
+          <option value="tunai">Tunai</option>
+          <option value="transfer">Transfer</option>
+        </select></label>
+      </div>
       <label>Catatan<textarea id="e_catatan" rows="2"></textarea></label>
     </div>
     <div class="modal-foot"><button class="btn ghost" data-close>Batal</button><button class="btn primary" id="btnSaveEdit">Simpan Perubahan</button></div>
