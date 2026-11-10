@@ -599,7 +599,7 @@
     <!-- BIAYA & PENDAPATAN LAIN -->
     <section class="page" id="page-pengeluaran">
       <h1 class="page-title">Biaya &amp; Pendapatan Lain</h1>
-      <p class="page-sub">Catat biaya operasional (<b>mengurangi laba</b>) dan pendapatan lain (<b>menambah pendapatan &amp; laba</b>). Riwayat &amp; laporannya ada di menu <b>Laporan → Biaya &amp; Pendapatan</b>.</p>
+      <p class="page-sub">Catat biaya operasional (<b>mengurangi laba</b>) dan pendapatan lain (<b>menambah pendapatan &amp; laba</b>). Pilih <b>sumber dana</b> agar laporan omzet service &amp; penjualan bisa dipisahkan. Riwayat &amp; laporannya ada di menu <b>Laporan → Biaya &amp; Pendapatan</b>.</p>
       <div class="ltabs" id="exTabs">
         <button type="button" class="ltab active" data-extab="biaya">💸 <span>Biaya</span></button>
         <button type="button" class="ltab" data-extab="pendapatan">💰 <span>Pendapatan Lain</span></button>
@@ -624,6 +624,11 @@
           </div>
           <label>Keterangan *<input id="ex_ket" placeholder="cth: Bayar listrik bulan Oktober" /></label>
           <label>Jumlah (Rp) *<input id="ex_jumlah" type="number" min="0" value="0" placeholder="cth: 150000" /></label>
+          <label>Sumber Dana *<select id="ex_sumber">
+            <option value="" selected>— Pilih sumber dana —</option>
+            <option value="service">🔧 Dari Omset Service</option>
+            <option value="penjualan">🛒 Dari Penjualan</option>
+          </select></label>
           <label>Metode Pembayaran<select id="ex_metode">
             <option value="tunai" selected>Tunai (mengurangi kas)</option>
             <option value="non-tunai">Non-tunai (transfer/QRIS)</option>
@@ -649,6 +654,11 @@
           </div>
           <label>Keterangan *<input id="in_ket" placeholder="cth: Bunga bank bulan Oktober" /></label>
           <label>Jumlah (Rp) *<input id="in_jumlah" type="number" min="0" value="0" placeholder="cth: 50000" /></label>
+          <label>Menambah ke *<select id="in_sumber">
+            <option value="" selected>— Pilih sumber —</option>
+            <option value="service">🔧 Omset Service</option>
+            <option value="penjualan">🛒 Penjualan</option>
+          </select></label>
           <label>Metode Pembayaran<select id="in_metode">
             <option value="tunai" selected>Tunai (menambah kas)</option>
             <option value="non-tunai">Non-tunai (transfer/QRIS)</option>
@@ -813,7 +823,7 @@
           <label>Cari<div class="search-wrap"><span>🔍</span><input id="lb_search" placeholder="Cari kategori / keterangan..." /></div></label>
         </div>
         <div class="table-wrap"><table style="min-width:0">
-          <thead><tr><th>Tanggal</th><th>Keterangan</th><th style="text-align:right">Jumlah</th><th>Aksi</th></tr></thead>
+          <thead><tr><th>Tanggal</th><th>Keterangan</th><th>Sumber</th><th style="text-align:right">Jumlah</th><th>Aksi</th></tr></thead>
           <tbody id="lbTable"></tbody>
         </table></div>
       </div>
@@ -1186,6 +1196,11 @@
       </select></label></div>
       <label>Keterangan<input id="mex_ket" /></label>
       <label>Jumlah (Rp)<input id="mex_jumlah" type="number" min="0" /></label>
+      <label>Sumber Dana<select id="mex_sumber">
+        <option value="">— Belum dialokasikan —</option>
+        <option value="service">🔧 Service</option>
+        <option value="penjualan">🛒 Penjualan</option>
+      </select></label>
       <label>Metode Pembayaran<select id="mex_metode">
         <option value="tunai">Tunai</option>
         <option value="non-tunai">Non-tunai (transfer/QRIS)</option>
@@ -1267,12 +1282,12 @@
 
 <script src="config.js?v=2610291603"></script>
 <script src="api.js?v=2610291603"></script>
-<script src="script-2611091317.js?v=2611091317"></script>
+<script src="script-2611101357.js?v=2611101357"></script>
 <script>
 // Daftarkan Service Worker supaya aplikasi bisa dipasang (PWA) & cache shell.
 if('serviceWorker' in navigator && location.protocol !== 'file:'){
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw-2611091317.js').catch(function(e){ console.warn('SW gagal:', e && e.message); });
+    navigator.serviceWorker.register('sw-2611101357.js').catch(function(e){ console.warn('SW gagal:', e && e.message); });
   });
 }
 </script>

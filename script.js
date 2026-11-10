@@ -2897,6 +2897,22 @@ let EXPENSES = loadExpensesLocal();
 let exEditId = null;
 let exTab = 'biaya';
 function exJenis(x){ return String((x&&x.jenis)||'biaya').trim().toLowerCase()==='pendapatan'?'pendapatan':'biaya'; }
+function exSumber(x){
+  const s=String((x&&x.sumber)||'').trim().toLowerCase();
+  if(s==='service'||s==='omset service'||s==='omzet service'||s==='jasa') return 'service';
+  if(s==='penjualan'||s==='jual'||s==='sales') return 'penjualan';
+  return '';
+}
+function exSumberText(x){
+  const s=exSumber(x), inc=exJenis(x)==='pendapatan';
+  if(!s) return 'Belum dialokasikan';
+  if(s==='service') return inc?'Menambah Omset Service':'Dari Omset Service';
+  return inc?'Menambah Penjualan':'Dari Penjualan';
+}
+function exSumberShort(x){
+  const s=exSumber(x);
+  return s==='service' ? 'Service' : (s==='penjualan' ? 'Penjualan' : '—');
+}
 function loadExpensesLocal(){ try{ return JSON.parse(localStorage.getItem(LS_EXPENSE)) || []; }catch{ return []; } }
 function saveExpensesLocal(){ try{ localStorage.setItem(LS_EXPENSE, JSON.stringify(EXPENSES)); }catch{} }
 async function pullExpenses(){
@@ -2947,7 +2963,7 @@ function renderExpenses(){
   if($('ex_empty')) $('ex_empty').classList.toggle('hidden', r.length>0);
   const admin=isAdminUp();
   if($('ex_table')) $('ex_table').innerHTML=r.slice(0,200).map(x=>{ const inc=exJenis(x)==='pendapatan'; return `<tr>
-    <td><b>${fmtTgl(x.tanggal)}</b><br><small class="muted">${inc?'💰 Pendapatan':'💸 Biaya'} • ${esc(x.kategori||'Lainnya')}</small></td>
+    <td><b>${fmtTgl(x.tanggal)}</b><br><small class="muted">${inc?'💰 Pendapatan':'💸 Biaya'} • ${esc(x.kategori||'Lainnya')} • ${esc(exSumberText(x))}</small></td>
     <td>${esc(x.keterangan||'-')}<br><small class="muted">👤 ${esc(x.dicatat_oleh||'-')}</small></td>
     <td style="text-align:right"><b style="${inc?'color:#16a34a':''}">${inc?'+':'−'}${fmtRp(x.jumlah)}</b></td>
     <td><div class="act-btns">${admin?`<button class="icon-btn" onclick="exEdit(${jsStr(x.id)})" title="Edit">✏️</button><button class="icon-btn" onclick="exHapus(${jsStr(x.id)})" title="Hapus">🗑</button>`:'<small class="muted">—</small>'}</div></td></tr>`; }).join('');
@@ -2968,18 +2984,22 @@ function renderLaporanBiaya(){
   const sum=a=>a.reduce((t,x)=>t+Number(x.jumlah||0),0);
   const biaya=sum(rows.filter(x=>exJenis(x)==='biaya'));
   const income=sum(rows.filter(x=>exJenis(x)==='pendapatan'));
+  const biayaService=sum(rows.filter(x=>exJenis(x)==='biaya'&&exSumber(x)==='service'));
+  const biayaPenjualan=sum(rows.filter(x=>exJenis(x)==='biaya'&&exSumber(x)==='penjualan'));
   if($('lbBiaya')) $('lbBiaya').textContent=fmtRp(biaya);
   if($('lbIncome')) $('lbIncome').textContent=fmtRp(income);
   if($('lbSaldo')) $('lbSaldo').textContent=fmtRp(income-biaya);
   if($('lbCount')) $('lbCount').textContent=rows.length;
-  if($('lbInfo')) $('lbInfo').textContent=(dari||sampai)?((dari||'…')+' s/d '+(sampai||'…')):'Semua periode';
+  if($('lbInfo')) $('lbInfo').textContent=((dari||sampai)?((dari||'…')+' s/d '+(sampai||'…')):'Semua periode')
+    + ' • Biaya Service '+fmtRp(biayaService)+' • Biaya Penjualan '+fmtRp(biayaPenjualan);
   const admin=isAdminUp();
   body.innerHTML=rows.slice(0,500).map(x=>{ const inc=exJenis(x)==='pendapatan'; return `<tr>
     <td><b>${fmtTgl(x.tanggal)}</b><br><small class="muted">${esc(x.dicatat_oleh||'-')}</small></td>
     <td><b style="${inc?'color:#16a34a':''}">${inc?'💰 Pendapatan':'💸 Biaya'}</b> • ${esc(x.kategori||'Lainnya')}<br><small class="muted">${esc(x.keterangan||'-')}</small></td>
+    <td><small>${esc(exSumberText(x))}</small></td>
     <td style="text-align:right"><b style="${inc?'color:#16a34a':''}">${inc?'+':'−'}${fmtRp(x.jumlah)}</b></td>
     <td><div class="act-btns">${admin?`<button class="icon-btn" onclick="exEdit(${jsStr(x.id)})" title="Edit">✏️</button><button class="icon-btn" onclick="exHapus(${jsStr(x.id)})" title="Hapus">🗑</button>`:'<small class="muted">—</small>'}</div></td>
-  </tr>`;}).join('') || '<tr><td colspan="4">Belum ada biaya atau pendapatan lain pada periode ini.</td></tr>';
+  </tr>`;}).join('') || '<tr><td colspan="5">Belum ada biaya atau pendapatan lain pada periode ini.</td></tr>';
 }
 function setExTab(name){
   exTab = name==='pendapatan' ? 'pendapatan' : 'biaya';
@@ -3004,25 +3024,30 @@ async function simpanExLike(jenis){
   const keterangan=val(p+'ket').trim();
   const jumlah=Number(($(p+'jumlah')||{}).value||0);
   const metode=(val(p+'metode','tunai')||'tunai');
+  const sumber=(val(p+'sumber','')||'').trim();
   if(!keterangan){ toast('Keterangan wajib diisi'); return; }
   if(!(jumlah>0)){ toast('Jumlah harus lebih dari 0'); return; }
+  if(sumber!=='service' && sumber!=='penjualan'){
+    toast(isInc?'Pilih tujuan pendapatan: Omset Service atau Penjualan':'Pilih sumber dana: Omset Service atau Penjualan');
+    return;
+  }
   if(useBackend() && window.API.createExpense){
     try{
-      const created=await window.API.createExpense({tanggal, jenis, kategori, keterangan, jumlah, metode});
+      const created=await window.API.createExpense({tanggal, jenis, kategori, keterangan, jumlah, metode, sumber});
       if(isInc && created && created.jenis!=='pendapatan'){
         toast('Server belum mendukung pendapatan lain — update backend dulu ⚠️');
       }
       await pullExpenses(); renderAll();
-      if($(p+'ket'))$(p+'ket').value=''; if($(p+'jumlah'))$(p+'jumlah').value=0; if($(p+'metode'))$(p+'metode').value='tunai';
+      if($(p+'ket'))$(p+'ket').value=''; if($(p+'jumlah'))$(p+'jumlah').value=0; if($(p+'metode'))$(p+'metode').value='tunai'; if($(p+'sumber'))$(p+'sumber').value='';
       renderExpenses();
       toast(isInc?'Pendapatan lain tersimpan, pendapatan & laba bertambah 💰':'Biaya tersimpan, laba berkurang 💸');
       return;
     }catch(err){ if(handleSesiError(err.message)) return; toast(err.message); return; }
   }
   const me=currentUser();
-  EXPENSES.unshift({id:Date.now(), tanggal, jenis, kategori, keterangan, jumlah, metode, dicatat_oleh:me?me.nama:''});
+  EXPENSES.unshift({id:Date.now(), tanggal, jenis, kategori, keterangan, jumlah, metode, sumber, dicatat_oleh:me?me.nama:''});
   saveExpensesLocal();
-  if($(p+'ket'))$(p+'ket').value=''; if($(p+'jumlah'))$(p+'jumlah').value=0; if($(p+'metode'))$(p+'metode').value='tunai';
+  if($(p+'ket'))$(p+'ket').value=''; if($(p+'jumlah'))$(p+'jumlah').value=0; if($(p+'metode'))$(p+'metode').value='tunai'; if($(p+'sumber'))$(p+'sumber').value='';
   renderAll(); toast(isInc?'Pendapatan lain tersimpan, pendapatan & laba bertambah 💰':'Biaya tersimpan, laba berkurang 💸');
 }
 function simpanExpense(){ return simpanExLike('biaya'); }
@@ -3036,6 +3061,7 @@ window.exEdit=function(id){
   if($('mex_kategori'))$('mex_kategori').value=x.kategori||'Lainnya';
   if($('mex_ket'))$('mex_ket').value=x.keterangan||'';
   if($('mex_jumlah'))$('mex_jumlah').value=x.jumlah||0;
+  if($('mex_sumber'))$('mex_sumber').value=exSumber(x);
   if($('mex_metode'))$('mex_metode').value=(x.metode||'tunai');
   $('modalExpense').classList.remove('hidden');
 };
@@ -3061,8 +3087,8 @@ function bindExpenses(){
   });
   if($('btnSimpanEx')) $('btnSimpanEx').onclick=simpanExpense;
   if($('btnSimpanIn')) $('btnSimpanIn').onclick=simpanIncome;
-  if($('btnBatalEx')) $('btnBatalEx').onclick=()=>{ if($('ex_ket'))$('ex_ket').value=''; if($('ex_jumlah'))$('ex_jumlah').value=0; if($('ex_tanggal'))$('ex_tanggal').value=new Date().toISOString().slice(0,10); toast('Input dibatalkan'); };
-  if($('btnBatalIn')) $('btnBatalIn').onclick=()=>{ if($('in_ket'))$('in_ket').value=''; if($('in_jumlah'))$('in_jumlah').value=0; if($('in_tanggal'))$('in_tanggal').value=new Date().toISOString().slice(0,10); toast('Input dibatalkan'); };
+  if($('btnBatalEx')) $('btnBatalEx').onclick=()=>{ if($('ex_ket'))$('ex_ket').value=''; if($('ex_jumlah'))$('ex_jumlah').value=0; if($('ex_sumber'))$('ex_sumber').value=''; if($('ex_tanggal'))$('ex_tanggal').value=new Date().toISOString().slice(0,10); toast('Input dibatalkan'); };
+  if($('btnBatalIn')) $('btnBatalIn').onclick=()=>{ if($('in_ket'))$('in_ket').value=''; if($('in_jumlah'))$('in_jumlah').value=0; if($('in_sumber'))$('in_sumber').value=''; if($('in_tanggal'))$('in_tanggal').value=new Date().toISOString().slice(0,10); toast('Input dibatalkan'); };
   if($('ex_search')) $('ex_search').addEventListener('input',renderExpenses);
   if($('ex_dari')) $('ex_dari').onchange=renderExpenses;
   if($('ex_sampai')) $('ex_sampai').onchange=renderExpenses;
@@ -3076,13 +3102,15 @@ function bindExpenses(){
     const keterangan=(($('mex_ket')||{}).value||'').trim();
     const jumlah=Number(($('mex_jumlah')||{}).value||0);
     const metode=(($('mex_metode')||{}).value||x.metode||'tunai');
+    const sumber=(($('mex_sumber')||{}).value||'').trim();
     if(!keterangan){ toast('Keterangan wajib diisi'); return; }
     if(!(jumlah>0)){ toast('Jumlah harus lebih dari 0'); return; }
+    if(sumber!=='service' && sumber!=='penjualan'){ toast('Pilih sumber dana: Omset Service atau Penjualan'); return; }
     if(useBackend() && window.API.updateExpense){
-      try{ await window.API.updateExpense(x.id,{tanggal,jenis,kategori,keterangan,jumlah,metode}); await pullExpenses(); renderAll(); $('modalExpense').classList.add('hidden'); toast('Transaksi diperbarui ✅'); return; }
+      try{ await window.API.updateExpense(x.id,{tanggal,jenis,kategori,keterangan,jumlah,metode,sumber}); await pullExpenses(); renderAll(); $('modalExpense').classList.add('hidden'); toast('Transaksi diperbarui ✅'); return; }
       catch(err){ toast(err.message); return; }
     }
-    Object.assign(x,{tanggal,jenis,kategori,keterangan,jumlah,metode});
+    Object.assign(x,{tanggal,jenis,kategori,keterangan,jumlah,metode,sumber});
     saveExpensesLocal();
     $('modalExpense').classList.add('hidden');
     renderAll(); toast('Transaksi diperbarui ✅');
@@ -3279,6 +3307,10 @@ function computeReportLocal(dari, sampai, kasir, sesiId, untilTs){
   const inList=exAll.filter(x=>exJenis(x)==='pendapatan');
   const exTot=exList.reduce((a,b)=>a+Number(b.jumlah||0),0);
   const inTot=inList.reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const exSvc=exList.filter(x=>exSumber(x)==='service').reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const exJual=exList.filter(x=>exSumber(x)==='penjualan').reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const inSvc=inList.filter(x=>exSumber(x)==='service').reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const inJual=inList.filter(x=>exSumber(x)==='penjualan').reduce((a,b)=>a+Number(b.jumlah||0),0);
   const groupUang=(arr)=>{
     const m={};
     arr.forEach(x=>{
@@ -3300,7 +3332,11 @@ function computeReportLocal(dari, sampai, kasir, sesiId, untilTs){
     penjualan_count: jual.length, penjualan_subtotal: jSub, penjualan_diskon: jDisc, penjualan_omzet: jOm, penjualan_hpp: jHpp, penjualan_laba: jLb,
     digital_count: 0, digital_omzet: 0, digital_hpp: 0, digital_laba: 0,
     expense_count: exList.length, expense_total: exTot,
+    expense_service: exSvc, expense_penjualan: exJual, expense_tanpa_sumber: exTot-exSvc-exJual,
     income_count: inList.length, income_total: inTot,
+    income_service: inSvc, income_penjualan: inJual, income_tanpa_sumber: inTot-inSvc-inJual,
+    service_omzet_bersih: sOm-exSvc+inSvc,
+    penjualan_omzet_bersih: jOm-exJual+inJual,
     total_hpp: jHpp,
     total_pendapatan: totalPendapatan, laba_kotor: labaKotor,
     laba_operasional: labaOperasional, total_laba: labaOperasional, laba_bersih: labaOperasional,
@@ -3442,8 +3478,16 @@ function computeArusKasLocal(dari,sampai,kasir,sesiId){
   const income=ex.filter(x=>exJenis(x)==='pendapatan');
   const biayaT=biaya.filter(x=>_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
   const biayaN=biaya.filter(x=>!_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const biayaSvcT=biaya.filter(x=>exSumber(x)==='service'&&_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const biayaJualT=biaya.filter(x=>exSumber(x)==='penjualan'&&_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const biayaSvcN=biaya.filter(x=>exSumber(x)==='service'&&!_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const biayaJualN=biaya.filter(x=>exSumber(x)==='penjualan'&&!_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
   const incomeT=income.filter(x=>_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
   const incomeN=income.filter(x=>!_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const incomeSvcT=income.filter(x=>exSumber(x)==='service'&&_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const incomeJualT=income.filter(x=>exSumber(x)==='penjualan'&&_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const incomeSvcN=income.filter(x=>exSumber(x)==='service'&&!_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
+  const incomeJualN=income.filter(x=>exSumber(x)==='penjualan'&&!_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.jumlah||0),0);
   const first={};
   sessions.forEach(s=>{ const k=normKasir(s.kasir)||'-'; const t=String(s.opened_at||''); if(!first[k]||t<first[k].t) first[k]={t,modal:Number(s.modal_awal||0)}; });
   const kasAwal=sess?Number(sess.modal_awal||0):Object.values(first).reduce((a,b)=>a+b.modal,0);
@@ -3452,11 +3496,17 @@ function computeArusKasLocal(dari,sampai,kasir,sesiId){
     dari:dari||'', sampai:sampai||'', kasir:kasir||'',
     sesi_id:sess?String(sess.id||''):'',
     kas_awal:kasAwal,
-    penerimaan:{service_tunai:svcT, penjualan_tunai:jualT, pendapatan_lain_tunai:incomeT, total:penerimaan},
-    pengeluaran:{biaya_tunai:biayaT, total:biayaT},
+    penerimaan:{service_tunai:svcT, penjualan_tunai:jualT, pendapatan_lain_tunai:incomeT,
+      pendapatan_lain_service_tunai:incomeSvcT, pendapatan_lain_penjualan_tunai:incomeJualT,
+      pendapatan_lain_belum_tunai:incomeT-incomeSvcT-incomeJualT, total:penerimaan},
+    pengeluaran:{biaya_tunai:biayaT, biaya_service_tunai:biayaSvcT, biaya_penjualan_tunai:biayaJualT,
+      biaya_belum_tunai:biayaT-biayaSvcT-biayaJualT, total:biayaT},
     arus_kas_bersih:penerimaan-biayaT,
     kas_akhir_sistem:kasAwal+penerimaan-biayaT,
-    non_tunai:{service:svcN, penjualan:jualN, pendapatan_lain:incomeN, pengeluaran:biayaN},
+    non_tunai:{service:svcN, penjualan:jualN, pendapatan_lain:incomeN,
+      pendapatan_lain_service:incomeSvcN, pendapatan_lain_penjualan:incomeJualN,
+      pendapatan_lain_belum:incomeN-incomeSvcN-incomeJualN, pengeluaran:biayaN,
+      pengeluaran_service:biayaSvcN, pengeluaran_penjualan:biayaJualN, pengeluaran_belum:biayaN-biayaSvcN-biayaJualN},
     sesi:sessions,
   };
 }
@@ -3485,16 +3535,28 @@ async function renderArusKas(dari,sampai,kasir,sesiId){
     row('Service (Diambil)', p.service_tunai||0),
     row('Penjualan barang', p.penjualan_tunai||0),
     row('Pendapatan lain', p.pendapatan_lain_tunai||0),
+    row('&nbsp;&nbsp;— ke Service', p.pendapatan_lain_service_tunai||0),
+    row('&nbsp;&nbsp;— ke Penjualan', p.pendapatan_lain_penjualan_tunai||0),
+    (Number(p.pendapatan_lain_belum_tunai||0)?row('&nbsp;&nbsp;— belum dialokasikan', p.pendapatan_lain_belum_tunai||0):''),
     row('Total penerimaan', p.total||0, true),
     '<tr><td colspan="2"><b>Pengeluaran Tunai</b></td></tr>',
     row('Biaya operasional', k.biaya_tunai||0),
+    row('&nbsp;&nbsp;— dari Omset Service', k.biaya_service_tunai||0),
+    row('&nbsp;&nbsp;— dari Penjualan', k.biaya_penjualan_tunai||0),
+    (Number(k.biaya_belum_tunai||0)?row('&nbsp;&nbsp;— belum dialokasikan', k.biaya_belum_tunai||0):''),
     row('Arus kas bersih', r.arus_kas_bersih||0, true),
     row('Kas akhir (sistem)', r.kas_akhir_sistem||0, true),
     '<tr><td colspan="2"><b>Non-tunai (tidak masuk kas)</b></td></tr>',
     row('Service', n.service||0),
     row('Penjualan barang', n.penjualan||0),
     row('Pendapatan lain', n.pendapatan_lain||0),
+    row('&nbsp;&nbsp;— ke Service', n.pendapatan_lain_service||0),
+    row('&nbsp;&nbsp;— ke Penjualan', n.pendapatan_lain_penjualan||0),
+    (Number(n.pendapatan_lain_belum||0)?row('&nbsp;&nbsp;— belum dialokasikan', n.pendapatan_lain_belum||0):''),
     row('Pengeluaran', n.pengeluaran||0),
+    row('&nbsp;&nbsp;— dari Service', n.pengeluaran_service||0),
+    row('&nbsp;&nbsp;— dari Penjualan', n.pengeluaran_penjualan||0),
+    (Number(n.pengeluaran_belum||0)?row('&nbsp;&nbsp;— belum dialokasikan', n.pengeluaran_belum||0):''),
   ].join('');
   const sesi=Array.isArray(r.sesi)?r.sesi:[];
   if($('akSesiBody')) $('akSesiBody').innerHTML=sesi.map(s=>`<tr>
@@ -3718,6 +3780,7 @@ async function renderLaporan(){
         r.penjualan_omzet = bOm + dOm;
         r.penjualan_laba = bLb + dLb;
         r.penjualan_hpp = sl.reduce((a,b)=>a+Number(b.hpp_total||0),0) + dl.reduce((a,b)=>a+Number(b.hpp||0),0);
+        r.penjualan_omzet_bersih = Number(r.penjualan_omzet||0) - Number(r.expense_penjualan||0) + Number(r.income_penjualan||0);
       }
       r._jualList = sl;
     }catch(e){}
@@ -3761,6 +3824,21 @@ async function renderLaporan(){
       add('Laba Kotor', labaKotor, true);
       add('Beban Operasional', beban, false, true);
       add('Laba Bersih', labaBersih, true);
+      const biayaSvc=Number(r.expense_service||0), biayaJual=Number(r.expense_penjualan||0);
+      const incSvc=Number(r.income_service||0), incJual=Number(r.income_penjualan||0);
+      const biayaNol=Number(r.expense_tanpa_sumber!=null?r.expense_tanpa_sumber:Math.max(0,beban-biayaSvc-biayaJual));
+      const incNol=Number(r.income_tanpa_sumber!=null?r.income_tanpa_sumber:Math.max(0,Number(r.income_total||0)-incSvc-incJual));
+      const svcNet=Number(r.service_omzet_bersih!=null?r.service_omzet_bersih:(Number(r.service_omzet||0)-biayaSvc+incSvc));
+      const jualNet=Number(r.penjualan_omzet_bersih!=null?r.penjualan_omzet_bersih:(Number(r.penjualan_omzet||0)-biayaJual+incJual));
+      rows.push('<tr><td colspan="2" style="padding-top:10px"><b>Atribusi Sumber Dana</b></td></tr>');
+      add('&nbsp;&nbsp;Biaya dari Omset Service', biayaSvc, false, true);
+      add('&nbsp;&nbsp;Pendapatan Lain → Service', incSvc);
+      add('Omzet Service Bersih', svcNet, true);
+      add('&nbsp;&nbsp;Biaya dari Penjualan', biayaJual, false, true);
+      add('&nbsp;&nbsp;Pendapatan Lain → Penjualan', incJual);
+      add('Omzet Penjualan Bersih', jualNet, true);
+      if(biayaNol) add('&nbsp;&nbsp;Biaya belum dialokasikan', biayaNol, false, true);
+      if(incNol) add('&nbsp;&nbsp;Pendapatan lain belum dialokasikan', incNol);
       rows.push(`<tr><td>Margin</td><td style="text-align:right">${margin}%</td></tr>`);
       const bk=Array.isArray(r.beban_per_kategori)?r.beban_per_kategori:[];
       if(bk.length){
@@ -3806,6 +3884,7 @@ async function renderLaporan(){
         r.penjualan_omzet = bOm + dOm;
         r.penjualan_laba = bLb + dLb;
         r.penjualan_hpp = bl.reduce((a,b)=>a+Number(b.hpp_total||0),0) + dl.reduce((a,b)=>a+Number(b.hpp||0),0);
+        r.penjualan_omzet_bersih = Number(r.penjualan_omzet||0) - Number(r.expense_penjualan||0) + Number(r.income_penjualan||0);
         r._jualList = bl;
       }
     }catch{}
@@ -4185,8 +4264,31 @@ function exportLaporanCSV(){
   L.push('Laba operasional,'+labaOps);
   L.push('Laba bersih,'+r.total_laba);
   L.push('Margin (%),'+(r.margin_persen!=null?r.margin_persen:0));
+  L.push('Biaya dari omset service,'+(r.expense_service||0));
+  L.push('Biaya dari penjualan,'+(r.expense_penjualan||0));
+  L.push('Biaya belum dialokasikan,'+(r.expense_tanpa_sumber||0));
+  L.push('Pendapatan lain ke service,'+(r.income_service||0));
+  L.push('Pendapatan lain ke penjualan,'+(r.income_penjualan||0));
+  L.push('Pendapatan lain belum dialokasikan,'+(r.income_tanpa_sumber||0));
+  L.push('Omzet service bersih,'+(r.service_omzet_bersih!=null?r.service_omzet_bersih:r.service_omzet));
+  L.push('Omzet penjualan bersih,'+(r.penjualan_omzet_bersih!=null?r.penjualan_omzet_bersih:r.penjualan_omzet));
   (r.beban_per_kategori||[]).forEach(x=>L.push('Beban '+(x.kategori||'Lainnya')+','+(x.jumlah||0)));
   (r.pendapatan_per_kategori||[]).forEach(x=>L.push('Pendapatan lain '+(x.kategori||'Lainnya')+','+(x.jumlah||0)));
+  L.push('');
+  L.push('BIAYA & PENDAPATAN LAIN');
+  L.push('Tanggal,Jenis,Kategori,Sumber,Jumlah,Metode,Pencatat');
+  try{
+    const sessCsv=rr.sesiId?lpSessionById(rr.sesiId):null;
+    const exCsv=(typeof EXPENSES!=='undefined'?EXPENSES:[]).filter(x=>{
+      const okWaktu=sessCsv?lpInWindow(tsRecord(x),sessCsv):inPeriode(x.tanggal||'',rr.dari||'',rr.sampai||'');
+      return okWaktu&&matchKasir(x.dicatat_oleh,rr.kasir||'');
+    }).sort((a,b)=>String(b.tanggal||'').localeCompare(String(a.tanggal||''))||((b.id||0)-(a.id||0)));
+    exCsv.forEach(x=>L.push([
+      x.tanggal||'', exJenis(x)||'biaya', '"'+String(x.kategori||'Lainnya').replace(/"/g,'""')+'"',
+      '"'+String(exSumberText(x)).replace(/"/g,'""')+'"', Number(x.jumlah||0), x.metode||'tunai',
+      '"'+String(x.dicatat_oleh||'').replace(/"/g,'""')+'"',
+    ].join(',')));
+  }catch(e){}
   L.push('');
   L.push('SERVICE PER STATUS');
   L.push('Status,Jumlah');
@@ -4241,15 +4343,27 @@ function exportLaporanCSV(){
     L.push('Penerimaan service tunai,'+(p.service_tunai||0));
     L.push('Penerimaan penjualan tunai,'+(p.penjualan_tunai||0));
     L.push('Pendapatan lain tunai,'+(p.pendapatan_lain_tunai||0));
+    L.push('Pendapatan lain ke service tunai,'+(p.pendapatan_lain_service_tunai||0));
+    L.push('Pendapatan lain ke penjualan tunai,'+(p.pendapatan_lain_penjualan_tunai||0));
+    L.push('Pendapatan lain belum dialokasikan tunai,'+(p.pendapatan_lain_belum_tunai||0));
     L.push('Total penerimaan tunai,'+(p.total||0));
     L.push('Pengeluaran tunai,'+(k.total||0));
+    L.push('Pengeluaran dari omset service tunai,'+(k.biaya_service_tunai||0));
+    L.push('Pengeluaran dari penjualan tunai,'+(k.biaya_penjualan_tunai||0));
+    L.push('Pengeluaran belum dialokasikan tunai,'+(k.biaya_belum_tunai||0));
     L.push('Arus kas bersih,'+(a.arus_kas_bersih||0));
     L.push('Kas akhir sistem,'+(a.kas_akhir_sistem||0));
     L.push('');
     L.push('Non-tunai service,'+(n.service||0));
     L.push('Non-tunai penjualan,'+(n.penjualan||0));
     L.push('Non-tunai pendapatan lain,'+(n.pendapatan_lain||0));
+    L.push('Non-tunai pendapatan lain service,'+(n.pendapatan_lain_service||0));
+    L.push('Non-tunai pendapatan lain penjualan,'+(n.pendapatan_lain_penjualan||0));
+    L.push('Non-tunai pendapatan lain belum dialokasikan,'+(n.pendapatan_lain_belum||0));
     L.push('Non-tunai pengeluaran,'+(n.pengeluaran||0));
+    L.push('Non-tunai pengeluaran service,'+(n.pengeluaran_service||0));
+    L.push('Non-tunai pengeluaran penjualan,'+(n.pengeluaran_penjualan||0));
+    L.push('Non-tunai pengeluaran belum dialokasikan,'+(n.pengeluaran_belum||0));
   }
   L.push('');
   L.push('POSISI KEUANGAN RINGKAS');

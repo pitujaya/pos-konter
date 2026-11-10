@@ -19,6 +19,15 @@ def _norm_metode(metode: str | None) -> str:
     return "non-tunai" if m in ("non-tunai", "non tunai", "nontunai", "transfer", "qris", "debit") else "tunai"
 
 
+def _norm_sumber(sumber: str | None) -> str:
+    s = str(sumber or "").strip().lower()
+    if s in ("service", "omset service", "omzet service", "jasa"):
+        return "service"
+    if s in ("penjualan", "jual", "sales"):
+        return "penjualan"
+    return ""
+
+
 def _expense_to_out(e: models.Expense) -> dict:
     return {
         "id": e.id,
@@ -28,6 +37,7 @@ def _expense_to_out(e: models.Expense) -> dict:
         "keterangan": e.keterangan or "",
         "jumlah": int(e.jumlah or 0),
         "metode": _norm_metode(getattr(e, "metode", "tunai")),
+        "sumber": _norm_sumber(getattr(e, "sumber", "")),
         "dicatat_oleh": e.dicatat_oleh or "",
         "created_at": (e.created_at.isoformat() if getattr(e, "created_at", None) else ""),
     }
@@ -51,6 +61,10 @@ def create_expense(body: schemas.ExpenseIn, db: Session = Depends(get_db),
     if jumlah <= 0:
         raise HTTPException(400, "Jumlah harus lebih dari 0")
     jenis = _norm_jenis(body.jenis)
+    sumber_raw = str(getattr(body, "sumber", "") or "").strip()
+    sumber = _norm_sumber(sumber_raw)
+    if sumber_raw and not sumber:
+        raise HTTPException(400, "Sumber dana tidak dikenal (service/penjualan)")
     tanggal = ((body.tanggal or "")[:10] or datetime.now().date().isoformat())
     kategori = (body.kategori or "Lainnya").strip() or "Lainnya"
     e = models.Expense(
@@ -60,6 +74,7 @@ def create_expense(body: schemas.ExpenseIn, db: Session = Depends(get_db),
         keterangan=(body.keterangan or "").strip(),
         jumlah=jumlah,
         metode=_norm_metode(getattr(body, "metode", "tunai")),
+        sumber=sumber,
         dicatat_oleh=user.nama or "",
     )
     db.add(e)
@@ -114,6 +129,12 @@ def update_expense(expense_id: int, body: schemas.ExpenseUpdateIn,
         e.jenis = _norm_jenis(data["jenis"])
     if "metode" in data and data["metode"]:
         e.metode = _norm_metode(data["metode"])
+    if "sumber" in data:
+        sumber_raw = str(data.get("sumber") or "").strip()
+        sumber = _norm_sumber(sumber_raw)
+        if sumber_raw and not sumber:
+            raise HTTPException(400, "Sumber dana tidak dikenal (service/penjualan)")
+        e.sumber = sumber
     if "kategori" in data and data["kategori"]:
         e.kategori = str(data["kategori"]).strip() or e.kategori
     if "keterangan" in data and data["keterangan"] is not None:

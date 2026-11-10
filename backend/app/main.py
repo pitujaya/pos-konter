@@ -161,8 +161,10 @@ try:
     _ensure_columns("expenses", {
         "jenis": "VARCHAR(20) DEFAULT 'biaya'",
         "metode": "VARCHAR(30) DEFAULT 'tunai'",
+        "sumber": "VARCHAR(20) DEFAULT ''",
     })
     _ensure_index("expenses", "ix_expenses_jenis", "jenis")
+    _ensure_index("expenses", "ix_expenses_sumber", "sumber")
     _ensure_columns("cash_sessions", {"service_tunai": "INTEGER DEFAULT 0"})
     _ensure_columns("settings", {"akses": "JSON DEFAULT '{}'"})
     try:

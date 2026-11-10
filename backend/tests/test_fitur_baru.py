@@ -163,14 +163,18 @@ class TestPendapatanLain:
         inc = client.post("/api/expenses", headers=h, json={
             "tanggal": self.TGL, "jenis": "pendapatan",
             "kategori": "Bunga Bank", "keterangan": "Bunga", "jumlah": 50000,
+            "sumber": "service",
         })
         assert inc.status_code == 201, inc.text
         assert inc.json()["jenis"] == "pendapatan"
+        assert inc.json()["sumber"] == "service"
         biaya = client.post("/api/expenses", headers=h, json={
             "tanggal": self.TGL, "kategori": "Listrik", "keterangan": "Token", "jumlah": 30000,
+            "sumber": "penjualan",
         })
         assert biaya.status_code == 201, biaya.text
         assert biaya.json()["jenis"] == "biaya"
+        assert biaya.json()["sumber"] == "penjualan"
 
         rep = client.get("/api/stats/report", headers=h,
                          params={"dari": self.TGL, "sampai": self.TGL}).json()
@@ -192,6 +196,7 @@ class TestPendapatanLain:
         client.post("/api/expenses", headers=h, json={
             "tanggal": self.TGL, "jenis": "pendapatan",
             "kategori": "Cashback", "keterangan": "Cashback", "jumlah": 15000,
+            "sumber": "penjualan",
         })
         cur1 = client.get("/api/kas/current", headers=h).json()
         assert cur1["kas_sistem"] == (cur0 or {}).get("kas_sistem", 0) + 15000
@@ -201,14 +206,25 @@ class TestPendapatanLain:
         r = client.post("/api/expenses", headers=h, json={
             "tanggal": self.TGL, "jenis": "pendapatan",
             "kategori": "Lainnya", "keterangan": "Ubah jenis", "jumlah": 10000,
+            "sumber": "service",
         })
         eid = r.json()["id"]
         up = client.put(f"/api/expenses/{eid}", headers=admin,
-                        json={"jenis": "biaya"})
+                        json={"jenis": "biaya", "sumber": "penjualan"})
         assert up.status_code == 200, up.text
         assert up.json()["jenis"] == "biaya"
+        assert up.json()["sumber"] == "penjualan"
 
     def test_jenis_column_exists(self):
         with SessionLocal() as db:
             cols = {c.name for c in models.Expense.__table__.columns}
         assert "jenis" in cols
+        assert "sumber" in cols
+
+    def test_sumber_invalid_ditolak(self, client):
+        h = self._user(client)
+        r = client.post("/api/expenses", headers=h, json={
+            "tanggal": self.TGL, "jenis": "biaya", "kategori": "Listrik",
+            "keterangan": "Token", "jumlah": 10000, "sumber": "ngawur",
+        })
+        assert r.status_code == 400, r.text

@@ -53,10 +53,12 @@ class TestLaporanKeuangan:
             assert st.status_code == 200, st.text
         return sid
 
-    def _expense(self, client, h, jumlah, jenis="biaya", metode="tunai", kategori="Operasional"):
+    def _expense(self, client, h, jumlah, jenis="biaya", metode="tunai",
+                 kategori="Operasional", sumber="service"):
         r = client.post("/api/expenses", headers=h, json={
             "tanggal": self.TGL, "jenis": jenis, "kategori": kategori,
             "keterangan": "test", "jumlah": jumlah, "metode": metode,
+            "sumber": sumber,
         })
         assert r.status_code == 201, r.text
         return r.json()
@@ -79,6 +81,30 @@ class TestLaporanKeuangan:
         assert b["arus_kas_bersih"] == 90000
         assert b["kas_akhir_sistem"] == 140000
         assert b["sesi"], "sesi kasir harus muncul"
+
+    def test_atribusi_sumber_dana(self, client):
+        h, kasir = self._user(client, modal=0)
+        self._service(client, h, 100000)
+        self._expense(client, h, 30000, jenis="biaya", sumber="service")
+        self._expense(client, h, 20000, jenis="pendapatan", sumber="penjualan")
+
+        rep = client.get("/api/stats/report", headers=h,
+                         params={"dari": self.TGL, "sampai": self.TGL, "kasir": kasir}).json()
+        assert rep["expense_service"] == 30000
+        assert rep["expense_penjualan"] == 0
+        assert rep["income_service"] == 0
+        assert rep["income_penjualan"] == 20000
+        assert rep["service_omzet_bersih"] == 70000
+        assert rep["penjualan_omzet_bersih"] == 20000
+        assert rep["total_laba"] == 90000
+
+        arus = client.get("/api/stats/arus-kas", headers=h,
+                          params={"dari": self.TGL, "sampai": self.TGL, "kasir": kasir}).json()
+        assert arus["pengeluaran"]["biaya_service_tunai"] == 30000
+        assert arus["pengeluaran"]["biaya_penjualan_tunai"] == 0
+        assert arus["penerimaan"]["pendapatan_lain_service_tunai"] == 0
+        assert arus["penerimaan"]["pendapatan_lain_penjualan_tunai"] == 20000
+        assert arus["penerimaan"]["pendapatan_lain_belum_tunai"] == 0
 
     def test_arus_kas_non_tunai_tidak_masuk_kas(self, client):
         h, kasir = self._user(client, modal=10000)

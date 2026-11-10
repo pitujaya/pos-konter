@@ -1227,7 +1227,7 @@ function renderStats(){
   $('stOmzet').textContent=fmtRp(day.filter(x=>normStatus(x.status)==='Diambil').reduce((a,b)=>a+Number(b.biaya||0),0));
   // Ringkasan Penjualan Digital
   try{
-    if(sesi){
+    if(sesi && sesi.open){
       ['stDigCount','stDigOmzet','stDigLaba'].forEach(id=>{ if($(id)) $(id).textContent='—'; });
     } else {
       let dl = Array.isArray(DIG_LIST)?DIG_LIST:[];

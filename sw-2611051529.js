@@ -10,7 +10,7 @@
  *
  * Catatan: service worker hanya aktif di origin https (atau localhost).
  */
-const CACHE = 'servishp-shell-v6';
+const CACHE = 'servishp-shell-v7';
 const SHELL = [
   './',
   './index.html',

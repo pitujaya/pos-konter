@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from .. import models, schemas
-from ..auth import get_current_user, require_admin
+from ..auth import get_current_user, require_admin, require_kasir_laba
 
 router = APIRouter(tags=["sales"])
 STATUS_SERVICE = ["Dikerjakan", "Selesai", "Diambil", "Cancel"]
@@ -20,6 +20,16 @@ def _norm_status(s: str | None) -> str:
 
 def _is_income(e) -> bool:
     return str(getattr(e, "jenis", "biaya") or "biaya").strip().lower() == "pendapatan"
+
+
+def _expense_sumber(e) -> str:
+    """Sumber atribusi: service | penjualan | '' (data lama/belum dialokasikan)."""
+    s = str(getattr(e, "sumber", "") or "").strip().lower()
+    if s in ("service", "omset service", "omzet service", "jasa"):
+        return "service"
+    if s in ("penjualan", "jual", "sales"):
+        return "penjualan"
+    return ""
 
 
 def _sale_diskon(s: models.Sale) -> int:
@@ -364,7 +374,7 @@ def delete_sale(sale_id: int, db: Session = Depends(get_db),
     return {"ok": True}
 
 
-@router.get("/stats/report", response_model=schemas.ReportOut)
+@router.get("/stats/report", response_model=schemas.ReportOut, dependencies=[Depends(require_kasir_laba)])
 def report(
     dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),
@@ -409,6 +419,18 @@ def report(
     biaya = [r for r in expenses if not _is_income(r)]
     expense_total = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya)
     income_total = sum(int(getattr(r, "jumlah", 0) or 0) for r in income)
+    expense_service = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya
+                          if _expense_sumber(r) == "service")
+    expense_penjualan = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya
+                            if _expense_sumber(r) == "penjualan")
+    income_service = sum(int(getattr(r, "jumlah", 0) or 0) for r in income
+                         if _expense_sumber(r) == "service")
+    income_penjualan = sum(int(getattr(r, "jumlah", 0) or 0) for r in income
+                           if _expense_sumber(r) == "penjualan")
+    expense_tanpa_sumber = expense_total - expense_service - expense_penjualan
+    income_tanpa_sumber = income_total - income_service - income_penjualan
+    service_omzet_bersih = service_omzet - expense_service + income_service
+    penjualan_omzet_bersih = penjualan_omzet_total - expense_penjualan + income_penjualan
     total_pendapatan = service_omzet + penjualan_omzet_total + income_total
     total_hpp = penjualan_hpp_total + service_hpp
     laba_kotor = total_pendapatan - total_hpp
@@ -445,8 +467,16 @@ def report(
         "digital_laba": digital_laba,
         "expense_count": len(biaya),
         "expense_total": expense_total,
+        "expense_service": expense_service,
+        "expense_penjualan": expense_penjualan,
+        "expense_tanpa_sumber": expense_tanpa_sumber,
         "income_count": len(income),
         "income_total": income_total,
+        "income_service": income_service,
+        "income_penjualan": income_penjualan,
+        "income_tanpa_sumber": income_tanpa_sumber,
+        "service_omzet_bersih": service_omzet_bersih,
+        "penjualan_omzet_bersih": penjualan_omzet_bersih,
         "total_hpp": total_hpp,
         "total_pendapatan": total_pendapatan,
         "laba_kotor": laba_kotor,
@@ -463,7 +493,7 @@ def report(
     }
 
 
-@router.get("/stats/arus-kas")
+@router.get("/stats/arus-kas", dependencies=[Depends(require_kasir_laba)])
 def arus_kas(
     dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),
@@ -493,10 +523,34 @@ def arus_kas(
                       if _is_tunai_metode(getattr(r, "metode", "tunai")))
     biaya_non = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya
                     if not _is_tunai_metode(getattr(r, "metode", "tunai")))
+    biaya_svc_tunai = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya
+                          if _expense_sumber(r) == "service"
+                          and _is_tunai_metode(getattr(r, "metode", "tunai")))
+    biaya_jual_tunai = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya
+                           if _expense_sumber(r) == "penjualan"
+                           and _is_tunai_metode(getattr(r, "metode", "tunai")))
+    biaya_svc_non = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya
+                        if _expense_sumber(r) == "service"
+                        and not _is_tunai_metode(getattr(r, "metode", "tunai")))
+    biaya_jual_non = sum(int(getattr(r, "jumlah", 0) or 0) for r in biaya
+                         if _expense_sumber(r) == "penjualan"
+                         and not _is_tunai_metode(getattr(r, "metode", "tunai")))
     income_tunai = sum(int(getattr(r, "jumlah", 0) or 0) for r in income
                        if _is_tunai_metode(getattr(r, "metode", "tunai")))
     income_non = sum(int(getattr(r, "jumlah", 0) or 0) for r in income
                      if not _is_tunai_metode(getattr(r, "metode", "tunai")))
+    income_svc_tunai = sum(int(getattr(r, "jumlah", 0) or 0) for r in income
+                           if _expense_sumber(r) == "service"
+                           and _is_tunai_metode(getattr(r, "metode", "tunai")))
+    income_jual_tunai = sum(int(getattr(r, "jumlah", 0) or 0) for r in income
+                            if _expense_sumber(r) == "penjualan"
+                            and _is_tunai_metode(getattr(r, "metode", "tunai")))
+    income_svc_non = sum(int(getattr(r, "jumlah", 0) or 0) for r in income
+                         if _expense_sumber(r) == "service"
+                         and not _is_tunai_metode(getattr(r, "metode", "tunai")))
+    income_jual_non = sum(int(getattr(r, "jumlah", 0) or 0) for r in income
+                          if _expense_sumber(r) == "penjualan"
+                          and not _is_tunai_metode(getattr(r, "metode", "tunai")))
     penerimaan_total = service_tunai + penjualan_tunai + income_tunai
     arus_bersih = penerimaan_total - biaya_tunai
 
@@ -518,22 +572,37 @@ def arus_kas(
             "service_tunai": service_tunai,
             "penjualan_tunai": penjualan_tunai,
             "pendapatan_lain_tunai": income_tunai,
+            "pendapatan_lain_service_tunai": income_svc_tunai,
+            "pendapatan_lain_penjualan_tunai": income_jual_tunai,
+            "pendapatan_lain_belum_tunai": income_tunai - income_svc_tunai - income_jual_tunai,
             "total": penerimaan_total,
         },
-        "pengeluaran": {"biaya_tunai": biaya_tunai, "total": biaya_tunai},
+        "pengeluaran": {
+            "biaya_tunai": biaya_tunai,
+            "biaya_service_tunai": biaya_svc_tunai,
+            "biaya_penjualan_tunai": biaya_jual_tunai,
+            "biaya_belum_tunai": biaya_tunai - biaya_svc_tunai - biaya_jual_tunai,
+            "total": biaya_tunai,
+        },
         "arus_kas_bersih": arus_bersih,
         "kas_akhir_sistem": kas_akhir_sistem,
         "non_tunai": {
             "service": service_non,
             "penjualan": penjualan_non,
             "pendapatan_lain": income_non,
+            "pendapatan_lain_service": income_svc_non,
+            "pendapatan_lain_penjualan": income_jual_non,
+            "pendapatan_lain_belum": income_non - income_svc_non - income_jual_non,
             "pengeluaran": biaya_non,
+            "pengeluaran_service": biaya_svc_non,
+            "pengeluaran_penjualan": biaya_jual_non,
+            "pengeluaran_belum": biaya_non - biaya_svc_non - biaya_jual_non,
         },
         "sesi": sesi,
     }
 
 
-@router.get("/stats/neraca")
+@router.get("/stats/neraca", dependencies=[Depends(require_kasir_laba)])
 def neraca(
     tanggal: str = Query("", description="YYYY-MM-DD, kosong = hari ini"),
     kasir: str = Query("", description="filter per kasir (nama), kosong = semua"),
@@ -620,7 +689,7 @@ def neraca(
     }
 
 
-@router.get("/stats/per-kategori")
+@router.get("/stats/per-kategori", dependencies=[Depends(require_kasir_laba)])
 def per_kategori(
     dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),
@@ -688,7 +757,7 @@ def per_kategori(
 
 
 
-@router.get("/stats/harian")
+@router.get("/stats/harian", dependencies=[Depends(require_kasir_laba)])
 def report_harian(
     dari: str = Query("", description="YYYY-MM-DD, kosong = semua"),
     sampai: str = Query("", description="YYYY-MM-DD, kosong = semua"),

@@ -295,6 +295,7 @@ class ExpenseIn(BaseModel):
     keterangan: str | None = ""
     jumlah: int = Field(ge=0)
     metode: str | None = "tunai"
+    sumber: str | None = ""
 
 
 class ExpenseUpdateIn(BaseModel):
@@ -304,6 +305,7 @@ class ExpenseUpdateIn(BaseModel):
     keterangan: str | None = None
     jumlah: int | None = Field(default=None, ge=0)
     metode: str | None = None
+    sumber: str | None = None
 
 
 class ExpenseOut(BaseModel):
@@ -314,6 +316,7 @@ class ExpenseOut(BaseModel):
     keterangan: str = ""
     jumlah: int = 0
     metode: str = "tunai"
+    sumber: str = ""
     dicatat_oleh: str = ""
     created_at: str = ""
 
@@ -344,8 +347,16 @@ class ReportOut(BaseModel):
     digital_laba: int = 0
     expense_count: int = 0
     expense_total: int = 0
+    expense_service: int = 0
+    expense_penjualan: int = 0
+    expense_tanpa_sumber: int = 0
     income_count: int = 0
     income_total: int = 0
+    income_service: int = 0
+    income_penjualan: int = 0
+    income_tanpa_sumber: int = 0
+    service_omzet_bersih: int = 0
+    penjualan_omzet_bersih: int = 0
     total_hpp: int = 0
     total_pendapatan: int = 0
     laba_kotor: int = 0

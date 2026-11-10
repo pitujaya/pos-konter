@@ -131,3 +131,20 @@ def require_roles(*roles: str):
 
 require_admin = require_roles("admin", "superadmin")
 require_superadmin = require_roles("superadmin")
+
+
+
+def require_kasir_laba(
+    user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Blokir akses laporan keuangan (laba rugi dan ringkasan laba) untuk kasir
+    yang izin kasir_lihat_laba berada di state false. Admin / Super Admin
+    selalu diizinkan."""
+    if user.role == "kasir":
+        setting = db.get(models.Setting, 1)
+        akses = (setting.akses or {}) if setting else {}
+        if akses.get("kasir_lihat_laba", True) is False:
+            raise HTTPException(status_code=403, detail="Hak akses: Laba Rugi dimatikan")
+
+

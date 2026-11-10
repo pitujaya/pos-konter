@@ -46,6 +46,7 @@ def _run_startup():
         "metode_bayar": "VARCHAR(30) DEFAULT 'tunai'",
     })
     _ensure_columns("cash_sessions", {"service_tunai": "INTEGER DEFAULT 0"})
+    _ensure_columns("expenses", {"sumber": "VARCHAR(20) DEFAULT ''"})
 
     Session = sessionmaker(bind=engine, future=True)
     with Session() as db:
@@ -136,6 +137,8 @@ def test_new_columns_get_defaults_not_null():
         assert "service_tunai" in cols2
         cols3 = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(spareparts)").fetchall()}
         assert "jenis" in cols3 and "kategori" in cols3
+        cols4 = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(expenses)").fetchall()}
+        assert "sumber" in cols4
 
 
 def test_seed_does_not_duplicate_when_data_exists():
