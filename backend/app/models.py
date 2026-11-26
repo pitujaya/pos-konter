@@ -180,6 +180,47 @@ class SaleItem(Base):
     sale: Mapped[Sale] = relationship("Sale", back_populates="items")
 
 
+class Purchase(Base):
+    """Pembelian stok dari supplier. Stok bertambah dan HPP diperbarui."""
+
+    __tablename__ = "purchases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    no_nota: Mapped[str] = mapped_column(String(30), unique=True, index=True, nullable=False)
+    tanggal: Mapped[str] = mapped_column(String(20), default="", index=True)
+    supplier: Mapped[str] = mapped_column(String(120), default="")
+    metode: Mapped[str] = mapped_column(String(30), default="Tunai")
+    catatan: Mapped[str] = mapped_column(Text, default="")
+    subtotal: Mapped[int] = mapped_column(Integer, default=0)
+    diskon: Mapped[int] = mapped_column(Integer, default=0)
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    dicatat_oleh: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    items: Mapped[list["PurchaseItem"]] = relationship(
+        "PurchaseItem", back_populates="purchase", cascade="all, delete-orphan"
+    )
+
+
+class PurchaseItem(Base):
+    __tablename__ = "purchase_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    purchase_id: Mapped[int] = mapped_column(ForeignKey("purchases.id", ondelete="CASCADE"), index=True)
+    sparepart_id: Mapped[int | None] = mapped_column(
+        ForeignKey("spareparts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    sku: Mapped[str] = mapped_column(String(80), default="")
+    nama: Mapped[str] = mapped_column(String(160), default="")
+    harga_beli: Mapped[int] = mapped_column(Integer, default=0)
+    harga_jual: Mapped[int] = mapped_column(Integer, default=0)
+    qty: Mapped[int] = mapped_column(Integer, default=1)
+    subtotal: Mapped[int] = mapped_column(Integer, default=0)
+
+    purchase: Mapped[Purchase] = relationship("Purchase", back_populates="items")
+
+
 class Expense(Base):
     """Biaya operasional (mengurangi laba) atau pendapatan lain (menambah laba)."""
 
@@ -240,6 +281,9 @@ class CashSession(Base):
     tunai_masuk: Mapped[int] = mapped_column(Integer, default=0)
     non_tunai: Mapped[int] = mapped_column(Integer, default=0)
     pengeluaran_total: Mapped[int] = mapped_column(Integer, default=0)
+    pembelian_count: Mapped[int] = mapped_column(Integer, default=0)
+    pembelian_total: Mapped[int] = mapped_column(Integer, default=0)
+    pembelian_tunai: Mapped[int] = mapped_column(Integer, default=0)
     service_count: Mapped[int] = mapped_column(Integer, default=0)
     service_omzet: Mapped[int] = mapped_column(Integer, default=0)
     service_tunai: Mapped[int] = mapped_column(Integer, default=0)

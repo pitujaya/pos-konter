@@ -55,7 +55,7 @@ async function pullSettings(){
     return true;
   }catch(e){ console.warn('pullSettings gagal:', e.message); return false; }
 }
-async function refreshFromBackend(){ await pullServices(); await pullSettings(); await pullSlides(); await pullSpareparts(); try{ await pullSales(); }catch{} try{ await pullExpenses(); }catch{} }
+async function refreshFromBackend(){ await pullServices(); await pullSettings(); await pullSlides(); await pullSpareparts(); try{ await pullSales(); }catch{} try{ await pullPurchases(); }catch{} try{ await pullExpenses(); }catch{} }
 async function pullSlides(){
   if(!useBackend()) return false;
   try{
@@ -203,6 +203,7 @@ let DB = loadData();
 const AKSES_DEF = {
   admin_ubah_produk: true,
   admin_hapus_penjualan: true,
+  admin_pembelian: true,
   kasir_lihat_laba: true,
   kasir_biaya_pendapatan: true,
   kasir_penjualan_tempo: true,
@@ -217,6 +218,7 @@ const AKSES_GRUP = [
   { judul: 'ADMIN', items: [
     ['admin_ubah_produk', 'Izinkan mengubah produk'],
     ['admin_hapus_penjualan', 'Izinkan menghapus penjualan'],
+    ['admin_pembelian', 'Izinkan input &amp; kelola pembelian stok'],
     ['admin_lihat_hpp', 'Izinkan melihat harga HPP barang'],
     ['admin_lihat_dashboard', 'Izinkan melihat dashboard'],
   ]},
@@ -371,7 +373,7 @@ function badge(st){ st = normStatus(st || 'Dikerjakan'); return `<span class="ba
 // Satu sesi terbuka per kasir. Input service/penjualan/pengeluaran DITOLAK
 // selama belum buka sesi (guard frontend + backend 409).
 const LS_KAS = 'servishp_kas_v1';
-const PAGES_TRANSAKSI = ['tambah', 'penjualan', 'pengeluaran']; // menu yang butuh sesi kasir
+const PAGES_TRANSAKSI = ['tambah', 'penjualan', 'pembelian', 'pengeluaran']; // menu yang butuh sesi kasir
 let KAS = null;          // sesi terbuka milik user aktif (null = kas tutup)
 let KAS_RIWAYAT = [];    // riwayat sesi untuk modal
 
@@ -475,16 +477,20 @@ function kasSummaryLocal(sess){
   const pengeluaran = expenses.filter(e => !isInc(e)).reduce((a, e) => a + Number(e.jumlah || 0), 0);
   const pendapatanLain = expenses.filter(isInc).reduce((a, e) => a + Number(e.jumlah || 0), 0);
   const serviceOmzet = services.reduce((a, s) => a + Number(s.biaya || 0), 0);
+  const purchases = (typeof BELI !== 'undefined' ? BELI : []).filter(p =>
+    inWin(tsRecord(p)) && (!kasir || String(p.dicatat_oleh || '') === kasir));
+  const pembelianTunai = purchases.filter(p => tunaiMetode(p.metode)).reduce((a, p) => a + Number(p.total || 0), 0);
   return {
-    jml_transaksi: sales.length + expenses.length + services.length,
+    jml_transaksi: sales.length + expenses.length + services.length + purchases.length,
     penjualan_count: sales.length,
     penjualan_total: penjualanTotal,
     tunai_masuk: tunai,
     non_tunai: penjualanTotal - tunai,
     pengeluaran_total: pengeluaran,
+    pembelian_tunai: pembelianTunai,
     service_count: services.length,
     service_omzet: serviceOmzet,
-    kas_sistem: Number(sess.modal_awal || 0) + tunai + pendapatanLain - pengeluaran,
+    kas_sistem: Number(sess.modal_awal || 0) + tunai + pendapatanLain - pengeluaran - pembelianTunai,
   };
 }
 
@@ -562,6 +568,7 @@ function renderKasRekap(){
     '<span>Penjualan tunai</span><span>+ ' + fmtRp(s.tunai_masuk) + '</span>' +
     '<span>Penjualan non-tunai</span><span>' + fmtRp(s.non_tunai) + '</span>' +
     '<span>Pengeluaran</span><span>− ' + fmtRp(s.pengeluaran_total) + '</span>' +
+    (Number(s.pembelian_tunai || 0) ? '<span>Pembelian stok</span><span>− ' + fmtRp(s.pembelian_tunai) + '</span>' : '') +
     '<span>Omzet service (Diambil)</span><span>' + fmtRp(s.service_omzet) + ' • ' + Number(s.service_count || 0) + ' unit</span>' +
     '<span>Nota penjualan</span><span>' + Number(s.penjualan_count || 0) + ' nota • ' + fmtRp(s.penjualan_total) + '</span>' +
     '<span class="kas-total">Kas seharusnya di laci</span><span class="kas-total">' + fmtRp(s.kas_sistem) + '</span>';
@@ -846,6 +853,7 @@ function goto(page, filter){
   if(page==='pengaturan' && myRole()==='kasir'){ toast('⛔ Pengaturan khusus Admin / Super Admin'); return; }
   if(page==='pengguna' && !isSuperAdmin()){ toast('⛔ Kelola Pengguna khusus Super Admin'); return; }
   if(page==='pengeluaran' && !bolehAkses('kasir_biaya_pendapatan')){ toast('⛔ Hak akses: menu Biaya & Pendapatan dimatikan'); return; }
+  if(page==='pembelian' && !bolehAkses('admin_pembelian')){ toast('⛔ Hak akses: menu Pembelian khusus Admin / Super Admin'); return; }
   if(page==='dashboard' && !bolehDashboard()){ toast('⛔ Hak akses: dashboard dimatikan'); return; }
   try{ clearFocus(); }catch{}
   try{ clearFokusLaporan(); }catch{}
@@ -873,6 +881,7 @@ function goto(page, filter){
   if(page==='dashboard'){ if(myRole()==='kasir' && !kasSesiAktif()){ try{ syncSesi(); }catch(e){} } try{ renderOmzetChart(); }catch{} if(useBackend()){ pullServices().then(()=>{ renderAll(); }).catch(()=>{}); try{ DIG_SYNCED=false; loadDigitalSales(false,true); }catch{} } }
   if(page==='produk'){ try{ renderSpareparts(); }catch{} if(useBackend()){ pullSpareparts().then(()=>{ renderAll(); }).catch(()=>{}); } }
   if(page==='penjualan'){ try{ renderSales(); }catch{} if(useBackend()){ pullSales().then(()=>{ try{renderSales();}catch{} }).catch(()=>{}); } }
+  if(page==='pembelian'){ try{ renderPembelian(); }catch{} if(useBackend()){ pullPurchases().then(()=>{ try{renderPembelian();}catch{} }).catch(()=>{}); } }
   if(page==='pengeluaran'){ try{ renderExpenses(); }catch{} if(useBackend()){ pullExpenses().then(()=>{ try{renderExpenses();}catch{} try{renderLaporan();}catch{} }).catch(()=>{}); } }
   if(page==='laporan'){ try{ syncLpKasirOptions(); }catch{} try{ renderLaporan(); }catch{} if(useBackend()){ pullSpareparts().then(()=>{ try{ renderLaporan(); }catch{} }).catch(()=>{}); } }
   // Kas belum dibuka + kasir klik menu transaksi -> langsung munculkan menu Buka Sesi
@@ -1193,7 +1202,7 @@ function filtered(){
   return r;
 }
 
-function renderAll(){ renderStats(); renderOmzetChart(); renderRecent(); renderData(); renderQueue(); renderSettingUI(); refreshPreview(); renderUsers(); renderHeadbar(); renderSlideManager(); renderSpareparts(); try{ renderSales(); }catch{} try{ renderExpenses(); }catch{} try{ renderLaporan(); }catch{} try{ renderKasUI(); }catch{} }
+function renderAll(){ renderStats(); renderOmzetChart(); renderRecent(); renderData(); renderQueue(); renderSettingUI(); refreshPreview(); renderUsers(); renderHeadbar(); renderSlideManager(); renderSpareparts(); try{ renderSales(); }catch{} try{ renderPembelian(); }catch{} try{ renderExpenses(); }catch{} try{ renderLaporan(); }catch{} try{ renderKasUI(); }catch{} }
 
 function renderStats(){
   // Kasir: dashboard mengikuti sesi kas aktif (input sesi ini).
@@ -1511,7 +1520,7 @@ window.hapus=async function(id){
   DB=DB.filter(d=>d.id!==id); saveData(); renderAll(); toast('Data dihapus');
 };
 function closeAllModals(){
-  ['modalDetail','modalEdit','modalSpare','modalExpense','modalKasBuka','modalKasTutup','modalWa'].forEach(id=>{ const m=$(id); if(m) m.classList.add('hidden'); });
+  ['modalDetail','modalEdit','modalSpare','modalExpense','modalBeliEdit','modalKasBuka','modalKasTutup','modalWa'].forEach(id=>{ const m=$(id); if(m) m.classList.add('hidden'); });
   if(typeof closeScan==='function'){
     try{
       const ms=$('modalScan');
@@ -1735,6 +1744,7 @@ function applyAksesUI(){
   const navA=$('navHakAkses'); if(navA) navA.classList.toggle('hidden', !superAdmin);
   const cardA=$('setHakAkses'); if(cardA) cardA.classList.toggle('hidden', !superAdmin);
   const bolehBiaya=!isKasir || aksesOn('kasir_biaya_pendapatan');
+  const bolehBeli=bolehAkses('admin_pembelian');
   const bolehLaba=!isKasir || aksesOn('kasir_lihat_laba');
   const bolehJual=!isKasir || aksesOn('kasir_laporan_penjualan_detail');
   const bolehDash=bolehDashboard();
@@ -1745,6 +1755,7 @@ function applyAksesUI(){
   const lblHpp=$('spHppLabel'); if(lblHpp) lblHpp.style.display=hppOk?'':'none';
   if(!hppOk && $('spMargin')) $('spMargin').textContent='';
   document.querySelectorAll('.nav-sub-btn[data-page="pengeluaran"]').forEach(b=>b.classList.toggle('hidden', !bolehBiaya));
+  document.querySelectorAll('.nav-sub-btn[data-akses="admin_pembelian"]').forEach(b=>b.classList.toggle('hidden', !bolehBeli));
   const grpBiaya=document.querySelector('.nav-group[data-group="biaya-pendapatan"]');
   if(grpBiaya) grpBiaya.classList.toggle('hidden', !bolehBiaya);
   document.querySelectorAll('[data-ltab="laba"]').forEach(b=>b.classList.toggle('hidden', !bolehLaba));
@@ -1760,6 +1771,7 @@ function applyAksesUI(){
     if(!bolehTempo && sel.value==='Tempo') sel.value='Tunai';
   }
   if(hasSesi && !bolehBiaya && $('page-pengeluaran') && $('page-pengeluaran').classList.contains('active')){ try{ goto(bolehDash?'dashboard':'data'); }catch(e){} }
+  if(!bolehBeli && $('page-pembelian') && $('page-pembelian').classList.contains('active')){ try{ goto(bolehDash?'dashboard':'data'); }catch(e){} }
   if(isKasir){
     if(!bolehLaba && typeof curLtab!=='undefined' && curLtab==='laba'){ try{ gotoLtab('service'); }catch(e){} }
     if(!bolehJual && typeof curLtab!=='undefined' && curLtab==='jual'){ try{ gotoLtab('service'); }catch(e){} }
@@ -2889,6 +2901,216 @@ window.hapusJual=async function(id){
   renderAll(); toast('Nota dihapus, stok dikembalikan');
 };
 
+// ===== PEMBELIAN STOK (admin) =====
+const LS_BELI = 'servishp_purchases_v1';
+let BELI = loadPurchasesLocal();
+let CART_BELI = [];
+let beliEditId = null;
+function loadPurchasesLocal(){ try{ return JSON.parse(localStorage.getItem(LS_BELI)) || []; }catch{ return []; } }
+function savePurchasesLocal(){ try{ localStorage.setItem(LS_BELI, JSON.stringify(BELI)); }catch{} }
+function genNoNotaBeli(){
+  const y=new Date().getFullYear();
+  let i=BELI.filter(x=>String(x.no_nota||'').includes('PB-'+y)).length+1;
+  let no=`PB-${y}-${String(i).padStart(4,'0')}`;
+  while(BELI.some(x=>x.no_nota===no)){ i++; no=`PB-${y}-${String(i).padStart(4,'0')}`; }
+  return no;
+}
+async function pullPurchases(){
+  if(!useBackend() || !window.API.listPurchases) return false;
+  try{
+    const list=await window.API.listPurchases({limit:1000});
+    BELI=Array.isArray(list)?list:[];
+    savePurchasesLocal(); renderPembelian();
+    return true;
+  }catch(e){ console.warn('pullPurchases gagal:', e.message); return false; }
+}
+function beliSubtotal(){ return CART_BELI.reduce((a,c)=>a+Number(c.beli||0)*Number(c.qty||0),0); }
+function beliDiskon(){
+  const sub=beliSubtotal(), d=Number((($('b_diskon')||{}).value)||0);
+  return d>0?Math.max(0,Math.min(Math.round(d),sub)):0;
+}
+function beliTotal(){ return beliSubtotal()-beliDiskon(); }
+function updBeliTotal(){
+  const sub=beliSubtotal(), d=beliDiskon(), t=sub-d;
+  if($('b_subtotal')) $('b_subtotal').textContent=fmtRp(sub);
+  if($('b_diskon_rp')) $('b_diskon_rp').textContent=d>0?('- '+fmtRp(d)):fmtRp(0);
+  if($('b_total')) $('b_total').textContent=fmtRp(t);
+}
+function renderPembelian(){
+  if(!$('b_cart')) return;
+  if($('b_tanggal') && !$('b_tanggal').value) $('b_tanggal').value=new Date().toISOString().slice(0,10);
+  if($('b_itemCount')) $('b_itemCount').textContent=CART_BELI.reduce((a,c)=>a+Number(c.qty||0),0);
+  if($('b_empty')) $('b_empty').classList.toggle('hidden', CART_BELI.length>0);
+  const inp='style="width:84px;padding:6px;border:1px solid var(--line);border-radius:8px"';
+  $('b_cart').innerHTML=CART_BELI.map((c,i)=>`<tr>
+    <td><b>${esc(c.nama)}</b><br><small class="muted">${esc(c.sku)} • stok ${esc(c.stok)}</small></td>
+    <td><input type="number" min="0" value="${esc(c.beli)}" ${inp} onchange="cartBeliHarga(${i},this.value)" /></td>
+    <td><input type="number" min="0" value="${esc(c.jual)}" ${inp} onchange="cartBeliJual(${i},this.value)" /></td>
+    <td><div class="act-btns"><button class="icon-btn" onclick="cartBeliQty(${i},-1)">−</button><b style="padding:0 6px">${esc(c.qty)}</b><button class="icon-btn" onclick="cartBeliQty(${i},1)">+</button></div></td>
+    <td><b>${fmtRp(Number(c.beli||0)*Number(c.qty||0))}</b></td>
+    <td><button class="icon-btn" onclick="cartBeliDel(${i})" title="Hapus">✕</button></td></tr>`).join('');
+  updBeliTotal();
+  const q=(($('bl_search')||{}).value||'').toLowerCase().trim();
+  let r=[...BELI].sort((a,b)=>(b.id||0)-(a.id||0));
+  if(q) r=r.filter(x=>[x.no_nota,x.supplier,x.catatan,(x.items||[]).map(i=>i.nama).join(' ')].join(' ').toLowerCase().includes(q));
+  if($('blInfo')) $('blInfo').textContent = r.length===BELI.length ? (BELI.length?`Menampilkan semua (${BELI.length})`:'') : `Menampilkan ${r.length} dari ${BELI.length}`;
+  if($('bl_empty')) $('bl_empty').classList.toggle('hidden', r.length>0);
+  if($('bl_table')) $('bl_table').innerHTML=r.slice(0,100).map(x=>`<tr>
+    <td><b>${esc(x.no_nota)}</b><br><small class="muted">${fmtTgl(x.tanggal)} • ${esc(x.metode||'Tunai')}</small></td>
+    <td>${esc(x.supplier||'-')}<br><small class="muted">${esc((x.items||[]).map(i=>i.nama+' ×'+i.qty).join(', ').slice(0,60))}</small></td>
+    <td><b>${fmtRp(x.total)}</b><br><small class="muted">${esc(x.dicatat_oleh||'')}</small></td>
+    <td><div class="act-btns"><button class="icon-btn" onclick="cetakBeli(${jsStr(x.id)})" title="Nota">🖨</button><button class="icon-btn" onclick="detailBeli(${jsStr(x.id)})" title="Detail">👁</button>${bolehAkses('admin_pembelian')?`<button class="icon-btn" onclick="editBeli(${jsStr(x.id)})" title="Edit">✎</button><button class="icon-btn" onclick="hapusBeli(${jsStr(x.id)})" title="Hapus">🗑</button>`:''}</div></td></tr>`).join('');
+}
+window.cartBeliQty=function(i,d){
+  const c=CART_BELI[i]; if(!c) return;
+  const nq=Number(c.qty||0)+d;
+  if(nq<=0){ CART_BELI.splice(i,1); } else { c.qty=nq; }
+  renderPembelian();
+};
+window.cartBeliDel=function(i){ CART_BELI.splice(i,1); renderPembelian(); };
+window.cartBeliHarga=function(i,v){ const c=CART_BELI[i]; if(c){ c.beli=Math.max(0,Number(v)||0); renderPembelian(); } };
+window.cartBeliJual=function(i,v){ const c=CART_BELI[i]; if(c){ c.jual=Math.max(0,Number(v)||0); } };
+function beliAddBarang(sp){
+  if(!sp) return;
+  const ada=CART_BELI.find(c=>String(c.id)===String(sp.id));
+  if(ada){ ada.qty=Number(ada.qty||0)+1; }
+  else CART_BELI.push({id:sp.id, sku:sp.sku, nama:sp.nama, beli:Number(sp.hpp||0), jual:Number(sp.harga_jual||0), stok:Number(sp.stok||0), qty:1});
+  if($('b_search')) $('b_search').value='';
+  if($('b_hasil')) $('b_hasil').innerHTML='';
+  renderPembelian();
+}
+function bindPembelian(){
+  const si=$('b_search');
+  if(si) si.addEventListener('input',()=>{
+    const box=$('b_hasil'); if(!box) return;
+    const q=si.value.toLowerCase().trim();
+    if(!q){ box.innerHTML=''; return; }
+    const r=(typeof SPARE!=='undefined'?SPARE:[]).filter(x=>[(x.nama||''),(x.sku||''),(x.merk||''),(x.kategori||'')].join(' ').toLowerCase().includes(q)).slice(0,8);
+    box.innerHTML=r.map(x=>`<button type="button" class="pick" data-sp="${esc(String(x.id))}"><b>${esc(x.nama)}</b> <small>${esc(x.sku)} • stok ${esc(x.stok)} • HPP ${fmtRp(x.hpp)}</small></button>`).join('')||'<small class="muted">Tidak ada barang cocok.</small>';
+    box.querySelectorAll('.pick').forEach(b=>b.onclick=()=>{
+      const sp=(typeof findSpare==='function')?findSpare(b.dataset.sp):(SPARE||[]).find(d=>String(d.id)===String(b.dataset.sp));
+      if(sp) beliAddBarang(sp);
+    });
+  });
+  if($('b_diskon')) $('b_diskon').addEventListener('input',updBeliTotal);
+  if($('bl_search')) $('bl_search').addEventListener('input',renderPembelian);
+  if($('btnBatalBeli')) $('btnBatalBeli').onclick=()=>{ CART_BELI=[]; if($('b_diskon'))$('b_diskon').value=0; if($('b_supplier'))$('b_supplier').value=''; if($('b_catatan'))$('b_catatan').value=''; renderPembelian(); toast('Keranjang dibatalkan'); };
+  if($('btnSimpanBeli')) $('btnSimpanBeli').onclick=simpanBeli;
+  if($('btnSaveBeliEdit')) $('btnSaveBeliEdit').onclick=simpanEditBeli;
+}
+async function simpanBeli(){
+  if(!needAdmin()) return;
+  if(!CART_BELI.length){ toast('Keranjang masih kosong'); return; }
+  if(!requireSesi()) return;
+  const payload={
+    tanggal: val('b_tanggal') || new Date().toISOString().slice(0,10),
+    supplier: val('b_supplier').trim(),
+    metode: val('b_metode','Tunai'),
+    catatan: val('b_catatan').trim(),
+    diskon: beliDiskon(),
+    items: CART_BELI.map(c=>({sparepart_id:Number(c.id), sku:c.sku, harga_beli:Number(c.beli||0), harga_jual:Number(c.jual||0), qty:Number(c.qty||0)})),
+  };
+  if(useBackend()){
+    try{
+      const p=await window.API.createPurchase(payload);
+      await pullSpareparts(); await pullPurchases(); renderAll();
+      CART_BELI=[]; if($('b_diskon'))$('b_diskon').value=0; if($('b_supplier'))$('b_supplier').value=''; if($('b_catatan'))$('b_catatan').value='';
+      renderPembelian(); toast('Pembelian '+p.no_nota+' tersimpan ✅');
+      cetakBeli(p.id);
+      return;
+    }catch(err){ if(handleSesiError(err.message)) return; toast(err.message); return; }
+  }
+  for(const c of CART_BELI){
+    const sp=(typeof findSpare==='function')?findSpare(c.id):(SPARE||[]).find(d=>String(d.id)===String(c.id));
+    if(!sp){ toast('Barang '+c.nama+' tidak ada di stok'); return; }
+  }
+  const items=CART_BELI.map(c=>{
+    const sp=findSpare(c.id);
+    const lama=Number(sp.stok||0), hppLama=Number(sp.hpp||0), qty=Number(c.qty||0), beli=Number(c.beli||0), baru=lama+qty;
+    sp.hpp=baru>0?Math.round((hppLama*lama+beli*qty)/baru):0;
+    sp.stok=baru;
+    if(Number(c.jual||0)>0) sp.harga_jual=Number(c.jual);
+    return {sparepart_id:sp.id, sku:sp.sku, nama:sp.nama, harga_beli:beli, harga_jual:sp.harga_jual, qty, subtotal:beli*qty};
+  });
+  const subtotal=items.reduce((a,i)=>a+Number(i.subtotal||0),0);
+  const diskon=beliDiskon();
+  const me=currentUser();
+  const p={id:Date.now(), no_nota:genNoNotaBeli(), tanggal:payload.tanggal, supplier:payload.supplier, metode:payload.metode, catatan:payload.catatan, subtotal, diskon, total:subtotal-diskon, dicatat_oleh:me?me.nama:'', items};
+  BELI.unshift(p); savePurchasesLocal();
+  try{ if(typeof saveSpareLocal==='function') saveSpareLocal(); }catch{}
+  CART_BELI=[]; if($('b_diskon'))$('b_diskon').value=0; if($('b_supplier'))$('b_supplier').value=''; if($('b_catatan'))$('b_catatan').value='';
+  renderAll(); toast('Pembelian '+p.no_nota+' tersimpan ✅');
+  cetakBeli(p.id);
+}
+function notaBeliHTML(x){
+  const rows=(x.items||[]).map(i=>`${esc(i.nama)} (${esc(i.sku)})<br>&nbsp;&nbsp;${esc(i.qty)} × ${fmtRp(i.harga_beli)} = <b>${fmtRp(i.subtotal)}</b>`).join('<br>');
+  return `<div class="nota"><h2>${esc(SET.nama)}</h2><p style="text-align:center">${esc(SET.alamat)}<br>Telp: ${esc(SET.telp)}</p><hr><p><b>NOTA PEMBELIAN: ${esc(x.no_nota)}</b><br>Tanggal: ${fmtTgl(x.tanggal)} • Dicatat: ${esc(x.dicatat_oleh||'-')}</p><hr><p><b>Supplier:</b> ${esc(x.supplier||'-')}<br><b>Bayar:</b> ${esc(x.metode||'Tunai')}</p><hr><p>${rows||'-'}</p><hr>${Number(x.diskon||0)>0?`<p>Diskon: -${fmtRp(x.diskon)}</p>`:''}<p><b>Total: ${fmtRp(x.total)}</b>${x.catatan?'<br>Catatan: '+esc(x.catatan):''}</p><br><br></div>`;
+}
+window.cetakBeli=function(id){
+  const x=BELI.find(d=>d.id===id); if(!x) return;
+  $('printArea').innerHTML=notaBeliHTML(x); window.print();
+};
+window.detailBeli=function(id){
+  const x=BELI.find(d=>d.id===id); if(!x) return;
+  $('detailTitle').textContent='Pembelian '+x.no_nota;
+  $('detailBody').innerHTML=`
+    <div class="kv"><b>Tanggal</b><span>${fmtTgl(x.tanggal)} • ${esc(x.metode||'Tunai')}</span></div>
+    <div class="kv"><b>Supplier</b><span>${esc(x.supplier||'-')}</span></div>
+    <div class="kv"><b>Dicatat oleh</b><span>${esc(x.dicatat_oleh||'-')}</span></div>
+    <div class="kv"><b>Item</b><span>${(x.items||[]).map(i=>esc(i.nama)+' ×'+esc(i.qty)+' @ '+fmtRp(i.harga_beli)+' = '+fmtRp(i.subtotal)).join('<br>')||'-'}</span></div>
+    <div class="kv"><b>Subtotal</b><span>${fmtRp(x.subtotal)}</span></div>
+    <div class="kv"><b>Diskon</b><span>-${fmtRp(x.diskon)}</span></div>
+    <div class="kv"><b>Total</b><span><b>${fmtRp(x.total)}</b></span></div>
+    <div class="kv"><b>Catatan</b><span>${esc(x.catatan||'-')}</span></div>`;
+  $('detailFoot').innerHTML=`<button class="btn ghost" onclick="cetakBeli(${jsStr(x.id)})">🖨 Cetak Nota</button>${bolehAkses('admin_pembelian')?`<button class="btn ghost" onclick="editBeli(${jsStr(x.id)})">✎ Edit</button><button class="btn ghost" onclick="hapusBeli(${jsStr(x.id)})">🗑 Hapus</button>`:''}<button class="btn primary" data-close>Tutup</button>`;
+  $('modalDetail').classList.remove('hidden');
+};
+window.editBeli=function(id){
+  if(!needAdmin()) return;
+  const x=BELI.find(d=>d.id===id); if(!x) return;
+  beliEditId=id;
+  if($('mb_tanggal')) $('mb_tanggal').value=x.tanggal||'';
+  if($('mb_supplier')) $('mb_supplier').value=x.supplier||'';
+  if($('mb_metode')) $('mb_metode').value=x.metode||'Tunai';
+  if($('mb_diskon')) $('mb_diskon').value=Number(x.diskon||0);
+  if($('mb_catatan')) $('mb_catatan').value=x.catatan||'';
+  if($('mbInfo')) $('mbInfo').textContent='Nota '+x.no_nota+' • edit hanya mengubah supplier, tanggal, metode, diskon & catatan.';
+  $('modalBeliEdit').classList.remove('hidden');
+};
+window.simpanEditBeli=async function(){
+  if(!needAdmin()) return;
+  const x=BELI.find(d=>d.id===beliEditId); if(!x) return;
+  const payload={tanggal:val('mb_tanggal')||x.tanggal, supplier:val('mb_supplier').trim(), metode:val('mb_metode','Tunai'), catatan:val('mb_catatan').trim(), diskon:Math.max(0,Number(val('mb_diskon')||0))};
+  if(useBackend()){
+    try{
+      await window.API.updatePurchase(x.id,payload);
+      await pullPurchases(); renderAll(); $('modalBeliEdit').classList.add('hidden'); toast('Pembelian diperbarui ✅'); return;
+    }catch(err){ toast(err.message); return; }
+  }
+  const sub=(x.items||[]).reduce((a,i)=>a+Number(i.subtotal||0),0);
+  Object.assign(x,payload,{subtotal:sub,diskon:payload.diskon,total:sub-payload.diskon});
+  savePurchasesLocal(); renderAll(); $('modalBeliEdit').classList.add('hidden'); toast('Pembelian diperbarui ✅');
+};
+window.hapusBeli=async function(id){
+  if(!needAdmin()) return;
+  const x=BELI.find(d=>d.id===id); if(!x) return;
+  if(!confirm('Hapus nota '+x.no_nota+'? Stok akan dikurangi kembali.')) return;
+  if(useBackend()){
+    try{
+      await window.API.deletePurchase(id);
+      await pullPurchases(); await pullSpareparts(); renderAll();
+      $('modalDetail').classList.add('hidden'); toast('Nota dihapus, stok dikurangi kembali'); return;
+    }catch(err){ toast(err.message); return; }
+  }
+  (x.items||[]).forEach(i=>{
+    const sp=(typeof findSpare==='function')?findSpare(i.sparepart_id):null;
+    if(sp) sp.stok=Math.max(0,Number(sp.stok||0)-Number(i.qty||0));
+  });
+  BELI=BELI.filter(d=>d.id!==id); savePurchasesLocal();
+  try{ if(typeof saveSpareLocal==='function') saveSpareLocal(); }catch{}
+  $('modalDetail').classList.add('hidden'); renderAll(); toast('Nota dihapus, stok dikurangi kembali');
+};
+
 // ===== BIAYA & PENDAPATAN LAIN =====
 // jenis: 'biaya' (mengurangi laba) | 'pendapatan' (menambah pendapatan & laba).
 // Data lama tanpa kolom jenis dianggap biaya.
@@ -3450,7 +3672,8 @@ function computeArusKasLocal(dari,sampai,kasir,sesiId){
   const allSvc=(typeof DB!=='undefined'?DB:[]);
   const allSales=(typeof SALES!=='undefined'?SALES:[]);
   const allEx=(typeof EXPENSES!=='undefined'?EXPENSES:[]);
-  let svc, sales, ex, sessions;
+  const allBeli=(typeof BELI!=='undefined'?BELI:[]);
+  let svc, sales, ex, beli, sessions;
   if(sess){
     const owner=(n)=>!n||!kasir||matchKasir(n,kasir);
     svc=allSvc.filter(x=>{
@@ -3459,11 +3682,13 @@ function computeArusKasLocal(dari,sampai,kasir,sesiId){
     });
     sales=allSales.filter(x=>lpInWindow(tsRecord(x),sess)&&matchKasir(x.kasir,kasir));
     ex=allEx.filter(x=>lpInWindow(tsRecord(x),sess)&&matchKasir(x.dicatat_oleh,kasir));
+    beli=allBeli.filter(x=>lpInWindow(tsRecord(x),sess)&&matchKasir(x.dicatat_oleh,kasir));
     sessions=[sess];
   } else {
     svc=allSvc.filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.kasir,kasir));
     sales=allSales.filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.kasir,kasir));
     ex=allEx.filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.dicatat_oleh,kasir));
+    beli=allBeli.filter(x=>inPeriode(x.tanggal||'',dari,sampai)&&matchKasir(x.dicatat_oleh,kasir));
     sessions=(typeof KAS_RIWAYAT!=='undefined'?KAS_RIWAYAT:[]).filter(s=>{
       const t=String(s.opened_at||'').slice(0,10);
       return inPeriode(t,dari,sampai)&&matchKasir(s.kasir,kasir);
@@ -3492,6 +3717,8 @@ function computeArusKasLocal(dari,sampai,kasir,sesiId){
   sessions.forEach(s=>{ const k=normKasir(s.kasir)||'-'; const t=String(s.opened_at||''); if(!first[k]||t<first[k].t) first[k]={t,modal:Number(s.modal_awal||0)}; });
   const kasAwal=sess?Number(sess.modal_awal||0):Object.values(first).reduce((a,b)=>a+b.modal,0);
   const penerimaan=svcT+jualT+incomeT;
+  const beliT=beli.filter(x=>_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.total||0),0);
+  const beliN=beli.filter(x=>!_isTunaiMetode(x.metode)).reduce((a,b)=>a+Number(b.total||0),0);
   return {
     dari:dari||'', sampai:sampai||'', kasir:kasir||'',
     sesi_id:sess?String(sess.id||''):'',
@@ -3500,12 +3727,13 @@ function computeArusKasLocal(dari,sampai,kasir,sesiId){
       pendapatan_lain_service_tunai:incomeSvcT, pendapatan_lain_penjualan_tunai:incomeJualT,
       pendapatan_lain_belum_tunai:incomeT-incomeSvcT-incomeJualT, total:penerimaan},
     pengeluaran:{biaya_tunai:biayaT, biaya_service_tunai:biayaSvcT, biaya_penjualan_tunai:biayaJualT,
-      biaya_belum_tunai:biayaT-biayaSvcT-biayaJualT, total:biayaT},
-    arus_kas_bersih:penerimaan-biayaT,
-    kas_akhir_sistem:kasAwal+penerimaan-biayaT,
+      biaya_belum_tunai:biayaT-biayaSvcT-biayaJualT, pembelian_tunai:beliT, total:biayaT+beliT},
+    arus_kas_bersih:penerimaan-biayaT-beliT,
+    kas_akhir_sistem:kasAwal+penerimaan-biayaT-beliT,
     non_tunai:{service:svcN, penjualan:jualN, pendapatan_lain:incomeN,
       pendapatan_lain_service:incomeSvcN, pendapatan_lain_penjualan:incomeJualN,
-      pendapatan_lain_belum:incomeN-incomeSvcN-incomeJualN, pengeluaran:biayaN,
+      pendapatan_lain_belum:incomeN-incomeSvcN-incomeJualN, pengeluaran:biayaN+beliN,
+      pengeluaran_pembelian:beliN,
       pengeluaran_service:biayaSvcN, pengeluaran_penjualan:biayaJualN, pengeluaran_belum:biayaN-biayaSvcN-biayaJualN},
     sesi:sessions,
   };
@@ -3544,6 +3772,7 @@ async function renderArusKas(dari,sampai,kasir,sesiId){
     row('&nbsp;&nbsp;— dari Omset Service', k.biaya_service_tunai||0),
     row('&nbsp;&nbsp;— dari Penjualan', k.biaya_penjualan_tunai||0),
     (Number(k.biaya_belum_tunai||0)?row('&nbsp;&nbsp;— belum dialokasikan', k.biaya_belum_tunai||0):''),
+    (Number(k.pembelian_tunai||0)?row('Pembelian stok', k.pembelian_tunai||0):''),
     row('Arus kas bersih', r.arus_kas_bersih||0, true),
     row('Kas akhir (sistem)', r.kas_akhir_sistem||0, true),
     '<tr><td colspan="2"><b>Non-tunai (tidak masuk kas)</b></td></tr>',
@@ -3554,6 +3783,7 @@ async function renderArusKas(dari,sampai,kasir,sesiId){
     row('&nbsp;&nbsp;— ke Penjualan', n.pendapatan_lain_penjualan||0),
     (Number(n.pendapatan_lain_belum||0)?row('&nbsp;&nbsp;— belum dialokasikan', n.pendapatan_lain_belum||0):''),
     row('Pengeluaran', n.pengeluaran||0),
+    (Number(n.pengeluaran_pembelian||0)?row('&nbsp;&nbsp;— Pembelian stok', n.pengeluaran_pembelian||0):''),
     row('&nbsp;&nbsp;— dari Service', n.pengeluaran_service||0),
     row('&nbsp;&nbsp;— dari Penjualan', n.pengeluaran_penjualan||0),
     (Number(n.pengeluaran_belum||0)?row('&nbsp;&nbsp;— belum dialokasikan', n.pengeluaran_belum||0):''),
@@ -4475,6 +4705,7 @@ function printLaporan(){
   window.print();
 }
 try{ bindPenjualan(); }catch{}
+try{ bindPembelian(); }catch{}
 try{ bindLaporan(); }catch{}
 try{
   if($('btnOmPrev')) $('btnOmPrev').onclick=()=>omzetGeser(-1);

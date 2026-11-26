@@ -367,6 +367,19 @@
     getSale(id) { return this.req("/sales/" + id); },
     deleteSale(id) { return this.req("/sales/" + id, { method: "DELETE" }); },
 
+    listPurchases(params = {}) {
+      const qs = new URLSearchParams({
+        q: params.q || "", dari: params.dari || "", sampai: params.sampai || "",
+        metode: params.metode || "",
+        skip: String(params.skip || 0), limit: String(params.limit || 1000),
+      }).toString();
+      return this.req("/purchases?" + qs);
+    },
+    createPurchase(payload) { return this.req("/purchases", { method: "POST", body: payload }); },
+    getPurchase(id) { return this.req("/purchases/" + id); },
+    updatePurchase(id, payload) { return this.req("/purchases/" + id, { method: "PUT", body: payload }); },
+    deletePurchase(id) { return this.req("/purchases/" + id, { method: "DELETE" }); },
+
     // Sesi kasir (buka / tutup shift)
     kasCurrent() { return this.req("/kas/current"); },
     kasOpen(payload) { return this.req("/kas/open", { method: "POST", body: payload }); },

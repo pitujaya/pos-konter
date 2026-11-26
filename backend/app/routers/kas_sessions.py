@@ -131,6 +131,12 @@ def _summary(db: Session, sess: models.CashSession) -> dict:
     if kasir:
         expenses = [e for e in expenses if (e.dicatat_oleh or "").strip() == kasir]
 
+    purchases = (db.query(models.Purchase)
+                 .filter(models.Purchase.created_at >= t0, models.Purchase.created_at <= t1)
+                 .all())
+    if kasir:
+        purchases = [p for p in purchases if (p.dicatat_oleh or "").strip() == kasir]
+
     svcs = _services_for_session(db, sess)
 
     penjualan_total = sum(int(s.total or 0) for s in sales)
@@ -153,15 +159,21 @@ def _summary(db: Session, sess: models.CashSession) -> dict:
     # nampil "selisih" palsu sebesar total service.
     service_tunai = sum(int(s.biaya or 0) for s in svcs
                         if _is_tunai(getattr(s, "metode_bayar", "tunai")))
-    kas_sistem = int(sess.modal_awal or 0) + tunai + service_tunai + pendapatan_tunai - pengeluaran_tunai
+    pembelian_total = sum(int(p.total or 0) for p in purchases)
+    pembelian_tunai = sum(int(p.total or 0) for p in purchases if _is_tunai(p.metode))
+    kas_sistem = (int(sess.modal_awal or 0) + tunai + service_tunai + pendapatan_tunai
+                  - pengeluaran_tunai - pembelian_tunai)
 
     return {
-        "jml_transaksi": len(sales) + len(svcs) + len(expenses),
+        "jml_transaksi": len(sales) + len(svcs) + len(expenses) + len(purchases),
         "penjualan_count": len(sales),
         "penjualan_total": penjualan_total,
         "tunai_masuk": tunai,
         "non_tunai": penjualan_total - tunai,
         "pengeluaran_total": pengeluaran,
+        "pembelian_count": len(purchases),
+        "pembelian_total": pembelian_total,
+        "pembelian_tunai": pembelian_tunai,
         "service_count": len(svcs),
         "service_omzet": service_omzet,
         "service_tunai": service_tunai,
@@ -189,6 +201,9 @@ def _to_out(sess: models.CashSession, db: Session | None = None) -> dict:
         "tunai_masuk": int((live or {}).get("tunai_masuk", sess.tunai_masuk or 0)),
         "non_tunai": int((live or {}).get("non_tunai", sess.non_tunai or 0)),
         "pengeluaran_total": int((live or {}).get("pengeluaran_total", sess.pengeluaran_total or 0)),
+        "pembelian_count": int((live or {}).get("pembelian_count", getattr(sess, "pembelian_count", 0) or 0)),
+        "pembelian_total": int((live or {}).get("pembelian_total", getattr(sess, "pembelian_total", 0) or 0)),
+        "pembelian_tunai": int((live or {}).get("pembelian_tunai", getattr(sess, "pembelian_tunai", 0) or 0)),
         "service_count": int((live or {}).get("service_count", sess.service_count or 0)),
         "service_omzet": int((live or {}).get("service_omzet", sess.service_omzet or 0)),
         "service_tunai": int((live or {}).get("service_tunai", sess.service_tunai or 0)),

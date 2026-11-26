@@ -215,10 +215,10 @@
     async req(path, opts = {}) {
       const method = (opts.method || "GET").toUpperCase();
       const hasBody = !!opts.body;
+      const isForm = !!opts.isForm;
+      const raw = !!opts.raw;
       const headers = Object.assign({}, opts.headers || {});
-      // Jangan kirim Content-Type untuk request tanpa body: memicu CORS
-      // preflight extra di setiap request GET saat origin beda.
-      if (hasBody && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+      if (hasBody && !isForm && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
       const tok = this.getToken();
       if (tok) headers["Authorization"] = "Bearer " + tok;
       let ctl, timer;
@@ -227,13 +227,26 @@
           ctl = new AbortController();
           timer = setTimeout(() => { try { ctl.abort(); } catch {} }, opts.timeout || this.TIMEOUT_MS);
         }
+        let bodyOut = undefined;
+        if (hasBody) {
+          if (isForm && opts.body instanceof FormData) bodyOut = opts.body;
+          else if (typeof opts.body === "string") bodyOut = opts.body;
+          else bodyOut = JSON.stringify(opts.body);
+        }
         const res = await fetch(this.base + path, {
           method: method,
           headers: headers,
-          body: hasBody ? JSON.stringify(opts.body) : undefined,
+          body: bodyOut,
           signal: ctl ? ctl.signal : undefined,
         });
         if (timer) clearTimeout(timer);
+        if (raw) {
+          const blob = await res.blob();
+          if (!res.ok) {
+            throw new Error("HTTP " + res.status);
+          }
+          return blob;
+        }
         const text = await res.text();
         let data = null;
         try { data = text ? JSON.parse(text) : null; } catch { data = { detail: text }; }
@@ -267,6 +280,19 @@
     },
 
     health() { return this.req("/health"); },
+    digitalSalesStatus() { return this.req("/digital-sales/status"); },
+    syncDigitalSales() { return this.req("/digital-sales/sync", { method: "POST" }); },
+    getDigitalSalesRaw() { return this.req("/digital-sales/raw"); },
+    listDigitalSales(params = {}) {
+      const qs = new URLSearchParams();
+      if (params.q) qs.set("q", params.q);
+      if (params.dari) qs.set("dari", params.dari);
+      if (params.sampai) qs.set("sampai", params.sampai);
+      if (params.skip != null) qs.set("skip", String(params.skip));
+      if (params.limit != null) qs.set("limit", String(params.limit));
+      const url = "/digital-sales" + (qs.toString() ? "?" + qs.toString() : "");
+      return this.req(url);
+    },
     login(identifier, password, remember = true) {
       return this.req("/auth/login", { method: "POST", body: { identifier, password, remember } });
     },
@@ -325,6 +351,9 @@
     updateSparepart(id, payload) { return this.req("/spareparts/" + id, { method: "PUT", body: payload }); },
     adjustStock(id, delta) { return this.req("/spareparts/" + id + "/stock", { method: "PATCH", body: { delta } }); },
     getBySku(sku) { return this.req("/spareparts/sku/" + encodeURIComponent(sku)); },
+    getSparepartTemplateExcel() { return this.req("/spareparts/template/excel", { raw: true }); },
+    getSparepartTemplateCsv() { return this.req("/spareparts/template/csv", { raw: true }); },
+    importSpareparts(file) { const fd = new FormData(); fd.append("file", file); return this.req("/spareparts/import", { method: "POST", body: fd, isForm: true }); },
     deleteSparepart(id) { return this.req("/spareparts/" + id, { method: "DELETE" }); },
     listSales(params = {}) {
       const qs = new URLSearchParams({
@@ -337,6 +366,19 @@
     createSale(payload) { return this.req("/sales", { method: "POST", body: payload }); },
     getSale(id) { return this.req("/sales/" + id); },
     deleteSale(id) { return this.req("/sales/" + id, { method: "DELETE" }); },
+
+    listPurchases(params = {}) {
+      const qs = new URLSearchParams({
+        q: params.q || "", dari: params.dari || "", sampai: params.sampai || "",
+        metode: params.metode || "",
+        skip: String(params.skip || 0), limit: String(params.limit || 1000),
+      }).toString();
+      return this.req("/purchases?" + qs);
+    },
+    createPurchase(payload) { return this.req("/purchases", { method: "POST", body: payload }); },
+    getPurchase(id) { return this.req("/purchases/" + id); },
+    updatePurchase(id, payload) { return this.req("/purchases/" + id, { method: "PUT", body: payload }); },
+    deletePurchase(id) { return this.req("/purchases/" + id, { method: "DELETE" }); },
 
     // Sesi kasir (buka / tutup shift)
     kasCurrent() { return this.req("/kas/current"); },
@@ -359,15 +401,17 @@
     createExpense(payload) { return this.req("/expenses", { method: "POST", body: payload }); },
     updateExpense(id, payload) { return this.req("/expenses/" + id, { method: "PUT", body: payload }); },
     deleteExpense(id) { return this.req("/expenses/" + id, { method: "DELETE" }); },
-    report(dari = "", sampai = "", kasir = "") {
+    report(dari = "", sampai = "", kasir = "", sesiId = "") {
       const qs = new URLSearchParams({
         dari: dari || "", sampai: sampai || "", kasir: kasir || "",
+        sesi_id: String(sesiId || "0"),
       }).toString();
       return this.req("/stats/report?" + qs);
     },
-    reportHarian(dari = "", sampai = "", kasir = "") {
+    reportHarian(dari = "", sampai = "", kasir = "", sesiId = "") {
       const qs = new URLSearchParams({
         dari: dari || "", sampai: sampai || "", kasir: kasir || "",
+        sesi_id: String(sesiId || "0"),
       }).toString();
       return this.req("/stats/harian?" + qs);
     },

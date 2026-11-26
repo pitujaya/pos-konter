@@ -52,6 +52,7 @@ from .routers import settings as settings_router
 from .routers import slides as slides_router
 from .routers import spareparts as spareparts_router
 from .routers import sales as sales_router
+from .routers import pembelian as pembelian_router
 from .routers import expenses as expenses_router
 from .routers import kas_sessions as kas_router
 from .routers import ai_monitor as ai_monitor_router
@@ -165,7 +166,12 @@ try:
     })
     _ensure_index("expenses", "ix_expenses_jenis", "jenis")
     _ensure_index("expenses", "ix_expenses_sumber", "sumber")
-    _ensure_columns("cash_sessions", {"service_tunai": "INTEGER DEFAULT 0"})
+    _ensure_columns("cash_sessions", {
+        "service_tunai": "INTEGER DEFAULT 0",
+        "pembelian_count": "INTEGER DEFAULT 0",
+        "pembelian_total": "INTEGER DEFAULT 0",
+        "pembelian_tunai": "INTEGER DEFAULT 0",
+    })
     _ensure_columns("settings", {"akses": "JSON DEFAULT '{}'"})
     try:
         Base.metadata.create_all(bind=engine)
@@ -183,6 +189,7 @@ app.include_router(settings_router.router, prefix="/api")
 app.include_router(slides_router.router, prefix="/api")
 app.include_router(spareparts_router.router, prefix="/api")
 app.include_router(sales_router.router, prefix="/api")
+app.include_router(pembelian_router.router, prefix="/api")
 app.include_router(expenses_router.router, prefix="/api")
 app.include_router(kas_router.router, prefix="/api")
 app.include_router(ai_monitor_router.router, prefix="/api")

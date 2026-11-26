@@ -287,6 +287,62 @@ class SaleOut(BaseModel):
     model_config = {"from_attributes": False}
 
 
+# ---------- Pembelian stok ----------
+class PurchaseItemIn(BaseModel):
+    sparepart_id: int | None = None
+    sku: str | None = None
+    harga_beli: int = Field(default=0, ge=0)
+    harga_jual: int | None = Field(default=None, ge=0)
+    qty: int = Field(default=1, ge=1)
+
+
+class PurchaseIn(BaseModel):
+    tanggal: str | None = None
+    supplier: str | None = ""
+    metode: str | None = "Tunai"
+    catatan: str | None = ""
+    diskon: int = Field(default=0, ge=0)
+    items: list[PurchaseItemIn] = Field(min_length=1)
+
+
+class PurchaseUpdateIn(BaseModel):
+    tanggal: str | None = None
+    supplier: str | None = None
+    metode: str | None = None
+    catatan: str | None = None
+    diskon: int | None = Field(default=None, ge=0)
+    items: list[PurchaseItemIn] | None = Field(default=None, min_length=1)
+
+
+class PurchaseItemOut(BaseModel):
+    sparepart_id: int | None = None
+    sku: str = ""
+    nama: str = ""
+    harga_beli: int = 0
+    harga_jual: int = 0
+    qty: int = 0
+    subtotal: int = 0
+
+    model_config = {"from_attributes": False}
+
+
+class PurchaseOut(BaseModel):
+    id: int
+    no_nota: str
+    tanggal: str = ""
+    supplier: str = ""
+    metode: str = "Tunai"
+    catatan: str = ""
+    subtotal: int = 0
+    diskon: int = 0
+    total: int = 0
+    dicatat_oleh: str = ""
+    created_at: str = ""
+    items: list[PurchaseItemOut] = []
+
+    model_config = {"from_attributes": False}
+
+
 # ---------- Biaya / Pendapatan Lain ----------
 class ExpenseIn(BaseModel):
     tanggal: str | None = None
@@ -355,6 +411,9 @@ class ReportOut(BaseModel):
     income_service: int = 0
     income_penjualan: int = 0
     income_tanpa_sumber: int = 0
+    pembelian_count: int = 0
+    pembelian_total: int = 0
+    pembelian_tunai: int = 0
     service_omzet_bersih: int = 0
     penjualan_omzet_bersih: int = 0
     total_hpp: int = 0
@@ -399,6 +458,9 @@ class CashSessionOut(BaseModel):
     tunai_masuk: int = 0
     non_tunai: int = 0
     pengeluaran_total: int = 0
+    pembelian_count: int = 0
+    pembelian_total: int = 0
+    pembelian_tunai: int = 0
     service_count: int = 0
     service_omzet: int = 0
     service_tunai: int = 0
@@ -496,3 +558,42 @@ class LeadOut(BaseModel):
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class AccountingSaleLineOut(BaseModel):
+    sparepart_id: int | None = None
+    sku: str = ""
+    nama: str = ""
+    hpp: int = 0
+    harga: int = 0
+    qty: int = 0
+    subtotal: int = 0
+
+    model_config = {"from_attributes": False}
+
+
+class AccountingSaleOut(BaseModel):
+    transaction_id: str
+    id: int
+    tanggal: str = ""
+    subtotal: int = 0
+    diskon: int = 0
+    total: int = 0
+    hpp_total: int = 0
+    metode_pembayaran: str = "Tunai"
+    created_at: str = ""
+    items: list[AccountingSaleLineOut] = []
+
+    model_config = {"from_attributes": False}
+
+
+class AccountingSalesPageOut(BaseModel):
+    source: str = "POS"
+    schema_version: int = 1
+    page: int
+    page_size: int
+    total: int
+    has_more: bool
+    items: list[AccountingSaleOut]
+
+    model_config = {"from_attributes": False}

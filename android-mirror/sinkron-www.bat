@@ -3,6 +3,8 @@ REM Sinkron ulang www -> assets biar mirror SELALU sama persis dengan web
 copy /Y "..\index.html" "app\src\main\assets\www\index.html"
 copy /Y "..\style.css" "app\src\main\assets\www\style.css"
 copy /Y "..\script.js" "app\src\main\assets\www\script.js"
+copy /Y "..\script-2611261500.js" "app\src\main\assets\www\script-2611261500.js"
+copy /Y "..\sw-2611261500.js" "app\src\main\assets\www\sw-2611261500.js"
 copy /Y "..\api.js" "app\src\main\assets\www\api.js"
 copy /Y "..\config.js" "app\src\main\assets\www\config.js"
 copy /Y "..\icon.png" "app\src\main\assets\www\icon.png"

@@ -211,6 +211,26 @@ def _collect_periode(db: Session, dari: str, sampai: str, kasir: str):
     return services, sales, expenses, digital
 
 
+def _purchases_periode(db: Session, dari: str, sampai: str, kasir: str):
+    rows = db.query(models.Purchase).all()
+    if dari or sampai:
+        rows = [r for r in rows if _in_range(r.tanggal or "", dari, sampai)]
+    kasir = (kasir or "").strip()
+    if kasir:
+        rows = [r for r in rows if _match_kasir(getattr(r, "dicatat_oleh", ""), kasir)]
+    return rows
+
+
+def _purchases_session(db: Session, sess: models.CashSession):
+    t0, t1 = _session_window(sess)
+    kasir = (sess.kasir or "").strip()
+    return [
+        r for r in db.query(models.Purchase).all()
+        if _in_window(getattr(r, "created_at", None), t0, t1)
+        and (not kasir or _match_kasir(getattr(r, "dicatat_oleh", ""), kasir))
+    ]
+
+
 def _group_uang(rows: list) -> list[dict]:
     """Kelompokkan expense/pendapatan per kategori (jumlah & transaksi)."""
     data: dict[str, dict] = {}
@@ -393,6 +413,7 @@ def report(
         services, sales, expenses, digital = _collect_periode(db, dari, sampai, kasir)
         # Omzet service HANYA dari status Diambil.
         diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
+    purchases = _purchases_session(db, sess) if sess is not None else _purchases_periode(db, dari, sampai, kasir)
     spares = db.query(models.Sparepart).all()
     service_omzet = sum(int(r.biaya or 0) for r in diambil)
     # Kebijakan konter: pembelian sparepart dicatat sebagai biaya, jadi laba
@@ -429,6 +450,10 @@ def report(
                            if _expense_sumber(r) == "penjualan")
     expense_tanpa_sumber = expense_total - expense_service - expense_penjualan
     income_tanpa_sumber = income_total - income_service - income_penjualan
+    pembelian_count = len(purchases)
+    pembelian_total = sum(int(getattr(r, "total", 0) or 0) for r in purchases)
+    pembelian_tunai = sum(int(getattr(r, "total", 0) or 0) for r in purchases
+                          if _is_tunai_metode(getattr(r, "metode", "Tunai")))
     service_omzet_bersih = service_omzet - expense_service + income_service
     penjualan_omzet_bersih = penjualan_omzet_total - expense_penjualan + income_penjualan
     total_pendapatan = service_omzet + penjualan_omzet_total + income_total
@@ -475,6 +500,9 @@ def report(
         "income_service": income_service,
         "income_penjualan": income_penjualan,
         "income_tanpa_sumber": income_tanpa_sumber,
+        "pembelian_count": pembelian_count,
+        "pembelian_total": pembelian_total,
+        "pembelian_tunai": pembelian_tunai,
         "service_omzet_bersih": service_omzet_bersih,
         "penjualan_omzet_bersih": penjualan_omzet_bersih,
         "total_hpp": total_hpp,
@@ -511,6 +539,7 @@ def arus_kas(
     else:
         services, sales, expenses, _digital = _collect_periode(db, dari, sampai, kasir)
         diambil = [r for r in services if _norm_status(r.status) == "Diambil"]
+    purchases = _purchases_session(db, sess) if sess is not None else _purchases_periode(db, dari, sampai, kasir)
     service_tunai = sum(int(r.biaya or 0) for r in diambil
                         if _is_tunai_metode(getattr(r, "metode_bayar", "tunai")))
     service_non = sum(int(r.biaya or 0) for r in diambil
@@ -551,8 +580,12 @@ def arus_kas(
     income_jual_non = sum(int(getattr(r, "jumlah", 0) or 0) for r in income
                           if _expense_sumber(r) == "penjualan"
                           and not _is_tunai_metode(getattr(r, "metode", "tunai")))
+    pembelian_tunai = sum(int(getattr(r, "total", 0) or 0) for r in purchases
+                          if _is_tunai_metode(getattr(r, "metode", "Tunai")))
+    pembelian_non = sum(int(getattr(r, "total", 0) or 0) for r in purchases
+                        if not _is_tunai_metode(getattr(r, "metode", "Tunai")))
     penerimaan_total = service_tunai + penjualan_tunai + income_tunai
-    arus_bersih = penerimaan_total - biaya_tunai
+    arus_bersih = penerimaan_total - biaya_tunai - pembelian_tunai
 
     # Sesi kasir dalam periode (untuk modal awal & selisih kas fisik).
     from .kas_sessions import _to_out as _kas_to_out
@@ -582,7 +615,8 @@ def arus_kas(
             "biaya_service_tunai": biaya_svc_tunai,
             "biaya_penjualan_tunai": biaya_jual_tunai,
             "biaya_belum_tunai": biaya_tunai - biaya_svc_tunai - biaya_jual_tunai,
-            "total": biaya_tunai,
+            "pembelian_tunai": pembelian_tunai,
+            "total": biaya_tunai + pembelian_tunai,
         },
         "arus_kas_bersih": arus_bersih,
         "kas_akhir_sistem": kas_akhir_sistem,
@@ -593,7 +627,8 @@ def arus_kas(
             "pendapatan_lain_service": income_svc_non,
             "pendapatan_lain_penjualan": income_jual_non,
             "pendapatan_lain_belum": income_non - income_svc_non - income_jual_non,
-            "pengeluaran": biaya_non,
+            "pengeluaran": biaya_non + pembelian_non,
+            "pengeluaran_pembelian": pembelian_non,
             "pengeluaran_service": biaya_svc_non,
             "pengeluaran_penjualan": biaya_jual_non,
             "pengeluaran_belum": biaya_non - biaya_svc_non - biaya_jual_non,
@@ -683,8 +718,8 @@ def neraca(
         },
         "selisih": total_aset - total_ekuitas,
         "catatan": (
-            "Posisi keuangan ringkas. Pembelian stok dicatat sebagai biaya, "
-            "sehingga nilai stok di aset bisa membuat selisih terhadap ekuitas."
+            "Posisi keuangan ringkas. Pembelian stok masuk ke nilai persediaan (aset), "
+            "bukan biaya; HPP diakui saat barang terjual."
         ),
     }
 
@@ -805,6 +840,7 @@ def report_harian(
             sales = [r for r in sales if _match_kasir(r.kasir, kasir)]
             expenses = [r for r in expenses if _match_kasir(getattr(r, "dicatat_oleh", ""), kasir)]
             digital = []
+    purchases = _purchases_session(db, sess) if sess is not None else _purchases_periode(db, dari, sampai, kasir)
 
     rows: dict[tuple[str, str], dict] = {}
 
@@ -817,7 +853,7 @@ def report_harian(
                 "nota": 0, "jual_omzet": 0, "jual_laba": 0,
                 "digital_count": 0, "digital_omzet": 0, "digital_laba": 0,
                 "exp_n": 0, "exp": 0, "inc_n": 0, "inc": 0, "wa_terkirim": 0,
-                "total_pendapatan": 0, "total_laba": 0,
+                "beli_n": 0, "beli": 0, "total_pendapatan": 0, "total_laba": 0,
             }
         return rows[key]
 
@@ -867,6 +903,13 @@ def report_harian(
             r["exp_n"] += 1
             r["exp"] += int(getattr(e, "jumlah", 0) or 0)
 
+    for p in purchases:
+        tgl = (getattr(p, "tanggal", "") or "")[:10]
+        nama = (getattr(p, "dicatat_oleh", "") or "").strip() or "-"
+        r = _row(tgl, nama)
+        r["beli_n"] += 1
+        r["beli"] += int(getattr(p, "total", 0) or 0)
+
     out = []
     for r in rows.values():
         r["total_pendapatan"] = r["svc_omzet"] + r["jual_omzet"] + r["inc"]
@@ -884,6 +927,8 @@ def report_harian(
         "jual_laba": sum(r["jual_laba"] for r in out),
         "exp": sum(r["exp"] for r in out),
         "inc": sum(r["inc"] for r in out),
+        "beli_n": sum(r["beli_n"] for r in out),
+        "beli": sum(r["beli"] for r in out),
         "wa_terkirim": sum(r["wa_terkirim"] for r in out),
         "total_pendapatan": sum(r["total_pendapatan"] for r in out),
         "total_laba": sum(r["total_laba"] for r in out),
