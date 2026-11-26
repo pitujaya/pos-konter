@@ -58,6 +58,7 @@ from .routers import kas_sessions as kas_router
 from .routers import ai_monitor as ai_monitor_router
 from .routers import leads as leads_router
 from .routers import digital_sales as digital_sales_router
+from .routers import accounting_sync as accounting_sync_router
 from .seed import seed
 
 app = FastAPI(
@@ -195,6 +196,7 @@ app.include_router(kas_router.router, prefix="/api")
 app.include_router(ai_monitor_router.router, prefix="/api")
 app.include_router(leads_router.router, prefix="/api")
 app.include_router(digital_sales_router.router, prefix="/api")
+app.include_router(accounting_sync_router.router, prefix="/api")
 
 # Folder upload gambar headbar -> serve di /static/uploads.
 # Path diambil dari app.paths supaya PENTING sama dengan folder yang dipakai
