@@ -3,7 +3,7 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -243,6 +243,18 @@ FRONTEND_CANDIDATES = [
 FRONTEND_DIR = next((p for p in FRONTEND_CANDIDATES if p.name != "__EMPTY__" and (p / "index.html").exists()), None)
 LANDING_DIR = Path(os.getenv("LANDING_DIR", "") or (Path(__file__).resolve().parent.parent.parent / "landing"))
 LANDING_HOSTS = {"pitujaya.my.id", "www.pitujaya.my.id"}
+
+
+@app.get("/download/version.json", include_in_schema=False)
+def app_version_manifest():
+    path = LANDING_DIR / "download" / "version.json"
+    if not path.exists():
+        raise HTTPException(404, "Version manifest tidak ditemukan")
+    return FileResponse(
+        path,
+        media_type="application/json",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 @app.get("/download/pitujaya-pos.apk", include_in_schema=False)
