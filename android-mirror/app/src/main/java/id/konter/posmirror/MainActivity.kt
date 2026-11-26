@@ -146,12 +146,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ================= UPDATE APK (notif + download + install) =================
-    private data class ApkUpdate(val code: Int, val name: String, val note: String)
+    private data class ApkUpdate(val code: Int, val name: String, val note: String, val url: String)
 
     private fun fetchApkUpdate(): ApkUpdate? {
         var conn: HttpURLConnection? = null
         return try {
-            conn = (URL(APK_VERSION_URL).openConnection() as HttpURLConnection).apply {
+            conn = (URL("$APK_VERSION_URL?v=${System.currentTimeMillis()}").openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 8000
                 readTimeout = 8000
@@ -164,7 +164,8 @@ class MainActivity : AppCompatActivity() {
             ApkUpdate(
                 code = json.optInt("versionCode", 0),
                 name = json.optString("versionName", ""),
-                note = json.optString("changelog", "")
+                note = json.optString("changelog", ""),
+                url = json.optString("apk", APK_DOWNLOAD_URL)
             )
         } catch (_: Exception) {
             null
@@ -194,13 +195,13 @@ class MainActivity : AppCompatActivity() {
                 .setTitle("Update APK tersedia")
                 .setMessage(pesan)
                 .setNegativeButton("Nanti", null)
-                .setPositiveButton("Download & Install") { _, _ -> downloadApk() }
+                .setPositiveButton("Download & Install") { _, _ -> downloadApk(update.url) }
                 .setCancelable(true)
                 .show()
         } catch (_: Exception) {}
     }
 
-    private fun downloadApk() {
+    private fun downloadApk(apkUrl: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !packageManager.canRequestPackageInstalls()) {
             try {
@@ -217,7 +218,7 @@ class MainActivity : AppCompatActivity() {
         val file = File(dir, "pos-konter-update.apk")
         try { if (file.exists()) file.delete() } catch (_: Exception) {}
         try {
-            val request = DownloadManager.Request(Uri.parse(APK_DOWNLOAD_URL))
+            val request = DownloadManager.Request(Uri.parse(apkUrl))
                 .setTitle("Update POS Konter")
                 .setDescription("Mengunduh APK versi baru…")
                 .setMimeType("application/vnd.android.package-archive")
