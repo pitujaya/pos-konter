@@ -777,7 +777,7 @@ class MainActivity : AppCompatActivity() {
             // atau reload kalau sebelumnya sedang offline / URL bukan backend.
             val cur = try { web.url ?: "" } catch (_: Exception) { "" }
             if (cur.isEmpty() || !isBackendUrl(cur)) {
-                web.loadUrl(BACKEND_URL)
+                web.loadUrl(BACKEND_URL + "?_cb=" + System.currentTimeMillis())
             } else if (wasOffline) {
                 web.reload()
             }
@@ -961,6 +961,7 @@ class MainActivity : AppCompatActivity() {
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
             keepScreenOn = true
+            settings.cacheMode = WebSettings.LOAD_NO_CACHE
         }
         root.addView(web)
 

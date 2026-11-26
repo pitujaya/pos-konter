@@ -1,7 +1,7 @@
 {
-  "versionCode": 10,
-  "versionName": "1.9-apk-update",
-  "changelog": "Notifikasi update otomatis saat aplikasi dibuka, download & install langsung. Menu Pembelian stok sudah aktif.",
-  "apk": "https://pos.pitujaya.my.id/download/pitujaya-pos.apk?v=10",
+  "versionCode": 11,
+  "versionName": "2.0-fresh-assets",
+  "changelog": "Paksa web assets segar saat dibuka: menu Pembelian sekarang muncul untuk admin & superadmin.",
+  "apk": "https://pos.pitujaya.my.id/download/pitujaya-pos.apk?v=11",
   "updated": "2026-11-26"
 }
