@@ -11,8 +11,8 @@ android {
         applicationId 'id.konter.posmirror'
         minSdk 24
         targetSdk 34
-        versionCode 9
-        versionName '1.8-auto-update'
+        versionCode 10
+        versionName '1.9-apk-update'
 
         // ---- AUTO LOGIN ----
         // Ganti kredensial di sini lalu build ulang APK.

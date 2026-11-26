@@ -2,11 +2,15 @@ package id.konter.posmirror
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.AlertDialog
+import android.app.DownloadManager
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.ConnectivityManager
@@ -16,6 +20,7 @@ import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.util.Base64
 import android.view.Gravity
 import android.view.View
@@ -37,8 +42,10 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -59,6 +66,8 @@ class MainActivity : AppCompatActivity() {
         // api.js otomatis pakai https://pos.pitujaya.my.id/api via same-origin.
         const val BACKEND_URL = "https://pos.pitujaya.my.id/"
         const val API_BASE = "https://pos.pitujaya.my.id/api"
+        const val APK_VERSION_URL = "https://pos.pitujaya.my.id/download/version.json"
+        const val APK_DOWNLOAD_URL = "https://pos.pitujaya.my.id/download/pitujaya-pos.apk"
         const val TOKEN_KEY = "servishp_token_v1"
         const val PREFS_AUTH = "pos_auth"
         const val PREFS_WEB_VERSION = "pos_web_version"
@@ -79,6 +88,9 @@ class MainActivity : AppCompatActivity() {
     private var autoLoginChecked = false
     private var autoLoginInFlight = false
     private var lastVersionCheck = 0L
+    private var lastApkCheck = 0L
+    private var apkUpdateShown = false
+    private var apkDownloadReceiver: BroadcastReceiver? = null
 
     private val bg = Executors.newSingleThreadExecutor()
 
@@ -131,6 +143,125 @@ class MainActivity : AppCompatActivity() {
                 } catch (_: Exception) {}
             }
         }
+    }
+
+    // ================= UPDATE APK (notif + download + install) =================
+    private data class ApkUpdate(val code: Int, val name: String, val note: String)
+
+    private fun fetchApkUpdate(): ApkUpdate? {
+        var conn: HttpURLConnection? = null
+        return try {
+            conn = (URL(APK_VERSION_URL).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 8000
+                readTimeout = 8000
+                useCaches = false
+                setRequestProperty("Cache-Control", "no-cache")
+                setRequestProperty("Pragma", "no-cache")
+            }
+            if (conn.responseCode !in 200..299) return null
+            val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            ApkUpdate(
+                code = json.optInt("versionCode", 0),
+                name = json.optString("versionName", ""),
+                note = json.optString("changelog", "")
+            )
+        } catch (_: Exception) {
+            null
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    private fun checkApkUpdate() {
+        val now = System.currentTimeMillis()
+        if (now - lastApkCheck < 60_000L || apkUpdateShown) return
+        lastApkCheck = now
+        if (!isOnline()) return
+        bg.execute {
+            val update = fetchApkUpdate() ?: return@execute
+            if (update.code <= BuildConfig.VERSION_CODE) return@execute
+            apkUpdateShown = true
+            runOnUiThread { showApkUpdateDialog(update) }
+        }
+    }
+
+    private fun showApkUpdateDialog(update: ApkUpdate) {
+        try {
+            val pesan = "Versi baru tersedia: ${update.name}\n\n${update.note}\n\n" +
+                "Terpasang: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+            AlertDialog.Builder(this)
+                .setTitle("Update APK tersedia")
+                .setMessage(pesan)
+                .setNegativeButton("Nanti", null)
+                .setPositiveButton("Download & Install") { _, _ -> downloadApk() }
+                .setCancelable(true)
+                .show()
+        } catch (_: Exception) {}
+    }
+
+    private fun downloadApk() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !packageManager.canRequestPackageInstalls()) {
+            try {
+                startActivity(Intent(
+                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName")
+                ))
+                Toast.makeText(this, "Izinkan install aplikasi ini, lalu tekan Update lagi.", Toast.LENGTH_LONG).show()
+            } catch (_: Exception) {}
+            return
+        }
+        val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: cacheDir
+        try { if (!dir.exists()) dir.mkdirs() } catch (_: Exception) {}
+        val file = File(dir, "pos-konter-update.apk")
+        try { if (file.exists()) file.delete() } catch (_: Exception) {}
+        try {
+            val request = DownloadManager.Request(Uri.parse(APK_DOWNLOAD_URL))
+                .setTitle("Update POS Konter")
+                .setDescription("Mengunduh APK versi baru…")
+                .setMimeType("application/vnd.android.package-archive")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationUri(Uri.fromFile(file))
+                .setAllowedOverMetered(true)
+                .setAllowedOverRoaming(true)
+            val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val id = dm.enqueue(request)
+            Toast.makeText(this, "Mengunduh update…", Toast.LENGTH_SHORT).show()
+            registerApkDownloadReceiver(id, file)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Gagal mengunduh: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun registerApkDownloadReceiver(downloadId: Long, file: File) {
+        try { apkDownloadReceiver?.let { unregisterReceiver(it) } } catch (_: Exception) {}
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) != downloadId) return
+                try { apkDownloadReceiver?.let { unregisterReceiver(it) } } catch (_: Exception) {}
+                apkDownloadReceiver = null
+                try {
+                    if (!file.exists() || file.length() < 100_000L) {
+                        Toast.makeText(context, "File update tidak valid.", Toast.LENGTH_LONG).show()
+                        return
+                    }
+                    val uri = FileProvider.getUriForFile(context, "$packageName.fileprovider", file)
+                    val install = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+                        setDataAndType(uri, "application/vnd.android.package-archive")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(install)
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Gagal membuka installer: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        apkDownloadReceiver = receiver
+        try {
+            registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+        } catch (_: Exception) {}
     }
 
     // ================= AUTO LOGIN (native, sebelum WebView pakai token) =================
@@ -1018,6 +1149,8 @@ class MainActivity : AppCompatActivity() {
         loadOrBlock()
         // Pastikan APK ikut versi web terbaru tanpa perlu install ulang.
         checkFrontendUpdate()
+        // Notifikasi update APK native (versi build vs versi di server).
+        checkApkUpdate()
     }
 
     override fun onSaveInstanceState(out: Bundle) {
@@ -1030,6 +1163,7 @@ class MainActivity : AppCompatActivity() {
             netCallback?.let { connMgr?.unregisterNetworkCallback(it) }
         } catch (_: Exception) {}
         try { btSocket?.close() } catch (_: Exception) {}
+        try { apkDownloadReceiver?.let { unregisterReceiver(it) } } catch (_: Exception) {}
         try { bg.shutdownNow() } catch (_: Exception) {}
         super.onDestroy()
     }
